@@ -1,0 +1,20 @@
+{"command": "ls -la", "expect": "allow"}
+{"command": "git add -- path/to/file.md", "expect": "allow"}
+{"command": "npm install", "expect": "allow"}
+{"command": "echo firmware-update", "expect": "allow"}
+{"command": "git commit -m 'chore: rollup'", "expect": "allow"}
+{"command": "rm -rf /tmp/x", "expect": "block"}
+{"command": "sudo rm file", "expect": "block"}
+{"command": "xargs rm < list.txt", "expect": "block"}
+{"command": "find . -name '*.tmp' -delete", "expect": "block"}
+{"command": "git push --force origin main", "expect": "block"}
+{"command": "git push --force-with-lease origin main", "expect": "block"}
+{"command": "git push origin +main", "expect": "block"}
+{"command": "git commit --no-verify -m x", "expect": "block"}
+{"command": "git add -A", "expect": "block"}
+{"command": "git add --all", "expect": "block"}
+{"command": "git reset --hard HEAD~1", "expect": "block"}
+{"command": "git clean -fd", "expect": "block"}
+{"command": "git filter-branch --all", "expect": "block"}
+{"command": "bash -c \"rm x\"", "expect": "block"}
+{"command": "grep -r 'rm -rf' docs/", "expect": "block", "note": "false positive accepted: fail-closed"}

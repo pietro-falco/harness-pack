@@ -1,0 +1,5 @@
+.harness/
+*.local.json
+__pycache__/
+dashboard.html
+stats.md

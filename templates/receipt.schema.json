@@ -1,0 +1,32 @@
+{
+  "$comment": "Canonical run receipt. One JSON file per run under RECEIPTS_DIR, later consolidated by RS-001 into receipt-chain.jsonl. Field names for tokens/cost intentionally mirror Claude Code result JSON; tier fields come from the launcher.",
+  "required": [
+    "run_id", "spec_id", "mode",
+    "tier_requested", "tier_resolved", "model_used", "manifest_version",
+    "constitution_hash", "tool_version",
+    "started_at", "ended_at",
+    "subtype", "num_turns", "stop_reason",
+    "claims"
+  ],
+  "properties": {
+    "run_id": { "type": "string" },
+    "spec_id": { "type": "string" },
+    "mode": { "enum": ["A", "B"] },
+    "tier_requested": { "enum": ["T0", "T1", "T2", "T3"] },
+    "tier_resolved": { "enum": ["T0", "T1", "T2", "T3"] },
+    "model_used": { "type": "string" },
+    "manifest_version": { "type": "integer" },
+    "constitution_hash": { "type": "string" },
+    "tool_version": { "type": "string" },
+    "started_at": { "type": "string", "$comment": "UTC ISO 8601 only" },
+    "ended_at": { "type": "string" },
+    "subtype": { "type": "string", "$comment": "from claude -p JSON: success | error_max_turns | error_during_execution" },
+    "num_turns": { "type": "integer" },
+    "total_cost_usd": { "type": ["number", "null"] },
+    "duration_ms": { "type": ["integer", "null"] },
+    "session_id": { "type": "string" },
+    "stop_reason": { "type": "string" },
+    "violation_code": { "type": "string" },
+    "claims": { "type": "array" }
+  }
+}

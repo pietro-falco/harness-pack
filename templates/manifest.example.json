@@ -1,0 +1,15 @@
+{
+  "manifest_version": 1,
+  "verified_on": "2026-07-11",
+  "_comment": "Config, not governance. Copy to your private location, edit freely; receipts record manifest_version. Model strings are opaque values.",
+  "tiers": {
+    "T0": { "name": "judgment-authoring", "chain": [], "resolves_to": "T1" },
+    "T1": { "name": "trust-anchor", "chain": ["OPUS_CLASS_MODEL"], "effort": "high" },
+    "T2": { "name": "execution", "chain": ["SONNET_CLASS_MODEL"] },
+    "T3": { "name": "subagent", "chain": ["HAIKU_CLASS_MODEL", "SONNET_CLASS_MODEL"] }
+  },
+  "rules": {
+    "resolution": "first entry in chain; empty chain + resolves_to = single hop DOWNWARD only (T0->T1 legal, T2->T1 never); empty chain without resolves_to = STOP",
+    "staleness_days": 30
+  }
+}
