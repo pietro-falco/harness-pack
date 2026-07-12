@@ -40,7 +40,7 @@ tier = m["tiers"][t]
 if not tier.get("chain"):
     rt = tier.get("resolves_to")
     order = ["T0","T1","T2","T3"]
-    if not rt or order.index(rt) < order.index(t):
+    if not rt or (order.index(rt) - order.index(t)) not in (0, 1):
         print("STOPX X 0"); sys.exit()
     t = rt; tier = m["tiers"][t]
     if not tier.get("chain"):
@@ -63,14 +63,14 @@ command -v gtimeout >/dev/null && TIMEOUT_CMD="gtimeout $((WALLMIN*60))"
 
 set +e
 # shellcheck disable=SC2086  # intentional word-splitting of optional timeout prefix
-cat "$SPEC" | $TIMEOUT_CMD claude -p \
+$TIMEOUT_CMD claude -p \
   --model "$MODEL" \
   --append-system-prompt "$(cat "$CONST")" \
   --settings "$HARNESS_HOME/templates/settings.mode-b.json" \
   --allowedTools "$TOOLS" \
   --permission-mode dontAsk \
   --max-turns "$MAXTURNS" \
-  --output-format json > "$OUT"
+  --output-format json < "$SPEC" > "$OUT"
 CC_EXIT=$?
 set -e
 ENDED="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
