@@ -63,7 +63,7 @@ command -v gtimeout >/dev/null && TIMEOUT_CMD="gtimeout $((WALLMIN*60))"
 
 set +e
 # shellcheck disable=SC2086  # intentional word-splitting of optional timeout prefix
-$TIMEOUT_CMD claude -p "$(cat "$SPEC")" \
+cat "$SPEC" | $TIMEOUT_CMD claude -p \
   --model "$MODEL" \
   --append-system-prompt "$(cat "$CONST")" \
   --settings "$HARNESS_HOME/templates/settings.mode-b.json" \
