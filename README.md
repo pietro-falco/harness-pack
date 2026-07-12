@@ -86,7 +86,7 @@ scripts/launch_worker.sh my-first-spec.md
 touch .harness/HALT
 ```
 
-## Vocabulary (aligned with harnesswright / verity)
+## Vocabulary (aligned with the A1/D8b proposal set; harnesswright port pending)
 
 - **verify: gate | review** — each acceptance criterion declares its
   verification path: `gate` (deterministic) or `review` (human
@@ -94,9 +94,10 @@ touch .harness/HALT
   is `gate` and nothing destructive is in scope. One `review`
   criterion forces a human in the loop — no discounts.
 - **Tiers T0–T3** — semantic capability levels (judgment-authoring,
-  trust-anchor, execution, subagent). Model names never appear in
-  specs or governance; only your local manifest knows them, so model
-  churn is a one-line config edit.
+  trust-anchor, execution, subagent). Model names never appear in pack
+  specs or pack governance (lint-enforced here; harnesswright's
+  `model` field remains opaque by its own ADR-004/D8); only your local
+  manifest knows them, so model churn is a one-line config edit.
 - **receipt-chain.jsonl** — the append-only hash-chained evidence
   log. Not a harnesswright slice ledger; the different name is on
   purpose.
