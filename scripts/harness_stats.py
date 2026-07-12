@@ -27,7 +27,7 @@ def flags(r):
     return out
 
 def main():
-    rdir = sys.argv[1] if len(sys.argv) > 1 else "./.harness/receipts"
+    rdir = sys.argv[1] if len(sys.argv) > 1 else "./.harness/pack/receipts"
     odir = sys.argv[2] if len(sys.argv) > 2 else rdir
     rows = load(rdir)
     by_sub = Counter(r.get("subtype", "?") for r in rows)

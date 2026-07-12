@@ -3,7 +3,7 @@
 # injection + hash (provability of G1..G7), bounded run, receipt write.
 # Env: HARNESS_HOME (pack dir; default: this script's parent),
 #      HARNESS_MANIFEST (default: $HARNESS_HOME/templates/manifest.example.json),
-#      RECEIPTS_DIR (default: ./.harness/receipts)
+#      RECEIPTS_DIR (default: ./.harness/pack/receipts)
 # Verify flag names against current Claude Code docs at wiring time;
 # this file is the only seam if the CLI contract drifts.
 set -euo pipefail
@@ -11,7 +11,9 @@ SPEC="${1:?usage: launch_worker.sh SPEC.md}"
 HARNESS_HOME="${HARNESS_HOME:-$(cd "$(dirname "$0")/.." && pwd)}"
 MANIFEST="${HARNESS_MANIFEST:-$HARNESS_HOME/templates/manifest.example.json}"
 CONST="$HARNESS_HOME/CONSTITUTION.md"
-RECEIPTS_DIR="${RECEIPTS_DIR:-./.harness/receipts}"
+# Nested under pack/ (not ./.harness/receipts) to avoid path collision with
+# harnesswright's own .harness/receipts/ layout, which uses a different schema.
+RECEIPTS_DIR="${RECEIPTS_DIR:-./.harness/pack/receipts}"
 mkdir -p "$RECEIPTS_DIR"
 
 # Operator kill-switch: touch .harness/HALT to refuse new runs.
@@ -51,6 +53,13 @@ PYEOF
 [ "$RESOLVED" != "STOPX" ] || { echo "STOP: empty chain / illegal resolves_to (config error)" >&2; exit 1; }
 
 CHASH="$(python3 -c 'import hashlib,sys;print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' "$CONST")"
+
+EXPECTED_CHASH="$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1])).get("constitution_hash_expected",""))' "$MANIFEST")"
+if [ -n "$EXPECTED_CHASH" ] && [ "$EXPECTED_CHASH" != "$CHASH" ]; then
+  echo "STOP: CONST-HASH-MISMATCH expected=$EXPECTED_CHASH actual=$CHASH" >&2
+  exit 1
+fi
+
 TOOLVER="$(claude --version 2>/dev/null || echo unknown)"
 RUN_ID="run-$(date -u +%Y%m%dT%H%M%SZ)-$$"
 STARTED="$(date -u +%Y-%m-%dT%H:%M:%SZ)"

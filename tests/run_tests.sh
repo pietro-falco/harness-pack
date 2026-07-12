@@ -54,6 +54,39 @@ else
   echo "ok [single-hop T0->T3 refused]: rc=$rc"
 fi
 
+echo "== constitution hash pinning fixture =="
+TMPD2="$(mktemp -d)"
+trap 'rm -rf "$TMPD" "$TMPD2"' EXIT
+cat > "$TMPD2/manifest.json" <<'JSON'
+{
+  "manifest_version": 1,
+  "constitution_hash_expected": "0000000000000000000000000000000000000000000000000000000000000000",
+  "tiers": {
+    "T0": { "name": "judgment-authoring", "chain": [], "resolves_to": "T1" },
+    "T1": { "name": "trust-anchor", "chain": ["OPUS_CLASS_MODEL"] },
+    "T2": { "name": "execution", "chain": ["SONNET_CLASS_MODEL"] },
+    "T3": { "name": "subagent", "chain": ["HAIKU_CLASS_MODEL"] }
+  }
+}
+JSON
+cat > "$TMPD2/spec.md" <<'SPEC'
+---
+id: FIXTURE-HASH-MISMATCH
+tier: T1
+mode: B
+---
+SPEC
+set +e
+HARNESS_MANIFEST="$TMPD2/manifest.json" RECEIPTS_DIR="$TMPD2/receipts" \
+  scripts/launch_worker.sh "$TMPD2/spec.md" >/dev/null 2>"$TMPD2/err"
+rc=$?
+set -e
+if [ "$rc" -eq 0 ] || ! grep -q "CONST-HASH-MISMATCH" "$TMPD2/err"; then
+  echo "FAIL [wrong constitution_hash_expected must be refused]: rc=$rc"; fail=1
+else
+  echo "ok [constitution hash mismatch refused]: rc=$rc"
+fi
+
 echo "== receipt_chain selftest =="
 python3 scripts/receipt_chain.py selftest || fail=1
 
