@@ -17,7 +17,9 @@ RECEIPTS_DIR="${RECEIPTS_DIR:-./.harness/pack/receipts}"
 mkdir -p "$RECEIPTS_DIR"
 
 # Operator kill-switch: touch .harness/HALT to refuse new runs.
-if [ -e "$(dirname "$RECEIPTS_DIR")/HALT" ]; then
+# Location-stable, independent of RECEIPTS_DIR: the kill-switch must not
+# move when RECEIPTS_DIR is overridden.
+if [ -e "$HARNESS_HOME/.harness/HALT" ]; then
   echo "STOP: HALT file present; refusing to launch." >&2; exit 1
 fi
 

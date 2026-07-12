@@ -87,6 +87,24 @@ else
   echo "ok [constitution hash mismatch refused]: rc=$rc"
 fi
 
+echo "== HALT kill-switch pinned to HARNESS_HOME fixture =="
+TMPD3="$(mktemp -d)"
+TMPD3R="$(mktemp -d)"
+trap 'rm -rf "$TMPD" "$TMPD2" "$TMPD3" "$TMPD3R"' EXIT
+mkdir -p "$TMPD3/.harness"
+touch "$TMPD3/.harness/HALT"
+set +e
+HARNESS_HOME="$TMPD3" RECEIPTS_DIR="$TMPD3R/receipts" \
+  scripts/launch_worker.sh "$TMPD3/spec.md" >/dev/null 2>"$TMPD3/err"
+rc=$?
+set -e
+rm -f "$TMPD3/.harness/HALT"
+if [ "$rc" -eq 0 ] || ! grep -q "HALT file present" "$TMPD3/err"; then
+  echo "FAIL [HALT under HARNESS_HOME must refuse launch regardless of RECEIPTS_DIR]: rc=$rc"; fail=1
+else
+  echo "ok [HALT under HARNESS_HOME refused launch, RECEIPTS_DIR overridden]: rc=$rc"
+fi
+
 echo "== receipt_chain selftest =="
 python3 scripts/receipt_chain.py selftest || fail=1
 
