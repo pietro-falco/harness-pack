@@ -9,7 +9,7 @@ budget:
   wall_clock_min: 20
 tools: "Read,Bash,Grep,Glob"
 trigger:
-  check: vault_health.py --check receipt-rollup-due
+  check: scripts/rollup_due.sh
   semantics: exit 0 = due (loose receipt count >= threshold; threshold parametric, default 25), exit 1 = not due
 scope:
   paths: ["<RECEIPTS_DIR>"]
