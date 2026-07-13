@@ -1,70 +1,94 @@
 # harness-pack
 
-Rules, receipts, and a kill-switch for autonomous AI agents.
-Zero runtime dependencies beyond Python 3 stdlib and bash.
+[![ci](https://github.com/pietro-falco/harness-pack/actions/workflows/ci.yml/badge.svg)](https://github.com/pietro-falco/harness-pack/actions/workflows/ci.yml)
+[![license: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-**Thesis: an agent's "done" is a claim, not a fact.** Everything in
-this repo exists to turn claims into deterministic, tamper-evident
-receipts.
+> Pinned rules, a fail-closed guard, hash-chained receipts, and an
+> operator kill-switch — the governance layer around every agent run.
 
-## The problem, in plain words
-
-Imagine hiring a contractor who works while you sleep. In the morning
-you get a text: "all done!" Do you transfer the money?
-
-Of course not. You want three things: **house rules** posted where
-the crew can't miss them, an **inspection** that doesn't depend on
-the contractor's word, and **signed paperwork** that can't be
-quietly rewritten afterwards.
-
-AI agents are that contractor. They are genuinely capable and
-genuinely overconfident, and "I finished the task" is the cheapest
-sentence they can produce. harness-pack is the rules, the
-inspection, and the paperwork.
-
-## How it works — the 60-second version
+**An agent's "done" is a claim, not a fact.** harness-pack turns that
+claim into a deterministic, tamper-evident receipt: which rules were
+in force (by hash), which model actually ran (by manifest), what the
+run cost, and how it ended. Zero runtime dependencies beyond Python 3
+stdlib and bash. Every functional claim in this README points at a
+fixture in the test suite, not at prose — see
+[Every claim has a fixture](#every-claim-has-a-fixture).
 
 ```mermaid
 flowchart LR
-    A["Agent: <b>done!</b><br/>(a claim)"] --> B{"Deterministic checks<br/>exit codes, git state,<br/>file hashes"}
-    B -->|all pass| C["Receipt written<br/>(hash-chained log)"]
-    B -->|any fail| D["FULL STOP<br/>no auto-retry,<br/>a human looks"]
+    A["agent: done<br/>(a claim)"] --> B{"deterministic checks<br/>exit codes, git state,<br/>file hashes"}
+    B -->|all pass| C["receipt appended to<br/>hash-chained log"]
+    B -->|any fail| D["full stop<br/>no auto-retry,<br/>operator review"]
     C --> E["git commit<br/>= tamper anchor"]
 ```
 
-No judgment calls, no "the model said it went fine." A check either
-passes with evidence or the whole run stops.
+## Why
 
-## A supervised night run, step by step
+Coding agents are genuinely capable and genuinely overconfident, and
+"I finished the task" is the cheapest sentence they can produce.
+Orchestrators multiply that output; they don't verify it, and they
+don't constrain what a worker may do while producing it. harness-pack
+supplies the missing envelope: rules the worker provably received,
+commands it provably could not run, and evidence that provably wasn't
+rewritten afterwards. No judgment calls, no "the model said it went
+fine" — a check either passes with evidence or the whole run stops.
+
+## Architecture
+
+`launch_worker.sh` is the single entry point. It refuses to start if
+the kill-switch is engaged or if the constitution on disk doesn't
+match the pinned hash; it resolves an abstract tier to a concrete
+model through your private manifest; it bounds the run; and the guard
+hook screens every tool call while the run is in flight.
 
 ```mermaid
 flowchart TD
-    S["Spec file<br/>(the work order: goal, budget,<br/>allowed tools, stop conditions)"] --> L["launch_worker.sh<br/>(the foreman)"]
-    L --> H{"HALT file<br/>present?"}
-    H -->|yes| X["Refuse to start.<br/>That's the kill-switch."]
-    H -->|no| T["Resolve WHO works:<br/>tier T0–T3 → concrete model<br/>via your local manifest"]
-    T --> C2["Inject CONSTITUTION.md<br/>into the worker's prompt;<br/>record its sha256"]
-    C2 --> R["Bounded run:<br/>max turns + wall-clock timeout"]
-    R --> G{"Guard hook checks<br/>every shell command"}
-    G -->|destructive| B2["BLOCKED (exit 2)<br/>rm, force-push, --no-verify…<br/>never run at all"]
+    S["spec.md<br/>goal, tier, mode, budget,<br/>stop conditions"] --> L["launch_worker.sh"]
+    L --> H{".harness/HALT<br/>present?"}
+    H -->|yes| X["refuse to launch"]
+    H -->|no| P{"CONSTITUTION.md sha256<br/>== pinned hash?"}
+    P -->|no| PX["refuse:<br/>CONST-HASH-MISMATCH"]
+    P -->|yes| T["resolve tier T0-T3<br/>to a model via<br/>local manifest"]
+    T --> C2["inject CONSTITUTION.md<br/>verbatim; record its sha256"]
+    C2 --> R["bounded run:<br/>max turns + wall-clock timeout"]
+    R --> G{"guard_pretooluse.py<br/>on every tool call"}
+    G -->|destructive| B2["blocked, exit 2<br/>never executes"]
     G -->|safe| R
-    R --> W["receipt.json written:<br/>who ran, under which rules,<br/>how it ended, what it cost"]
-    W --> ST["harness_stats.py<br/>→ dashboard.html on demand"]
+    R --> W["receipt.json:<br/>model, constitution_hash,<br/>outcome, cost"]
+    W --> RC["receipt_chain.py<br/>append-only JSONL,<br/>each line hashes the previous"]
+```
+
+## The HALT kill-switch
+
+`touch .harness/HALT` stops everything, twice over: the launcher
+refuses to start new runs, and the guard hook — which fires on every
+tool, not just Bash — neutralises runs already in flight. The HALT
+search walks *up* the directory tree from both the tool's working
+directory and `CLAUDE_PROJECT_DIR`, so a worker cannot dodge it by
+`cd`-ing into a subdirectory. Deleting the file lifts the halt; no
+restart or state cleanup required.
+
+```mermaid
+flowchart LR
+    O["operator:<br/>touch .harness/HALT"] --> L2["launch_worker.sh"]
+    O --> G2["guard hook<br/>(every tool call)"]
+    L2 -->|HALT present| RF["refuses to launch"]
+    G2 -->|"HALT found walking up<br/>from cwd or<br/>CLAUDE_PROJECT_DIR"| BK["blocks Edit, Bash,<br/>every tool — exit 2"]
 ```
 
 ## What's in the box
 
-| File | On a construction site | What it actually does |
-|---|---|---|
-| `CONSTITUTION.md` | House rules at the gate | Injected verbatim into every worker prompt; its sha256 lands in every receipt, so "the rules were in force" is provable |
-| `scripts/guard_pretooluse.py` | Circuit breaker | Blocks destructive shell commands *before* they execute; fail-closed, so false alarms are accepted by design |
-| `scripts/launch_worker.sh` | The foreman | Kill-switch check, picks the model from your manifest, injects the rules, bounds the run, writes the receipt |
-| `scripts/receipt_chain.py` | Logbook with numbered carbon pages | Append-only JSONL where every line hashes the previous one; edits and missing pages are detectable |
-| `templates/manifest.example.json` | Staff roster | Maps abstract tiers T0–T3 to real model names; edit your local copy freely, no governance ceremony |
-| `specs/recurring/RS-001-receipt-rollup.md` | A standing work order | The canonical recurring job: file loose receipts into the chained logbook, archive originals via `git mv` (never `rm`) |
-| `scripts/harness_stats.py` | The weekly site report | Reads receipts, emits `stats.md` + `dashboard.html`; flags failed runs and budget-burners |
-| `scripts/lint_specs.py` | Permit office | Rejects any spec that claims autonomy (mode B) without fully deterministic checks |
-| `tests/` + CI | Building inspector for the inspectors | The guard, the chain, and the lint are themselves tested on every push |
+| File | What it does |
+|---|---|
+| [`CONSTITUTION.md`](CONSTITUTION.md) | Behavioural rules injected verbatim into every worker prompt; its sha256 lands in every receipt, so "the rules were in force" is provable, and the launcher refuses to run if the file drifts from the pinned hash |
+| [`scripts/guard_pretooluse.py`](scripts/guard_pretooluse.py) | Fail-closed PreToolUse hook: blocks destructive shell commands *before* they execute and enforces HALT across all tools; false positives are accepted by design |
+| [`scripts/launch_worker.sh`](scripts/launch_worker.sh) | The launcher: kill-switch check, constitution pinning, tier→model resolution, bounded run, receipt |
+| [`scripts/receipt_chain.py`](scripts/receipt_chain.py) | Append-only JSONL log where every line hashes the previous one; edits and missing interior lines are detectable — see [`examples/receipt-chain.sample.jsonl`](examples/receipt-chain.sample.jsonl) |
+| [`templates/manifest.example.json`](templates/manifest.example.json) | Maps abstract tiers T0–T3 to real model names; your copy stays local (`*.local.json` is gitignored), so model churn is a one-line config edit |
+| [`specs/recurring/RS-001-receipt-rollup.md`](specs/recurring/RS-001-receipt-rollup.md) | The canonical recurring job: file loose receipts into the chained log, archive originals via `git mv` (never `rm`) |
+| [`scripts/harness_stats.py`](scripts/harness_stats.py) | Reads receipts, emits `stats.md` + `dashboard.html` on demand; flags failed runs and budget-burners. A generated file, not a server |
+| [`scripts/lint_specs.py`](scripts/lint_specs.py) | Rejects any spec that claims unattended autonomy (mode B) without fully deterministic checks |
+| [`tests/`](tests/) + [CI](.github/workflows/ci.yml) | The guard, the chain, the launcher gates and the lint are themselves tested on every push |
 
 ## Quickstart
 
@@ -82,11 +106,28 @@ export HARNESS_MANIFEST="$HOME/path/to/model-manifest.local.json"
 cp templates/spec.template.md my-first-spec.md
 scripts/launch_worker.sh my-first-spec.md
 
-# Emergency stop for all future runs:
+# Emergency stop for all current and future runs:
 touch .harness/HALT
 ```
 
-## Vocabulary (aligned with the A1/D8b proposal set; harnesswright port pending)
+## Every claim has a fixture
+
+The thesis applies to this README too: a description of behaviour is
+a claim until a test pins it. Each row below names the fixture in
+[`tests/run_tests.sh`](tests/run_tests.sh) (by its literal `==`
+section header) that fails CI if the claim stops being true.
+
+| Claim | Fixture |
+|---|---|
+| The guard blocks `rm -rf`, force-push (including `--force-with-lease` and `+ref`), `--no-verify`, `git add -A`, `reset --hard`, `clean -fd`, `filter-branch`, nested `bash -c "rm …"` — and accepts false positives as the price of fail-closed | `== guard fixtures ==` over the 20 cases in [`tests/guard_cases.jsonl`](tests/guard_cases.jsonl) |
+| Tier indirection is single-hop: a manifest where T0 resolves to T3 is refused at launch | `== single-hop tier resolution fixture (D8b) ==` |
+| A constitution that doesn't match the manifest's pinned sha256 refuses to launch (`CONST-HASH-MISMATCH`) | `== constitution hash pinning fixture ==` |
+| HALT in the *target* repo refuses launch even when `RECEIPTS_DIR` points elsewhere | `== HALT kill-switch in target repo refuses launch ==` |
+| HALT neutralises a run in flight — Edit, benign Bash, from a deep subdirectory, and via `CLAUDE_PROJECT_DIR` when the payload cwd is clean; lifting it restores normal operation | `== HALT kill-switch neutralises a run in flight (guard, all tools) ==` |
+| The chain detects mutation of an interior line and removal of the first line | `== receipt_chain selftest ==` (`receipt_chain.py selftest`) |
+| A mode-B spec whose checks are not fully deterministic is rejected | `== spec lint ==` (`lint_specs.py`) |
+
+## Vocabulary
 
 - **verify: gate | review** — each acceptance criterion declares its
   verification path: `gate` (deterministic) or `review` (human
@@ -94,10 +135,9 @@ touch .harness/HALT
   is `gate` and nothing destructive is in scope. One `review`
   criterion forces a human in the loop — no discounts.
 - **Tiers T0–T3** — semantic capability levels (judgment-authoring,
-  trust-anchor, execution, subagent). Model names never appear in pack
-  specs or pack governance (lint-enforced here; harnesswright's
-  `model` field remains opaque by its own ADR-004/D8); only your local
-  manifest knows them, so model churn is a one-line config edit.
+  trust-anchor, execution, subagent). Model names never appear in
+  pack specs or pack governance (lint-enforced); only your local
+  manifest knows them.
 - **receipt-chain.jsonl** — the append-only hash-chained evidence
   log. Not a harnesswright slice ledger; the different name is on
   purpose.
@@ -110,22 +150,37 @@ touch .harness/HALT
   git commit anchors. Authoritative verification reads the committed
   blob (`git show HEAD:<chain>`).
 - The guard is fail-closed regex, not a proof: gaps become test
-  fixtures, fixtures become releases. It's one of two layers — the
-  declarative deny rules in `templates/settings.mode-b.json` are the
-  other, and they are independent.
+  fixtures, fixtures become releases. It's one of two independent
+  layers — the declarative deny rules in
+  [`templates/settings.mode-b.json`](templates/settings.mode-b.json)
+  are the other.
 - On subscription auth, per-run cost fields may be null; `num_turns`
   is the primary budget signal.
+- The full risk register — including the threat-model notes on prompt
+  injection and secrets in receipts — lives in
+  [`docs/RISKS.md`](docs/RISKS.md).
 
 ## Non-goals
 
 No LLM-as-judge gates. No auto-retry of failed gates. No always-on
 services — the dashboard is a generated file, not a server.
 
-## Companions
+## Where it sits
 
-- **harnesswright** — evidence-gated slice ledgers: *what* work
-  exists and whether it may proceed.
-- **verity** — deterministic claim verification: *is this specific
-  assertion true against reality?*
+- [**harnesswright**](https://github.com/pietro-falco/harnesswright) —
+  evidence-gated slice ledgers: *what* work exists and whether it may
+  proceed.
+- [**verity**](https://github.com/pietro-falco/verity) — deterministic
+  claim verification: *is this specific assertion true against
+  reality?*
 - **harness-pack** (this repo) — the rules, routing, and receipts
   around every run.
+
+## Requirements
+
+Python 3 and bash. No packages to install, no daemon, no network
+calls. CI runs on Python 3.12.
+
+## License
+
+Apache-2.0 — see [`LICENSE`](LICENSE).

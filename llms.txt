@@ -1,0 +1,62 @@
+# harness-pack
+
+> An agent's "done" is a claim, not a fact. harness-pack is the
+> governance layer around every agent run: pinned rules injected by
+> hash, a fail-closed command guard, hash-chained receipts, and an
+> operator kill-switch. Python 3 stdlib + bash only.
+
+## What it is
+
+- A set of plain committed files (bash launcher, Python hooks/tools, markdown governance) — no daemon, no telemetry, no API keys, zero dependencies beyond Python 3 stdlib and bash.
+- The envelope around a worker run: rules the worker provably received (constitution sha256 in every receipt), commands it provably could not run (fail-closed PreToolUse guard), and evidence that provably wasn't rewritten (append-only hash-chained JSONL anchored by git commits).
+- Model-agnostic by construction: specs name abstract tiers T0–T3; only a private, gitignored local manifest maps tiers to real model names.
+
+## What it is NOT
+
+- No LLM-as-judge gates: a check performed by a model is an opinion; a receipt is evidence.
+- No auto-retry of failed gates: a failing check is a full stop for operator review.
+- No always-on services: the stats dashboard is a generated file, not a server.
+- Not a slice ledger or claim verifier — that's harnesswright and verity respectively (see Companions).
+
+## Components
+
+- scripts/launch_worker.sh — the single entry point: refuses to launch on HALT or constitution-hash mismatch, resolves tier→model via the local manifest, injects CONSTITUTION.md verbatim, bounds the run (max turns + wall-clock timeout), writes receipt.json.
+- scripts/guard_pretooluse.py — fail-closed PreToolUse hook on all tools: blocks destructive shell commands before execution (rm -rf, force-push, --no-verify, git add -A, reset --hard, clean -fd, filter-branch, nested bash -c) and enforces the HALT kill-switch; the HALT search walks up from cwd and CLAUDE_PROJECT_DIR, so a subdirectory cd cannot bypass it.
+- scripts/receipt_chain.py — append-only JSONL evidence log; every line hashes the previous one; detects mutation, insertion, reordering, and removal of interior lines; final-line/tail integrity is anchored by the git commit (verify against `git show HEAD:<chain>`).
+- scripts/lint_specs.py — rejects any spec claiming unattended autonomy (mode B) without fully deterministic checks.
+- scripts/harness_stats.py — reads receipts, emits stats.md + dashboard.html on demand.
+- scripts/rollup_due.sh — trigger for the recurring receipt-rollup job (RS-001).
+- CONSTITUTION.md — behavioural rules appended verbatim to every worker system prompt; sha256 recorded in every receipt as constitution_hash; pinnable via constitution_hash_expected in the manifest.
+- templates/ — manifest.example.json (tier→model mapping), spec.template.md, settings.mode-b.json (declarative deny rules, the guard's independent second layer), receipt.schema.json.
+- specs/recurring/RS-001-receipt-rollup.md — the canonical recurring job: file loose receipts into the chained log, archive originals via git mv (never rm).
+- tests/run_tests.sh + tests/guard_cases.jsonl — the fixture suite; every functional claim in README.md maps to a named `==` fixture section here.
+
+## Key concepts
+
+- receipt: the per-run evidence record — which model ran, under which rules (constitution_hash), how it ended, what it cost.
+- receipt-chain.jsonl: the append-only hash-chained log the receipts roll up into; not a harnesswright slice ledger.
+- tier: abstract capability level T0–T3 (judgment-authoring, trust-anchor, execution, subagent); resolution to a model is single-hop, and an illegal hop (e.g. T0→T3) refuses to launch.
+- verify: gate | review — each acceptance criterion is either deterministic (gate) or human judgment (review); mode B (unattended) requires every criterion to be gate.
+- HALT: `touch .harness/HALT` refuses new launches and neutralises runs in flight across all tools; deleting the file lifts it.
+- fail-closed: guard false positives are accepted by design; the escape hatch is attended mode with an operator directive, never a bypass.
+
+## Entry point
+
+scripts/launch_worker.sh <spec.md> — with HARNESS_MANIFEST pointing at your local manifest copy. Run `bash tests/run_tests.sh` first (expect: ALL TESTS PASSED).
+
+## Companions
+
+- harnesswright — evidence-gated slice ledgers: what work exists and whether it may proceed. https://github.com/pietro-falco/harnesswright
+- verity — deterministic claim verification: is this specific assertion true against reality? https://github.com/pietro-falco/verity
+
+## Files that matter
+
+- README.md — architecture, HALT flow, quickstart, claim→fixture map.
+- CONSTITUTION.md — the injected rules; workers never edit this file.
+- docs/RISKS.md — risk register and threat-model notes (prompt injection, secrets in receipts).
+- docs/PUBLISHING.md — release-hardening plan (attestations, Scorecard, gitleaks) to wire at first tag.
+- examples/receipt-chain.sample.jsonl — a verified three-link sample chain.
+
+## License
+
+Apache-2.0. Repository: https://github.com/pietro-falco/harness-pack
