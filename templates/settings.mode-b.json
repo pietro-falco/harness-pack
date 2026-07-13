@@ -1,5 +1,5 @@
 {
-  "_comment": "Mode B settings: declarative deny rules + dynamic guard hook. Layer 1 (deny rules) cannot be overridden by a hook allow; layer 2 (PreToolUse hook) blocks even in bypassPermissions. Verify at wiring time that CLAUDE_PROJECT_DIR expands in your Claude Code version; hook $VARs not allowlisted expand to empty string.",
+  "_comment": "Mode B settings: declarative deny rules + dynamic guard hook. Layer 1 (deny rules) cannot be overridden by a hook allow; layer 2 (PreToolUse hook) blocks even in bypassPermissions. The hook matcher is \"*\" (match all tools), not \"Bash\": the guard also carries the HALT kill-switch, which must neutralise a run in flight across Edit/Write too, not only shell-outs. Verify at wiring time that CLAUDE_PROJECT_DIR expands in your Claude Code version; hook $VARs not allowlisted expand to empty string.",
   "permissions": {
     "deny": [
       "Bash(rm:*)", "Bash(rmdir:*)", "Bash(sudo:*)",
@@ -11,7 +11,7 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Bash",
+        "matcher": "*",
         "hooks": [
           {
             "type": "command",

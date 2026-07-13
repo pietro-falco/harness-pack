@@ -14,14 +14,20 @@ CONST="$HARNESS_HOME/CONSTITUTION.md"
 # Nested under pack/ (not ./.harness/receipts) to avoid path collision with
 # harnesswright's own .harness/receipts/ layout, which uses a different schema.
 RECEIPTS_DIR="${RECEIPTS_DIR:-./.harness/pack/receipts}"
-mkdir -p "$RECEIPTS_DIR"
 
-# Operator kill-switch: touch .harness/HALT to refuse new runs.
-# Location-stable, independent of RECEIPTS_DIR: the kill-switch must not
-# move when RECEIPTS_DIR is overridden.
-if [ -e "$HARNESS_HOME/.harness/HALT" ]; then
+# Operator kill-switch: touch .harness/HALT at the root of the TARGET repo to
+# refuse new runs. The root is resolved with git, so the switch still fires
+# when the launcher is invoked from a subdirectory -- same file, and the same
+# walk-up semantics, as the PreToolUse guard: one touch both refuses a launch
+# and neutralises a run already in flight. Checked before the first write, so
+# a refused launch leaves no receipts dir behind, and independent of
+# RECEIPTS_DIR: the kill-switch must not move when RECEIPTS_DIR is overridden.
+HALT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+if [ -e "$HALT_ROOT/.harness/HALT" ]; then
   echo "STOP: HALT file present; refusing to launch." >&2; exit 1
 fi
+
+mkdir -p "$RECEIPTS_DIR"
 
 read -r SPEC_ID TIER MODE MAXTURNS WALLMIN TOOLS <<<"$(python3 - "$SPEC" <<'PYEOF'
 import re, sys

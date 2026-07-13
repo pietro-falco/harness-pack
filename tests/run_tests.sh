@@ -87,23 +87,57 @@ else
   echo "ok [constitution hash mismatch refused]: rc=$rc"
 fi
 
-echo "== HALT kill-switch pinned to HARNESS_HOME fixture =="
+echo "== HALT kill-switch in target repo refuses launch =="
 TMPD3="$(mktemp -d)"
 TMPD3R="$(mktemp -d)"
 trap 'rm -rf "$TMPD" "$TMPD2" "$TMPD3" "$TMPD3R"' EXIT
+PACK="$PWD"
 mkdir -p "$TMPD3/.harness"
 touch "$TMPD3/.harness/HALT"
 set +e
-HARNESS_HOME="$TMPD3" RECEIPTS_DIR="$TMPD3R/receipts" \
-  scripts/launch_worker.sh "$TMPD3/spec.md" >/dev/null 2>"$TMPD3/err"
+( cd "$TMPD3" && RECEIPTS_DIR="$TMPD3R/receipts" \
+    "$PACK/scripts/launch_worker.sh" "$TMPD3/spec.md" ) >/dev/null 2>"$TMPD3/err"
 rc=$?
 set -e
 rm -f "$TMPD3/.harness/HALT"
 if [ "$rc" -eq 0 ] || ! grep -q "HALT file present" "$TMPD3/err"; then
-  echo "FAIL [HALT under HARNESS_HOME must refuse launch regardless of RECEIPTS_DIR]: rc=$rc"; fail=1
+  echo "FAIL [HALT in target repo must refuse launch regardless of RECEIPTS_DIR]: rc=$rc"; fail=1
 else
-  echo "ok [HALT under HARNESS_HOME refused launch, RECEIPTS_DIR overridden]: rc=$rc"
+  echo "ok [HALT in target repo refused launch, RECEIPTS_DIR overridden]: rc=$rc"
 fi
+
+echo "== HALT kill-switch neutralises a run in flight (guard, all tools) =="
+TMPD4="$(mktemp -d)"    # halted repo: holds .harness/HALT
+TMPD4N="$(mktemp -d)"   # clean repo: no HALT anywhere, for the env-fallback case
+trap 'rm -rf "$TMPD" "$TMPD2" "$TMPD3" "$TMPD3R" "$TMPD4" "$TMPD4N"' EXIT
+mkdir -p "$TMPD4/.harness" "$TMPD4/a/b"
+touch "$TMPD4/.harness/HALT"
+halt_case() {  # $1=label  $2=hook payload  $3=want rc;  env: CPD -> CLAUDE_PROJECT_DIR
+  set +e
+  printf '%s' "$2" \
+    | CLAUDE_PROJECT_DIR="${CPD:-}" python3 scripts/guard_pretooluse.py 2>/dev/null
+  rc=$?
+  set -e
+  if [ "$rc" -ne "$3" ]; then
+    echo "FAIL [$1: want rc=$3 got rc=$rc]"; fail=1
+  else
+    echo "ok [$1]: rc=$rc"
+  fi
+}
+CPD=""
+halt_case "HALT blocks Edit" \
+  "$(printf '{"tool_name":"Edit","cwd":"%s"}' "$TMPD4")" 2
+halt_case "HALT blocks benign Bash" \
+  "$(printf '{"tool_name":"Bash","tool_input":{"command":"ls"},"cwd":"%s"}' "$TMPD4")" 2
+halt_case "HALT blocks from a deep subdir (no bypass by cd)" \
+  "$(printf '{"tool_name":"Bash","tool_input":{"command":"ls"},"cwd":"%s/a/b"}' "$TMPD4")" 2
+CPD="$TMPD4"
+halt_case "HALT found via CLAUDE_PROJECT_DIR when payload cwd is clean" \
+  "$(printf '{"tool_name":"Edit","cwd":"%s"}' "$TMPD4N")" 2
+CPD=""
+rm -f "$TMPD4/.harness/HALT"
+halt_case "HALT lifted: benign Bash allowed" \
+  "$(printf '{"tool_name":"Bash","tool_input":{"command":"ls"},"cwd":"%s"}' "$TMPD4")" 0
 
 echo "== receipt_chain selftest =="
 python3 scripts/receipt_chain.py selftest || fail=1
