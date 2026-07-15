@@ -4,9 +4,11 @@
   "_comment": "Config, not governance. Copy to your private location, edit freely; receipts record manifest_version. Model strings are opaque values.",
   "constitution_hash_expected": "00a92e1544ba9dd55591388830a7f86bf1a8d555e22f455f05b5eb267ecaf97d",
   "_comment_constitution_hash_expected": "Pins the exact governance bytes; launcher fail-closed on mismatch.",
+  "model_tiers": { "worker": "T3", "executor": "T2", "top": "T1" },
+  "_comment_model_tiers": "ADR-005 D4: pack-side bridge from next's opaque model-string to a tier. Resolution: spec.model -> model_tiers[spec.model] -> tiers[T].chain[0]. Fail-closed: a model-string absent here is a STOP, never a default tier. 'top' is reachable only via an explicitly declared model; T0 is never a resolution target.",
   "tiers": {
     "T0": { "name": "judgment-authoring", "chain": [], "resolves_to": "T1" },
-    "T1": { "name": "trust-anchor", "chain": ["OPUS_CLASS_MODEL"], "effort": "high" },
+    "T1": { "name": "trust-anchor", "chain": ["OPUS_CLASS_MODEL"] },
     "T2": { "name": "execution", "chain": ["SONNET_CLASS_MODEL"] },
     "T3": { "name": "subagent", "chain": ["HAIKU_CLASS_MODEL", "SONNET_CLASS_MODEL"] }
   },
