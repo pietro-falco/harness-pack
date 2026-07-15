@@ -36,6 +36,12 @@ RECEIPTS_DIR="${RECEIPTS_DIR:-./.harness/pack/receipts}"
 HW_CLI="${HARNESSWRIGHT_CLI:-$HOME/Code/harnesswright/dist/cli.js}"
 [ -f "$HW_CLI" ] || { echo "STOP: harnesswright CLI not resolvable at $HW_CLI" >&2; exit 1; }
 
+# verity CLI, fail-closed and resolved BEFORE launching CC (ADR-004 D7): a run whose
+# claims cannot be gated must not start. Default to the local build (same rationale as
+# HW_CLI: the published npm may predate the current report schema). Override via VERITY_CLI.
+VERITY_CLI="${VERITY_CLI:-$HOME/Code/verity/dist/cli.js}"
+[ -f "$VERITY_CLI" ] || { echo "STOP: verity CLI not resolvable at $VERITY_CLI" >&2; exit 1; }
+
 # Operator kill-switch (unchanged): git-root-anchored HALT file, checked before the
 # first write so a refused launch leaves no receipts dir behind and is independent of
 # RECEIPTS_DIR.
@@ -103,7 +109,12 @@ if isinstance(wc, str):
 tools = spec.get("tools")
 if not isinstance(tools, list) or not tools or any((not isinstance(t, str) or t == "") for t in tools):
     print(f"STOP spec.tools missing/empty for {rid} (expected a non-empty list from next)"); sys.exit()
-print("OK", rid, model, maxturns, wallsec, ",".join(tools))
+# spec.criteria = the claim IDs this slice asserts (ADR-004 D7 gate scope). Note the
+# collision: this is spec.criteria, NOT the top-level `criteria` next --json returns (which is harness.json).
+criteria = spec.get("criteria")
+if not isinstance(criteria, list) or not criteria or any((not isinstance(c, str) or c == "") for c in criteria):
+    print(f"STOP spec.criteria missing/empty for {rid} (expected a non-empty list of claim IDs)"); sys.exit()
+print("OK", rid, model, maxturns, wallsec, ",".join(tools), ",".join(criteria))
 PYEOF
 )"
 read -r VERDICT REST <<<"$DECISION"
@@ -111,7 +122,7 @@ if [ "$VERDICT" != "OK" ]; then
   echo "$DECISION" >&2
   exit 1
 fi
-read -r RESOLVED_ID MODEL_STRING MAXTURNS WALLSEC TOOLS <<<"$REST"
+read -r RESOLVED_ID MODEL_STRING MAXTURNS WALLSEC TOOLS CRITERIA <<<"$REST"
 
 # Resolve the opaque model-string to a concrete model, pack-side, via the manifest
 # (ADR-005 D4): spec.model -> model_tiers[model] -> tiers[T].chain[0]. Fail-closed: a
@@ -195,15 +206,79 @@ CC_EXIT=$?
 set -e
 ENDED="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
-# NOTE (ADR-004 D7, commit C): the receipt below still hardcodes "claims": [] and the
-# run still stops on CC_EXIT alone. Wiring the verity gate into the receipt is the next
-# commit; this commit changes only the plan-resolution inputs, not the gate.
-python3 - "$OUT" "$RECEIPTS_DIR/$RUN_ID.receipt.json" <<PYEOF
-import json, sys
+# Gate (ADR-004 D7): a Mode B run's "done" is a claim, not a fact. When CC exited 0, run
+# verity over the target repo's manifest and judge THIS slice's declared criteria only
+# (ADR-004 criteria = claim IDs; the manifest is repo-level and accretes across slices, so
+# the gate is scoped to spec.criteria, not verity's overall verdict). verity is a black box:
+# invoke, read --json report + exit code, filter by criteria. verity writes its own report
+# under .verity/reports/; we embed the item-level verdicts here (D6). If CC did not exit 0,
+# the stop condition is the CC failure itself and the gate is skipped.
+GATE_JSON="{}"
+if [ "$CC_EXIT" -eq 0 ]; then
+  VERITY_ERR="${TMPDIR:-/tmp}/verity.$$.err"
+  set +e
+  VERITY_OUT="$(cd "$HALT_ROOT" && node "$VERITY_CLI" verify --json 2>"$VERITY_ERR")"
+  VERITY_EXIT=$?
+  set -e
+  GATE_JSON="$(
+    CRITERIA="$CRITERIA" VERITY_EXIT="$VERITY_EXIT" VERITY_OUT="$VERITY_OUT" python3 <<'PYEOF'
+import json, os
+crit = [c for c in os.environ["CRITERIA"].split(",") if c]
+vexit = int(os.environ["VERITY_EXIT"])
+# verity exit 2 = usage/config error (missing/malformed manifest, unknown claim type):
+# no verdict was produced, the gate could not run. Terminal (ADR-004 D3: a repo-determined
+# config error a retry cannot fix), fail-closed.
+if vexit == 2:
+    print(json.dumps({"verdict": "NO-VERDICT", "reason": "verity config error (exit 2); gate could not run", "verity_exit": vexit, "claims": []}))
+else:
+    try:
+        report = json.loads(os.environ["VERITY_OUT"])
+        results = {r["id"]: r for r in report.get("results", [])}
+    except Exception as e:
+        print(json.dumps({"verdict": "NO-VERDICT", "reason": f"verity --json not parseable: {e}", "verity_exit": vexit, "claims": []}))
+    else:
+        items, missing, failed = [], [], []
+        for cid in crit:
+            r = results.get(cid)
+            if r is None:
+                missing.append(cid)
+                items.append({"id": cid, "verdict": "ABSENT", "evidence": "criterion id not present in verity report"})
+            else:
+                items.append({"id": cid, "type": r.get("type"), "verdict": r.get("verdict"), "evidence": r.get("evidence")})
+                if r.get("verdict") != "PASS":
+                    failed.append(cid)
+        if missing:
+            verdict, reason = "STOP", "criteria absent from verity report: " + ",".join(missing)
+        elif failed:
+            verdict, reason = "FAIL", "criteria failed: " + ",".join(failed)
+        else:
+            verdict, reason = "PASS", "all declared criteria PASS"
+        print(json.dumps({"verdict": verdict, "reason": reason, "verity_exit": vexit, "claims": items}))
+PYEOF
+  )"
+  rm -f "$VERITY_ERR"
+fi
+
+# Receipt: reflects the gate, not just CC exit. claims[] carries item-level verdicts for
+# the slice's criteria (D6); stop_reason names what actually stopped the run (D7).
+GATE_JSON="$GATE_JSON" python3 - "$OUT" "$RECEIPTS_DIR/$RUN_ID.receipt.json" <<PYEOF
+import json, os, sys
 try:
     cc = json.load(open(sys.argv[1]))
 except Exception:
     cc = {"subtype": "error_no_output"}
+gate = json.loads(os.environ.get("GATE_JSON") or "{}") or {}
+cc_exit = int("$CC_EXIT")
+if cc_exit != 0:
+    stop_reason = "cc_exit=%d" % cc_exit
+    claims = []
+    gate_summary = {"verdict": "not-run", "reason": "CC did not exit 0; gate skipped"}
+else:
+    v = gate.get("verdict", "NO-VERDICT")
+    label = {"PASS": "gate-pass", "FAIL": "gate-fail", "STOP": "gate-stop", "NO-VERDICT": "gate-no-verdict"}.get(v, "gate-" + str(v).lower())
+    stop_reason = label if v == "PASS" else label + ": " + gate.get("reason", "")
+    claims = gate.get("claims", [])
+    gate_summary = {"verdict": v, "reason": gate.get("reason", ""), "verity_exit": gate.get("verity_exit")}
 receipt = {
   "run_id": "$RUN_ID", "spec_id": "$RESOLVED_ID", "mode": "B",
   "model_string": "$MODEL_STRING", "tier_resolved": "$TIER_RESOLVED",
@@ -215,12 +290,20 @@ receipt = {
   "total_cost_usd": cc.get("total_cost_usd"),
   "duration_ms": cc.get("duration_ms"),
   "session_id": cc.get("session_id",""),
-  "stop_reason": "cc_exit=$CC_EXIT",
-  "claims": []
+  "gate": gate_summary,
+  "retries": 0,
+  "stop_reason": stop_reason,
+  "claims": claims
 }
 json.dump(receipt, open(sys.argv[2], "w"), indent=1)
 print("receipt:", sys.argv[2])
 PYEOF
 
-# Non-success is a full stop for the operator to review (G5).
-[ "$CC_EXIT" -eq 0 ] || exit "$CC_EXIT"
+# Final outcome (ADR-004 D3/D7): CC failure dominates and is returned as-is. Otherwise the
+# gate decides: only an all-criteria-PASS verdict is a success; FAIL, STOP (absent criterion),
+# and NO-VERDICT are all terminal non-zero exits for the operator to review.
+if [ "$CC_EXIT" -ne 0 ]; then
+  exit "$CC_EXIT"
+fi
+GATE_VERDICT="$(printf '%s' "$GATE_JSON" | python3 -c 'import json,sys;print(json.load(sys.stdin).get("verdict","NO-VERDICT"))')"
+[ "$GATE_VERDICT" = "PASS" ] || { echo "STOP: gate verdict=$GATE_VERDICT (run not accepted)" >&2; exit 1; }
