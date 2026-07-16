@@ -11,7 +11,7 @@
 #                      (default: $HOME/Code/harnesswright/dist/cli.js)
 #   HARNESS_HOME       pack dir (default: this script's parent)
 #   HARNESS_MANIFEST   default: $HARNESS_HOME/templates/manifest.example.json
-#   RECEIPTS_DIR       default: ./.harness/pack/receipts
+#   RECEIPTS_DIR       default: ./.harness/receipts
 #   LAUNCH_DRYRUN      if =1, resolve + print the launch decision and exit 0 BEFORE
 #                      hashing the constitution or invoking claude; writes nothing.
 #                      Preview + test affordance; the gate logic above it is identical.
@@ -27,7 +27,7 @@ SPEC="$1"
 HARNESS_HOME="${HARNESS_HOME:-$(cd "$(dirname "$0")/.." && pwd)}"
 MANIFEST="${HARNESS_MANIFEST:-$HARNESS_HOME/templates/manifest.example.json}"
 CONST="$HARNESS_HOME/CONSTITUTION.md"
-RECEIPTS_DIR="${RECEIPTS_DIR:-./.harness/pack/receipts}"
+RECEIPTS_DIR="${RECEIPTS_DIR:-./.harness/receipts}"
 
 # harnesswright CLI, fail-closed (ADR-005 D6 STOP "CLI not resolvable"; Consequences a:
 # pin the resolution path at wiring time). Default to the LOCAL BUILD: it is the only
