@@ -1,6 +1,6 @@
 # ADR-004: Parameterized topology & sanitization (supersedes ADR-001 literals)
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-07-17
 - **Deciders:** Pietro Falco
 - **Related:** ADR-001 (enforced deploy topology — Accepted; its literal path/uid/group **values** are superseded here, its structural property is not — see D1), ADR-002 (hermetic launch checks — Accepted; makes `tests/run_tests.sh` a meaningful gate), ADR-003 (canonical stack doc & agent-contract home — Accepted; owns the docs, D6 boundary). Vault ADR-057 (ownership trust boundary) and ADR-058 ("concrete path pinned after recon") — the properties this ADR preserves while de-literalizing. Vault ADR-059 D9 (README vault-section already sanitized in S-SR-001). This ADR decides; implementation is slice **S-SR-002**; no code, launcher, or Justfile is edited here.
