@@ -67,11 +67,12 @@ run SPEC:
     set -euo pipefail
     enforced="{{enforced}}"
     spec="{{SPEC}}"
+    cd "{{invocation_directory()}}"
     [ -f "$spec" ] || { echo "RUN-FAIL: spec not found: $spec" >&2; exit 1; }
     root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
     if [ -e "$root/.harness/HALT" ]; then
       echo "RUN-FAIL: HALT file present at $root/.harness/HALT; refusing." >&2; exit 1
     fi
-    just preflight
+    just --justfile "{{justfile()}}" preflight
     echo "preflight green; launching supervised run over enforced pack (HARNESS_HOME=$enforced)"
     HARNESS_HOME="$enforced" "$enforced/scripts/launch_worker.sh" "$spec"
