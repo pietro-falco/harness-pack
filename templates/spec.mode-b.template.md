@@ -5,6 +5,7 @@ type: chore            # REQUIRED (mode B): chore | bug | feature  (hotfix is Mo
 mode: B                # A | B
 status: proposed       # proposed | accepted
 effort: low            # low | high
+efficiency: []         # REQUIRED: list (may be empty)
 tools:                 # REQUIRED: non-empty YAML list; launcher STOPs if next emits empty spec.tools
   - Read
   - Bash
