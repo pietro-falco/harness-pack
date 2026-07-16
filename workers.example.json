@@ -1,0 +1,7 @@
+{
+  "_comment": "Template for `just preflight`/`just run` (ADR-004 D3). Copy to workers.local.json (gitignored) and list the absolute paths of your worker repos -- each must contain a .harness/pack symlink retargeted to the enforced copy.",
+  "workers": [
+    "/path/to/worker-a",
+    "/path/to/worker-b"
+  ]
+}

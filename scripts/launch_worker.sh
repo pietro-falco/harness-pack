@@ -8,7 +8,7 @@
 #
 # Env:
 #   HARNESSWRIGHT_CLI  path to the harnesswright CLI entrypoint
-#                      (default: $HOME/Code/harnesswright/dist/cli.js)
+#                      (default: an installed `harnesswright` binary resolved via PATH)
 #   HARNESS_HOME       pack dir (default: this script's parent)
 #   HARNESS_MANIFEST   default: $HARNESS_HOME/templates/manifest.example.json
 #   RECEIPTS_DIR       default: ./.harness/receipts
@@ -29,17 +29,42 @@ MANIFEST="${HARNESS_MANIFEST:-$HARNESS_HOME/templates/manifest.example.json}"
 CONST="$HARNESS_HOME/CONSTITUTION.md"
 RECEIPTS_DIR="${RECEIPTS_DIR:-./.harness/receipts}"
 
-# harnesswright CLI, fail-closed (ADR-005 D6 STOP "CLI not resolvable"; Consequences a:
-# pin the resolution path at wiring time). Default to the LOCAL BUILD: it is the only
-# artifact guaranteed to carry spec.tools/tools_source (ADR-005 D3); the published npm
-# 0.1.1 may predate that field. Override via HARNESSWRIGHT_CLI.
-HW_CLI="${HARNESSWRIGHT_CLI:-$HOME/Code/harnesswright/dist/cli.js}"
+# Operator kill-switch (unchanged): git-root-anchored HALT file, checked before the
+# first write so a refused launch leaves no receipts dir behind and is independent of
+# RECEIPTS_DIR. Checked first among the pack-side gates (ADR-005 D6), ahead of CLI
+# resolution, so the emergency stop fires unconditionally even when harnesswright/verity
+# are not installed.
+HALT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+if [ -e "$HALT_ROOT/.harness/HALT" ]; then
+  echo "STOP: HALT file present; refusing to launch." >&2; exit 1
+fi
+
+# harnesswright CLI, fail-closed (ADR-005 D6 STOP "CLI not resolvable"). Resolution order
+# (harness-pack ADR-004 D2): HARNESSWRIGHT_CLI env override first; else an installed
+# `harnesswright` binary on PATH; else STOP with actionable guidance. No literal home
+# path is a tracked default -- the operator's install location is theirs to choose.
+if [ -n "${HARNESSWRIGHT_CLI:-}" ]; then
+  HW_CLI="$HARNESSWRIGHT_CLI"
+elif command -v harnesswright >/dev/null 2>&1; then
+  HW_CLI="$(command -v harnesswright)"
+else
+  echo "STOP: harnesswright CLI not resolvable; install harnesswright or set HARNESSWRIGHT_CLI" >&2
+  exit 1
+fi
 [ -f "$HW_CLI" ] || { echo "STOP: harnesswright CLI not resolvable at $HW_CLI" >&2; exit 1; }
 
-# verity CLI, fail-closed and resolved BEFORE launching CC (ADR-004 D7): a run whose
-# claims cannot be gated must not start. Default to the local build (same rationale as
-# HW_CLI: the published npm may predate the current report schema). Override via VERITY_CLI.
-VERITY_CLI="${VERITY_CLI:-$HOME/Code/verity/dist/cli.js}"
+# verity CLI, fail-closed and resolved BEFORE launching CC (verity ADR-004 D7): a run
+# whose claims cannot be gated must not start. Resolution order (harness-pack ADR-004
+# D2): VERITY_CLI env override first; else an installed `verity` binary on PATH; else
+# STOP with actionable guidance.
+if [ -n "${VERITY_CLI:-}" ]; then
+  :
+elif command -v verity >/dev/null 2>&1; then
+  VERITY_CLI="$(command -v verity)"
+else
+  echo "STOP: verity CLI not resolvable; install verity or set VERITY_CLI" >&2
+  exit 1
+fi
 [ -f "$VERITY_CLI" ] || { echo "STOP: verity CLI not resolvable at $VERITY_CLI" >&2; exit 1; }
 
 # Pack-side launch-gate checks (ADR-002): tier resolution + constitution hash pin,
@@ -48,14 +73,6 @@ VERITY_CLI="${VERITY_CLI:-$HOME/Code/verity/dist/cli.js}"
 SELF_DIR="$(cd "$(dirname "$0")" && pwd)"
 CHECKS="$SELF_DIR/launch_checks.py"
 [ -f "$CHECKS" ] || { echo "STOP: launch_checks.py not resolvable at $CHECKS" >&2; exit 1; }
-
-# Operator kill-switch (unchanged): git-root-anchored HALT file, checked before the
-# first write so a refused launch leaves no receipts dir behind and is independent of
-# RECEIPTS_DIR.
-HALT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-if [ -e "$HALT_ROOT/.harness/HALT" ]; then
-  echo "STOP: HALT file present; refusing to launch." >&2; exit 1
-fi
 
 # The slice the operator requested, derived from the spec FILENAME only, never by
 # parsing the spec (ADR-005 D1: one dialect, and the launcher is not its second reader).

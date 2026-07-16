@@ -33,6 +33,9 @@ verify:
 
 # Fail-closed pre-run checks: tamper gate + enforced present + all worker
 # symlinks retargeted to enforced. Red until the operator retargets .harness/pack.
+# Worker list externalized (ADR-004 D3): workers.local.json (gitignored, operator's
+# real paths) if present, else the tracked workers.example.json placeholder -- no
+# worker repo name or home path is a tracked literal.
 preflight:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -41,11 +44,14 @@ preflight:
     [ -x "$detect" ] || { echo "PREFLIGHT-FAIL: detect gate missing or not executable at $detect (enforced not deployed with D4?)" >&2; exit 1; }
     "$detect" || { echo "PREFLIGHT-FAIL: tamper gate reported mismatch" >&2; exit 1; }
     [ -d "$enforced" ] || { echo "PREFLIGHT-FAIL: enforced root absent: $enforced" >&2; exit 1; }
+    repo="{{justfile_directory()}}"
+    workers_file="$repo/workers.local.json"
+    [ -f "$workers_file" ] || workers_file="$repo/workers.example.json"
+    [ -f "$workers_file" ] || { echo "PREFLIGHT-FAIL: no workers.local.json or workers.example.json at $repo" >&2; exit 1; }
+    mapfile -t workers < <(python3 -c 'import json,sys; print("\n".join(json.load(open(sys.argv[1]))["workers"]))' "$workers_file")
     fail=0
-    for link in \
-        "$HOME/Code/harness-sandbox/.harness/pack" \
-        "$HOME/Code/harness-smoke/.harness/pack" \
-        "$HOME/Code/verifiable-intel/.harness/pack"; do
+    for worker in "${workers[@]}"; do
+      link="$worker/.harness/pack"
       if [ ! -L "$link" ]; then
         echo "PREFLIGHT-FAIL: not a symlink: $link" >&2; fail=1; continue
       fi

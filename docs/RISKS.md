@@ -13,9 +13,9 @@
 - Claude Code CLI/hooks contract drift -> launch_worker.sh,
   settings.mode-b.json and guard_pretooluse.py are the only seams;
   verify flag/field names against current docs at wiring time.
-- Cost fields on subscription auth may be absent/zero -> receipts
-  treat total_cost_usd as nullable; num_turns is the primary budget
-  signal.
+- Cost fields, on an auth mode without standing API keys, may be
+  absent/zero -> receipts treat total_cost_usd as nullable; num_turns
+  is the primary budget signal.
 - Hook env-var expansion is allowlist-gated in some configurations ->
   settings notes it; tests bypass settings and test the script
   directly.

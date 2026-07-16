@@ -154,8 +154,8 @@ section header) that fails CI if the claim stops being true.
   layers — the declarative deny rules in
   [`templates/settings.mode-b.json`](templates/settings.mode-b.json)
   are the other.
-- On subscription auth, per-run cost fields may be null; `num_turns`
-  is the primary budget signal.
+- On an auth mode without standing API keys, per-run cost fields may
+  be null; `num_turns` is the primary budget signal.
 - The full risk register — including the threat-model notes on prompt
   injection and secrets in receipts — lives in
   [`docs/RISKS.md`](docs/RISKS.md).
