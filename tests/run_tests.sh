@@ -22,12 +22,17 @@ while IFS= read -r line; do
   fi
 done < tests/guard_cases.jsonl
 
-echo "== single-hop tier resolution fixture (D8b) =="
+echo "== single-hop tier resolution unit (D8b, ADR-002) =="
+# Assert on the extracted unit directly (scripts/launch_checks.py resolve-tier) — the
+# same code the launcher runs — with no next/CLI/git dependency. Illegal hop refused,
+# legal single-hop-down resolves (so the extraction is not hardcoded to fail).
 TMPD="$(mktemp -d)"
 trap 'rm -rf "$TMPD"' EXIT
-cat > "$TMPD/manifest.json" <<'JSON'
+# Illegal hop: T0 has an empty chain and resolves_to T3 (three tiers down, not one).
+cat > "$TMPD/manifest-illegal.json" <<'JSON'
 {
   "manifest_version": 1,
+  "model_tiers": { "JUDGMENT_MODEL": "T0" },
   "tiers": {
     "T0": { "name": "judgment-authoring", "chain": [], "resolves_to": "T3" },
     "T1": { "name": "trust-anchor", "chain": ["OPUS_CLASS_MODEL"] },
@@ -36,31 +41,21 @@ cat > "$TMPD/manifest.json" <<'JSON'
   }
 }
 JSON
-cat > "$TMPD/spec.md" <<'SPEC'
----
-id: FIXTURE-T0-T3
-tier: T0
-mode: B
----
-SPEC
 set +e
-HARNESS_MANIFEST="$TMPD/manifest.json" RECEIPTS_DIR="$TMPD/receipts" \
-  scripts/launch_worker.sh "$TMPD/spec.md" >/dev/null 2>"$TMPD/err"
+MODEL_STRING="JUDGMENT_MODEL" python3 scripts/launch_checks.py resolve-tier "$TMPD/manifest-illegal.json" \
+  >/dev/null 2>"$TMPD/err"
 rc=$?
 set -e
-if [ "$rc" -eq 0 ] || ! grep -q "illegal resolves_to" "$TMPD/err"; then
+if [ "$rc" -eq 0 ] || ! grep -q "no legal single-hop-downward resolves_to" "$TMPD/err"; then
   echo "FAIL [single-hop T0->T3 must be refused]: rc=$rc"; fail=1
 else
   echo "ok [single-hop T0->T3 refused]: rc=$rc"
 fi
-
-echo "== constitution hash pinning fixture =="
-TMPD2="$(mktemp -d)"
-trap 'rm -rf "$TMPD" "$TMPD2"' EXIT
-cat > "$TMPD2/manifest.json" <<'JSON'
+# Positive companion: a legal single hop down (T0->T1) resolves to T1's model.
+cat > "$TMPD/manifest-legal.json" <<'JSON'
 {
   "manifest_version": 1,
-  "constitution_hash_expected": "0000000000000000000000000000000000000000000000000000000000000000",
+  "model_tiers": { "JUDGMENT_MODEL": "T0" },
   "tiers": {
     "T0": { "name": "judgment-authoring", "chain": [], "resolves_to": "T1" },
     "T1": { "name": "trust-anchor", "chain": ["OPUS_CLASS_MODEL"] },
@@ -69,22 +64,55 @@ cat > "$TMPD2/manifest.json" <<'JSON'
   }
 }
 JSON
-cat > "$TMPD2/spec.md" <<'SPEC'
----
-id: FIXTURE-HASH-MISMATCH
-tier: T1
-mode: B
----
-SPEC
 set +e
-HARNESS_MANIFEST="$TMPD2/manifest.json" RECEIPTS_DIR="$TMPD2/receipts" \
-  scripts/launch_worker.sh "$TMPD2/spec.md" >/dev/null 2>"$TMPD2/err"
+legal_out="$(MODEL_STRING="JUDGMENT_MODEL" python3 scripts/launch_checks.py resolve-tier "$TMPD/manifest-legal.json" 2>/dev/null)"
+rc=$?
+set -e
+if [ "$rc" -ne 0 ] || [ "$legal_out" != "OK T1 OPUS_CLASS_MODEL 1" ]; then
+  echo "FAIL [single-hop T0->T1 must resolve]: rc=$rc out=$legal_out"; fail=1
+else
+  echo "ok [single-hop T0->T1 resolves]: $legal_out"
+fi
+
+echo "== constitution hash pinning unit (ADR-002) =="
+# Assert on the extracted unit directly (scripts/launch_checks.py check-hash): wrong
+# expected hash refused, matching hash passes and echoes the computed digest.
+TMPD2="$(mktemp -d)"
+trap 'rm -rf "$TMPD" "$TMPD2"' EXIT
+printf 'constitution body\n' > "$TMPD2/CONSTITUTION.md"
+# Wrong expected hash -> fail-closed refusal.
+cat > "$TMPD2/manifest-wrong.json" <<'JSON'
+{
+  "manifest_version": 1,
+  "constitution_hash_expected": "0000000000000000000000000000000000000000000000000000000000000000"
+}
+JSON
+set +e
+python3 scripts/launch_checks.py check-hash "$TMPD2/CONSTITUTION.md" "$TMPD2/manifest-wrong.json" \
+  >/dev/null 2>"$TMPD2/err"
 rc=$?
 set -e
 if [ "$rc" -eq 0 ] || ! grep -q "CONST-HASH-MISMATCH" "$TMPD2/err"; then
   echo "FAIL [wrong constitution_hash_expected must be refused]: rc=$rc"; fail=1
 else
   echo "ok [constitution hash mismatch refused]: rc=$rc"
+fi
+# Positive companion: the matching expected hash passes and echoes the digest.
+actual_chash="$(python3 -c 'import hashlib,sys;print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' "$TMPD2/CONSTITUTION.md")"
+cat > "$TMPD2/manifest-right.json" <<JSON
+{
+  "manifest_version": 1,
+  "constitution_hash_expected": "$actual_chash"
+}
+JSON
+set +e
+right_out="$(python3 scripts/launch_checks.py check-hash "$TMPD2/CONSTITUTION.md" "$TMPD2/manifest-right.json" 2>/dev/null)"
+rc=$?
+set -e
+if [ "$rc" -ne 0 ] || [ "$right_out" != "$actual_chash" ]; then
+  echo "FAIL [correct constitution_hash_expected must pass]: rc=$rc"; fail=1
+else
+  echo "ok [constitution hash match passes]: rc=$rc"
 fi
 
 echo "== HALT kill-switch in target repo refuses launch =="

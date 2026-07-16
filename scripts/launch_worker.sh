@@ -42,6 +42,13 @@ HW_CLI="${HARNESSWRIGHT_CLI:-$HOME/Code/harnesswright/dist/cli.js}"
 VERITY_CLI="${VERITY_CLI:-$HOME/Code/verity/dist/cli.js}"
 [ -f "$VERITY_CLI" ] || { echo "STOP: verity CLI not resolvable at $VERITY_CLI" >&2; exit 1; }
 
+# Pack-side launch-gate checks (ADR-002): tier resolution + constitution hash pin,
+# extracted verbatim into a standalone unit the tests exercise directly. Resolved
+# beside THIS script (not via HARNESS_HOME, which is overridable), fail-closed.
+SELF_DIR="$(cd "$(dirname "$0")" && pwd)"
+CHECKS="$SELF_DIR/launch_checks.py"
+[ -f "$CHECKS" ] || { echo "STOP: launch_checks.py not resolvable at $CHECKS" >&2; exit 1; }
+
 # Operator kill-switch (unchanged): git-root-anchored HALT file, checked before the
 # first write so a refused launch leaves no receipts dir behind and is independent of
 # RECEIPTS_DIR.
@@ -128,31 +135,7 @@ read -r RESOLVED_ID MODEL_STRING MAXTURNS WALLSEC TOOLS CRITERIA <<<"$REST"
 # (ADR-005 D4): spec.model -> model_tiers[model] -> tiers[T].chain[0]. Fail-closed: a
 # model-string absent from model_tiers is a STOP, never a default tier. The existing
 # single-hop-DOWNWARD resolves_to rule (empty chain) is preserved unchanged.
-RESOLUTION="$(
-  MODEL_STRING="$MODEL_STRING" python3 - "$MANIFEST" <<'PYEOF'
-import json, os, sys
-m = json.load(open(sys.argv[1]))
-model = os.environ["MODEL_STRING"]
-model_tiers = m.get("model_tiers") or {}
-tiers = m.get("tiers") or {}
-if model not in model_tiers:
-    print(f"STOP model-string {model!r} absent from manifest.model_tiers (fail-closed; not a default)"); sys.exit()
-t = model_tiers[model]
-tier = tiers.get(t)
-if tier is None:
-    print(f"STOP model_tiers[{model!r}] -> {t!r}, not a tier in the manifest"); sys.exit()
-if not tier.get("chain"):
-    rt = tier.get("resolves_to")
-    order = ["T0", "T1", "T2", "T3"]
-    if not rt or t not in order or rt not in order or (order.index(rt) - order.index(t)) != 1:
-        print(f"STOP tier {t!r} has empty chain and no legal single-hop-downward resolves_to"); sys.exit()
-    t = rt
-    tier = tiers.get(t) or {}
-    if not tier.get("chain"):
-        print(f"STOP resolves_to target {t!r} also has empty chain"); sys.exit()
-print("OK", t, tier["chain"][0], m.get("manifest_version", ""))
-PYEOF
-)"
+RESOLUTION="$(MODEL_STRING="$MODEL_STRING" python3 "$CHECKS" resolve-tier "$MANIFEST")" || exit 1
 read -r RVERDICT RREST <<<"$RESOLUTION"
 if [ "$RVERDICT" != "OK" ]; then
   echo "$RESOLUTION" >&2
@@ -169,13 +152,9 @@ fi
 
 mkdir -p "$RECEIPTS_DIR"
 
-# Constitution hash pin, fail-closed (unchanged).
-CHASH="$(python3 -c 'import hashlib,sys;print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' "$CONST")"
-EXPECTED_CHASH="$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1])).get("constitution_hash_expected",""))' "$MANIFEST")"
-if [ -n "$EXPECTED_CHASH" ] && [ "$EXPECTED_CHASH" != "$CHASH" ]; then
-  echo "STOP: CONST-HASH-MISMATCH expected=$EXPECTED_CHASH actual=$CHASH" >&2
-  exit 1
-fi
+# Constitution hash pin, fail-closed (ADR-002: via the extracted unit; check-hash
+# echoes the computed digest on stdout, or STOPs on stderr + non-zero on mismatch).
+CHASH="$(python3 "$CHECKS" check-hash "$CONST" "$MANIFEST")" || exit 1
 
 TOOLVER="$(claude --version 2>/dev/null || echo unknown)"
 RUN_ID="run-$(date -u +%Y%m%dT%H%M%SZ)-$$"
