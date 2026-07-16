@@ -4,3 +4,4 @@ __pycache__/
 dashboard.html
 stats.md
 .DS_Store
+receipts/

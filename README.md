@@ -176,14 +176,13 @@ services — the dashboard is a generated file, not a server.
 - **harness-pack** (this repo) — the rules, routing, and receipts
   around every run.
 
-## Vault ADRs affecting this project
+## Governance
 
-Governance ADRs live in the vault (`~/Obsidian-Vault/80-governance/adrs/`); this project's own ADRs live in `docs/adrs/` (ADR-001+). Per vault ADR-022 §4, the relevant vault ADRs are:
+This project's own ADRs live in `docs/adrs/` (ADR-001+). Broader governance decisions affecting deployment topology, guard tamper-resistance, and repo conventions are recorded in a private, operator-side ADR series and are out of scope for this public repo. The public invariants those decisions enforce — and that this pack is built to guarantee — are:
 
-- vault ADR-057 — harness tamper-resistance & guard trust boundary (`80-governance/adrs/ADR-057-harness-tamper-resistance.md`)
-- vault ADR-058 — harness enforcement topology: deploy-split, symlink-independent guard resolution (`80-governance/adrs/ADR-058-harness-enforcement-deploy-split.md`)
-- vault ADR-054 — harness deployment topology + Mode B preconditions (`80-governance/adrs/ADR-054-*.md`)
-- vault ADR-022 — code-repo conventions & ADR namespace (`80-governance/adrs/ADR-022-code-repo-conventions-and-adr-namespace.md`)
+- **Enforced-copy deploy topology**: the runtime pack a worker executes against is a separate, non-writable copy outside the worker's own tree; editing the dev source never changes what the enforcer runs.
+- **Tamper gate on the deployed copy**: the deployed pack's integrity is verified against a pinned hash before every run; drift is a stop condition.
+- **Constitution hash pinned into every receipt**: the governance rules injected into a run are hash-pinned, so every receipt is traceable to the exact constitution version that governed it.
 
 ## Requirements
 
