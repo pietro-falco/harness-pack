@@ -176,6 +176,15 @@ services — the dashboard is a generated file, not a server.
 - **harness-pack** (this repo) — the rules, routing, and receipts
   around every run.
 
+## Vault ADRs affecting this project
+
+Governance ADRs live in the vault (`~/Obsidian-Vault/80-governance/adrs/`); this project's own ADRs live in `docs/adrs/` (ADR-001+). Per vault ADR-022 §4, the relevant vault ADRs are:
+
+- vault ADR-057 — harness tamper-resistance & guard trust boundary (`80-governance/adrs/ADR-057-harness-tamper-resistance.md`)
+- vault ADR-058 — harness enforcement topology: deploy-split, symlink-independent guard resolution (`80-governance/adrs/ADR-058-harness-enforcement-deploy-split.md`)
+- vault ADR-054 — harness deployment topology + Mode B preconditions (`80-governance/adrs/ADR-054-*.md`)
+- vault ADR-022 — code-repo conventions & ADR namespace (`80-governance/adrs/ADR-022-code-repo-conventions-and-adr-namespace.md`)
+
 ## Requirements
 
 Python 3 and bash. No packages to install, no daemon, no network
