@@ -1,6 +1,6 @@
 # ADR-003: Canonical stack-integration doc (docs/STACK.md) and agent-contract home
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-07-17
 - **Deciders:** Pietro Falco
 - **Related:** ADR-001 (harness-pack deploy topology — Accepted), ADR-002 (hermetically testable launch checks — Accepted). External code repos composed at runtime: harnesswright (the planner; launcher consumes `next --json`) and verity (the gate; launcher consumes `verify --json`), both MIT. Forward: ADR-004 (parameterized topology & sanitization) owns the literal-path/uid supersession of ADR-001 and the launcher-fallback changes — this ADR does not. Vault ADR-060 (license split; open question 3). The operator's private governance chain (`~/.claude/CLAUDE.md` and its vault `@import`s) is out of scope here and unchanged by this ADR.
