@@ -1,6 +1,6 @@
 # ADR-001: Enforced-pack deploy topology — root-owned enforced copy, absolute guard resolution, and the detect gate
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-07-16
 - **Deciders:** Pietro Falco
 - **Related:** vault ADR-057 (harness tamper-resistance & guard trust boundary — Accepted); vault ADR-058 (harness enforcement topology: deploy-split, symlink-independent guard resolution — Accepted); vault ADR-054 (harness deployment topology + Mode B preconditions — Accepted); vault ADR-022 (code-repo conventions & ADR namespace). External code repo: harnesswright ADR-005 (the launcher consumes `next --json`). This is harness-pack's first project ADR; it opens harness-pack's ADR sequence at ADR-001 per vault ADR-022 §1, independent of the vault and harnesswright sequences.
