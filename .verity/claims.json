@@ -5,42 +5,42 @@
       "id": "privacy-lint-vault-name",
       "type": "command",
       "description": "No tracked file (outside docs/adrs/, which documents the sanitization itself) references the private vault name.",
-      "run": "! git grep -qiF 'Obsidian-Vault' -- ':!docs/adrs/' ':!*.example.json' ':!workers.local.json'",
+      "run": "! git grep -qiF 'Obsidian-Vault' -- ':!docs/adrs/' ':!*.example.json' ':!workers.local.json' ':!.verity/claims.json'",
       "expect": { "exitCode": 0 }
     },
     {
       "id": "privacy-lint-user-paths",
       "type": "command",
       "description": "No tracked file references a literal /Users/ home path.",
-      "run": "! git grep -qF '/Users/' -- ':!docs/adrs/' ':!*.example.json' ':!workers.local.json'",
+      "run": "! git grep -qF '/Users/' -- ':!docs/adrs/' ':!*.example.json' ':!workers.local.json' ':!.verity/claims.json'",
       "expect": { "exitCode": 0 }
     },
     {
       "id": "privacy-lint-operator-uid-phrase",
       "type": "command",
       "description": "No tracked file references the operator's literal uid via the 'uid 501' phrasing.",
-      "run": "! git grep -qiE '\\buid 501\\b' -- ':!docs/adrs/' ':!*.example.json' ':!workers.local.json'",
+      "run": "! git grep -qiE '\\buid 501\\b' -- ':!docs/adrs/' ':!*.example.json' ':!workers.local.json' ':!.verity/claims.json'",
       "expect": { "exitCode": 0 }
     },
     {
       "id": "privacy-lint-operator-uid-bare",
       "type": "command",
       "description": "No tracked file references the operator's literal uid as a bare '501' id token.",
-      "run": "! git grep -qE '\\b501\\b' -- ':!docs/adrs/' ':!*.example.json' ':!workers.local.json'",
+      "run": "! git grep -qE '\\b501\\b' -- ':!docs/adrs/' ':!*.example.json' ':!workers.local.json' ':!.verity/claims.json'",
       "expect": { "exitCode": 0 }
     },
     {
       "id": "privacy-lint-worker-repo-names",
       "type": "command",
       "description": "No tracked file names the operator's private worker repos.",
-      "run": "! git grep -qiE 'harness-sandbox|harness-smoke|verifiable-intel' -- ':!docs/adrs/' ':!*.example.json' ':!workers.local.json'",
+      "run": "! git grep -qiE 'harness-sandbox|harness-smoke|verifiable-intel' -- ':!docs/adrs/' ':!*.example.json' ':!workers.local.json' ':!.verity/claims.json'",
       "expect": { "exitCode": 0 }
     },
     {
       "id": "privacy-lint-model-id",
       "type": "command",
       "description": "No tracked file names a real model ID outside the *_CLASS_MODEL manifest placeholder convention.",
-      "run": "! git grep -qiE 'claude-(opus|sonnet|haiku)-[0-9]' -- ':!docs/adrs/' ':!*.example.json' ':!workers.local.json'",
+      "run": "! git grep -qiE 'claude-(opus|sonnet|haiku)-[0-9]' -- ':!docs/adrs/' ':!*.example.json' ':!workers.local.json' ':!.verity/claims.json'",
       "expect": { "exitCode": 0 }
     }
   ]
