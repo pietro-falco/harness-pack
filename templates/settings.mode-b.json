@@ -1,5 +1,5 @@
 {
-  "_comment": "Mode B settings: declarative deny rules + dynamic guard hook. Layer 1 (deny rules) cannot be overridden by a hook allow; layer 2 (PreToolUse hook) blocks even in bypassPermissions. The hook matcher is \"*\" (match all tools), not \"Bash\": the guard also carries the HALT kill-switch, which must neutralise a run in flight across Edit/Write too, not only shell-outs. Verify at wiring time that CLAUDE_PROJECT_DIR expands in your Claude Code version; hook $VARs not allowlisted expand to empty string.",
+  "_comment": "Mode B settings: declarative deny rules + dynamic guard hook. Layer 1 (deny rules) cannot be overridden by a hook allow; layer 2 (PreToolUse hook) blocks even in bypassPermissions. The hook matcher is \"*\" (match all tools), not \"Bash\": the guard also carries the HALT kill-switch, which must neutralise a run in flight across Edit/Write too, not only shell-outs. The guard is referenced by an absolute enforced path (/opt/harness/scripts/guard_pretooluse.py), never via the .harness/pack symlink or $CLAUDE_PROJECT_DIR, so a worker cannot retarget the guard by moving a symlink or shadowing an env var (ADR-001 D3).",
   "permissions": {
     "deny": [
       "Bash(rm:*)", "Bash(rmdir:*)", "Bash(sudo:*)",
@@ -15,7 +15,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR/.harness/pack/scripts/guard_pretooluse.py\""
+            "command": "python3 /opt/harness/scripts/guard_pretooluse.py"
           }
         ]
       }

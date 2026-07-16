@@ -31,6 +31,10 @@ DENY = [
     BOUNDARY + r"rm[\s]",  BOUNDARY + r"rm$",
     BOUNDARY + r"rmdir(\s|$)",
     BOUNDARY + r"shred(\s|$)",
+    BOUNDARY + r"ln(\s|$)",
+    BOUNDARY + r"mv(\s|$)",
+    BOUNDARY + r"chmod(\s|$)",
+    BOUNDARY + r"chflags(\s|$)",
     r"git\s+push\b.*(--force\b|--force-with-lease\b)",
     r"git\s+push\b.*\s\+\S",          # +refspec force push
     r"--no-verify\b",
