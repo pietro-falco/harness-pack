@@ -5,7 +5,11 @@ type: chore            # REQUIRED (mode B): chore | bug | feature  (hotfix is Mo
 mode: B                # A | B
 status: proposed       # proposed | accepted
 effort: low            # low | high
-tools: "Read,Bash,Grep,Glob"   # REQUIRED: non-empty; launcher STOPs if next emits empty spec.tools
+tools:                 # REQUIRED: non-empty YAML list; launcher STOPs if next emits empty spec.tools
+  - Read
+  - Bash
+  - Grep
+  - Glob
 budget:                # REQUIRED: a map with at least one of tokens / turns / wall_clock
   turns: 10
   wall_clock: "15m"    # must match ^\d+(m|h)$
