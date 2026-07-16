@@ -94,6 +94,7 @@ trap 'rm -rf "$TMPD" "$TMPD2" "$TMPD3" "$TMPD3R"' EXIT
 PACK="$PWD"
 mkdir -p "$TMPD3/.harness"
 touch "$TMPD3/.harness/HALT"
+printf -- '---\nid: FIXTURE-HALT\ntier: T1\nmode: B\n---\n' > "$TMPD3/spec.md"
 set +e
 ( cd "$TMPD3" && RECEIPTS_DIR="$TMPD3R/receipts" \
     "$PACK/scripts/launch_worker.sh" "$TMPD3/spec.md" ) >/dev/null 2>"$TMPD3/err"
