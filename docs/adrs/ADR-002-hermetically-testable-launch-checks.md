@@ -1,6 +1,6 @@
 # ADR-002: Extract tier-resolution and constitution-hash checks into hermetically testable units
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-07-17
 - **Deciders:** Pietro Falco
 - **Related:** ADR-001 (harness-pack deploy topology — Accepted). External code repos: harnesswright ADR-005 (the launcher consumes `next --json`; D4 pack-side model-string→tier resolution), verity ADR-004 (the gate). This ADR changes no semantics from either; it is a testability refactor of `scripts/launch_worker.sh`.
