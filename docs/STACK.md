@@ -6,16 +6,16 @@
 This document is the canonical account of how the stack fits together,
 and the authoritative home of the [agent contract](#agent-contract)
 every session operating these repos must follow. Each repo's
-`CLAUDE.md` is a thin projection of this file — a pointer, not a copy.
+`CLAUDE.md` is a thin projection of this file: a pointer, not a copy.
 
 ## The three layers
 
 The stack separates what should happen, what actually runs, and what
-can be proven — and never blurs the three.
+can be proven, and never blurs the three.
 
 | Layer | Home | What lives there |
 |---|---|---|
-| **Intent** | specs + ADRs | What should exist and why. Architectural decisions land as ADRs (Proposed → Accepted, two commits); work is cut into slices with declared acceptance criteria. Intent is authored and reviewed — never improvised by the session executing it. |
+| **Intent** | specs + ADRs | What should exist and why. Architectural decisions land as ADRs (Proposed → Accepted, two commits); work is cut into slices with declared acceptance criteria. Intent is authored and reviewed, never improvised by the session executing it. |
 | **Execution** | Claude Code, wrapped by **harness-pack** | The bounded run: a pinned constitution injected verbatim, a fail-closed guard screening every tool call, an operator kill-switch, abstract model tiers resolved through an untracked local manifest. The session does the work; it never grades the work. |
 | **Truth** | **harnesswright** plan gate → **verity** → hash-pinned receipts | Whether work may proceed, and whether it actually happened. harnesswright's gate decides eligibility from the slice ledger; verity checks each declared claim against reality with a deterministic command; the outcome lands in a hash-chained receipt log anchored by a git commit. |
 
@@ -26,21 +26,19 @@ asserted. A layer that borrows another layer's job is a bug.
 ## Composition
 
 The dependency is one-directional. harness-pack is the composition
-point — the only repo that sees all three vocabularies. Neither
+point: the only repo that sees all three vocabularies. Neither
 harnesswright nor verity knows harness-pack exists, and verity depends
 on nothing in the stack.
 
-```mermaid
-flowchart LR
-    HP["harness-pack<br/>launcher · guard · receipts"] --> HW["harnesswright<br/>specs · ledger · plan gate"]
-    HP --> V["verity<br/>deterministic claim checks"]
-```
+<p align="center"><img src="diagrams/stack-workflow.png" width="880" alt="Stack workflow: the operator writes the spec. harnesswright's next reports which slice is unlocked. harness-pack's launcher pins the constitution and arms the guard, the agent works in a bounded run, and the gate hands the verdict to verity, which checks every claim. All pass appends a receipt to the hash-chained log and the loop returns to next; any fail is a full stop back to the operator"></p>
+
+<sub>Color key: amber marks a gate or anything waiting on the operator, green marks a verified pass, grey is neutral state.</sub>
 
 At runtime, the launcher consumes harnesswright's plan
 (`harnesswright next --json`) to decide whether a slice may launch,
 and verity's report (`verity verify --json`) to decide whether the
 work passed. verity's independence is deliberate: it is the layer the
-other two are judged by, so it must stay trustable on its own — zero
+other two are judged by, so it must stay trustable on its own. Zero
 dependencies, no network, no model calls.
 
 CLI resolution follows house convention: an explicit environment
@@ -58,7 +56,7 @@ trusting the narrator:
 - **Verifiable execution.** Every run ends in a receipt recording the
   exact rules in force (by sha256), the model that actually ran
   (resolved from an abstract tier), the outcome, and the cost. Anyone
-  can re-check it from the committed blob — the receipt survives the
+  can re-check it from the committed blob; the receipt survives the
   session that wrote it.
 - **Deterministic gates.** A gate is a command with an expected exit
   code. No LLM-as-judge, no auto-retry, no "probably fine": a check
@@ -68,7 +66,7 @@ trusting the narrator:
   tail of the chain. Mutation, reordering, and interior deletion are
   detectable; the commit anchors what the file alone cannot.
 
-Prose scales with model fluency. Receipts scale with nothing — they
+Prose scales with model fluency. Receipts scale with nothing: they
 are either reproducible or they are not, and that asymmetry is the
 whole moat.
 
@@ -76,11 +74,11 @@ whole moat.
 
 The split is deliberate, not drift, and there is no plan to relicense:
 
-- **harness-pack — Apache-2.0.** The enforcement layer: code that
+- **harness-pack: Apache-2.0.** The enforcement layer: code that
   executes, gates, and blocks real work on real machines. Apache-2.0's
   explicit patent grant is the right fit for the layer users must be
   able to run in anger without a licensing question mark.
-- **harnesswright and verity — MIT.** Thin, zero-dependency libraries
+- **harnesswright and verity: MIT.** Thin, zero-dependency libraries
   whose value is maximal reuse and embedding. MIT's minimal footprint
   removes every barrier to pulling them into another stack.
 
@@ -94,26 +92,26 @@ fresh session needs nothing beyond this section to operate correctly.
 ### ADR gate
 
 - Implement only against an ADR whose status line literally reads
-  **Accepted**. Verify by reading the file, not from memory — recall
+  **Accepted**. Verify by reading the file, not from memory; recall
   is not evidence.
 - Two-commit lifecycle: the ADR lands as **Proposed** in its own
   commit; a second commit flips it to **Accepted** after operator
   review; implementation commits come only after that flip.
 - Accepted ADRs are immutable. Correct them by superseding with a new
-  ADR or an appended amendment — never by editing in place.
+  ADR or an appended amendment, never by editing in place.
 
 ### Evidence discipline
 
 - Evidence is raw output: exit codes, literal stdout,
   `git show HEAD:<path>` blobs, commit hashes, receipts. A prose
   summary is never evidence of file content, commit state, or test
-  results — neither accepted nor produced as such.
+  results: neither accepted nor produced as such.
 - Recon before write: read the literal current state before authoring,
   editing, or asserting a baseline.
 - Verify after write: read every file back in the same step it was
   written. Post-commit, the source of truth is the committed blob,
   not the working tree.
-- Never assert a status — accepted, done, closed, green — without a
+- Never assert a status (accepted, done, closed, green) without a
   literal check of the source of truth.
 
 ### Git hygiene
@@ -121,11 +119,11 @@ fresh session needs nothing beyond this section to operate correctly.
 - Stage explicit paths only: `git add -- <file>`. Never `git add -A`,
   `--all`, or a bare `git add .`.
 - Never bypass hooks: no `--no-verify`. A hook blocking a commit is a
-  stop condition — surface its output verbatim and stop.
+  stop condition: surface its output verbatim and stop.
 - No destructive operations without an explicit operator directive:
   no `git reset --hard`, no force-push, no `git clean`, no history
   rewrite, no discarding uncommitted work.
-- Commits are atomic — one logical change each, with a
+- Commits are atomic: one logical change each, with a
   Conventional-Commit prefix.
 
 ### Scope and stops
