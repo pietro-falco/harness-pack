@@ -19,6 +19,21 @@
 # is the only seam if the runner CLI contract drifts.
 set -euo pipefail
 
+# Optional, fail-open Telegram notification. No-op (silent) unless both
+# TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID are set; a notification failure
+# must never alter the run outcome or exit code, so curl's result is
+# discarded and this always returns 0. Never echo the token.
+notify_telegram() {
+  local text="$1"
+  if [ -z "${TELEGRAM_BOT_TOKEN:-}" ] || [ -z "${TELEGRAM_CHAT_ID:-}" ]; then
+    return 0
+  fi
+  curl -s -m 5 "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+    --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
+    --data-urlencode "text=${text}" >/dev/null 2>&1 || true
+  return 0
+}
+
 usage() { echo "usage: launch_worker.sh SPEC.md" >&2; exit 2; }
 [ $# -eq 1 ] || usage
 SPEC="$1"
@@ -294,6 +309,9 @@ receipt = {
 json.dump(receipt, open(sys.argv[2], "w"), indent=1)
 print("receipt:", sys.argv[2])
 PYEOF
+
+RECEIPT_STOP_REASON="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("stop_reason",""))' "$RECEIPTS_DIR/$RUN_ID.receipt.json")"
+ notify_telegram "run_id=$RUN_ID spec_id=$RESOLVED_ID stop_reason=$RECEIPT_STOP_REASON"
 
 # Final outcome (ADR-004 D3/D7): CC failure dominates and is returned as-is. Otherwise the
 # gate decides: only an all-criteria-PASS verdict is a success; FAIL, STOP (absent criterion),
