@@ -42,6 +42,34 @@
       "description": "No tracked file names a real model ID outside the *_CLASS_MODEL manifest placeholder convention.",
       "run": "! git grep -qiE 'claude-(opus|sonnet|haiku)-[0-9]' -- ':!docs/adrs/' ':!*.example.json' ':!workers.local.json' ':!.verity/claims.json'",
       "expect": { "exitCode": 0 }
+    },
+    {
+      "id": "drift-guard-agent-contract-adr-gate",
+      "type": "command",
+      "description": "docs/STACK.md retains the pinned agent-contract heading '### ADR gate' (ADR-003 D3).",
+      "run": "git grep -qF '### ADR gate' -- docs/STACK.md",
+      "expect": { "exitCode": 0 }
+    },
+    {
+      "id": "drift-guard-agent-contract-evidence-discipline",
+      "type": "command",
+      "description": "docs/STACK.md retains the pinned agent-contract heading '### Evidence discipline' (ADR-003 D3).",
+      "run": "git grep -qF '### Evidence discipline' -- docs/STACK.md",
+      "expect": { "exitCode": 0 }
+    },
+    {
+      "id": "drift-guard-agent-contract-git-hygiene",
+      "type": "command",
+      "description": "docs/STACK.md retains the pinned agent-contract heading '### Git hygiene' (ADR-003 D3).",
+      "run": "git grep -qF '### Git hygiene' -- docs/STACK.md",
+      "expect": { "exitCode": 0 }
+    },
+    {
+      "id": "drift-guard-agent-contract-scope-and-stops",
+      "type": "command",
+      "description": "docs/STACK.md retains the pinned agent-contract heading '### Scope and stops' (ADR-003 D3).",
+      "run": "git grep -qF '### Scope and stops' -- docs/STACK.md",
+      "expect": { "exitCode": 0 }
     }
   ]
 }
