@@ -1,0 +1,14 @@
+%%{init: {"theme":"dark","securityLevel":"loose","themeVariables":{"fontFamily":"'SF Pro Text','Segoe UI',Helvetica,Arial,sans-serif","fontSize":"17px","primaryColor":"#0d1117","primaryTextColor":"#e6edf3","primaryBorderColor":"#8b949e","lineColor":"#6e7681","edgeLabelBackground":"#0d1117"},"flowchart":{"htmlLabels":true,"curve":"basis","padding":18,"nodeSpacing":60,"rankSpacing":70}}}%%
+flowchart LR
+    A("<b style='font-size:1.15em'>agent says done</b><br/><span style='font-size:0.85em'>a claim, not a fact</span>") --> B{"<b>deterministic checks</b><br/><span style='font-size:0.8em'>exit codes, git state, file hashes</span>"}
+    B -->|"<small>all pass</small>"| C("<b style='font-size:1.15em'>receipt</b><br/><span style='font-size:0.85em'>appended to a hash-chained log</span>")
+    B -->|"<small>any fail</small>"| D("<b style='font-size:1.15em'>full stop</b><br/><span style='font-size:0.85em'>no auto-retry, operator review</span>")
+    C --> E("<b style='font-size:1.15em'>git commit</b><br/><span style='font-size:0.85em'>tamper anchor</span>")
+    class B gate
+    class C pass
+    class D halt
+
+    classDef default fill:#0d1117,stroke:#8b949e,stroke-width:1.5px,color:#e6edf3
+    classDef gate fill:#0d1117,stroke:#ffd699,stroke-width:2px,color:#ffd699
+    classDef pass fill:#0d1117,stroke:#2ea043,stroke-width:1.5px,color:#7ee2a8
+    classDef halt fill:#0d1117,stroke:#ffd699,stroke-width:1.5px,color:#ffd699

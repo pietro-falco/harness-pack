@@ -1,0 +1,31 @@
+%%{init: {"theme":"dark","securityLevel":"loose","themeVariables":{"fontFamily":"'SF Pro Text','Segoe UI',Helvetica,Arial,sans-serif","fontSize":"17px","primaryColor":"#0d1117","primaryTextColor":"#e6edf3","primaryBorderColor":"#8b949e","lineColor":"#6e7681","edgeLabelBackground":"#0d1117"},"flowchart":{"htmlLabels":true,"curve":"basis","padding":18,"nodeSpacing":60,"rankSpacing":70}}}%%
+flowchart LR
+    OP("<b style='font-size:1.15em'>operator</b><br/><span style='font-size:0.85em'>writes the spec</span>") --> NX
+    subgraph HW["harnesswright · truth layer"]
+        NX("<b style='font-size:1.15em'>next</b><br/><span style='font-size:0.85em'>which slice is unlocked</span>")
+        GT{"<b>gate</b><br/><span style='font-size:0.8em'>deterministic verdict</span>"}
+    end
+    subgraph HP["harness-pack · runtime rules"]
+        LW("<b style='font-size:1.15em'>launch_worker.sh</b><br/><span style='font-size:0.85em'>constitution pinned, guard armed</span>")
+        AG("<b style='font-size:1.15em'>agent works</b><br/><span style='font-size:0.85em'>bounded run, every tool guarded</span>")
+        RC("<b style='font-size:1.15em'>receipt appended</b><br/><span style='font-size:0.85em'>hash-chained log, ledger updated</span>")
+    end
+    subgraph VY["verity · claim verifier"]
+        VV("<b style='font-size:1.15em'>verity verify</b><br/><span style='font-size:0.85em'>claims against filesystem, git, exit codes</span>")
+    end
+    NX --> LW --> AG --> GT
+    GT --> VV
+    VV -->|"<small>all pass</small>"| RC --> NX
+    VV -->|"<small>any fail</small>"| FS("<b style='font-size:1.15em'>full stop</b><br/><span style='font-size:0.85em'>operator review</span>") --> OP
+    class GT gate
+    class VV gate
+    class RC pass
+    class FS halt
+    style HW fill:#0d1117,stroke:#30363d
+    style HP fill:#0d1117,stroke:#30363d
+    style VY fill:#0d1117,stroke:#30363d
+
+    classDef default fill:#0d1117,stroke:#8b949e,stroke-width:1.5px,color:#e6edf3
+    classDef gate fill:#0d1117,stroke:#ffd699,stroke-width:2px,color:#ffd699
+    classDef pass fill:#0d1117,stroke:#2ea043,stroke-width:1.5px,color:#7ee2a8
+    classDef halt fill:#0d1117,stroke:#ffd699,stroke-width:1.5px,color:#ffd699

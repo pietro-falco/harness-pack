@@ -1,0 +1,14 @@
+%%{init: {"theme":"dark","securityLevel":"loose","themeVariables":{"fontFamily":"'SF Pro Text','Segoe UI',Helvetica,Arial,sans-serif","fontSize":"17px","primaryColor":"#0d1117","primaryTextColor":"#e6edf3","primaryBorderColor":"#8b949e","lineColor":"#6e7681","edgeLabelBackground":"#0d1117"},"flowchart":{"htmlLabels":true,"curve":"basis","padding":18,"nodeSpacing":60,"rankSpacing":70}}}%%
+flowchart LR
+    O("<b style='font-size:1.15em'>operator</b><br/><span style='font-size:0.85em'>touch .harness/HALT</span>") --> L2("launch_worker.sh")
+    O --> G2("guard hook<br/><span style='font-size:0.85em'>every tool call</span>")
+    L2 -->|"<small>HALT present</small>"| RF("<b style='font-size:1.15em'>refuses to launch</b>")
+    G2 -->|"<small>HALT found walking up</small>"| BK("<b style='font-size:1.15em'>blocks every tool</b><br/><span style='font-size:0.85em'>Edit, Bash, all of it · exit 2</span>")
+    class O gate
+    class RF halt
+    class BK halt
+
+    classDef default fill:#0d1117,stroke:#8b949e,stroke-width:1.5px,color:#e6edf3
+    classDef gate fill:#0d1117,stroke:#ffd699,stroke-width:2px,color:#ffd699
+    classDef pass fill:#0d1117,stroke:#2ea043,stroke-width:1.5px,color:#7ee2a8
+    classDef halt fill:#0d1117,stroke:#ffd699,stroke-width:1.5px,color:#ffd699

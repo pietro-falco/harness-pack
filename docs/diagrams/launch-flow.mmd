@@ -1,0 +1,28 @@
+%%{init: {"theme":"dark","securityLevel":"loose","themeVariables":{"fontFamily":"'SF Pro Text','Segoe UI',Helvetica,Arial,sans-serif","fontSize":"17px","primaryColor":"#0d1117","primaryTextColor":"#e6edf3","primaryBorderColor":"#8b949e","lineColor":"#6e7681","edgeLabelBackground":"#0d1117"},"flowchart":{"htmlLabels":true,"curve":"basis","padding":18,"nodeSpacing":60,"rankSpacing":70}}}%%
+flowchart TD
+    S("<b style='font-size:1.15em'>spec.md</b><br/><span style='font-size:0.85em'>goal, tier, mode, budget, stop conditions</span>") --> L("launch_worker.sh")
+    L --> H{"<b>HALT check</b><br/><span style='font-size:0.8em'>.harness/HALT on disk</span>"}
+    H -->|"<small>yes</small>"| X("<b style='font-size:1.15em'>refuse to launch</b>")
+    H -->|"<small>no</small>"| P{"<b>constitution check</b><br/><span style='font-size:0.8em'>sha256 vs pinned hash</span>"}
+    P -->|"<small>no</small>"| PX("<b style='font-size:1.15em'>refuse</b><br/><span style='font-size:0.85em'>CONST-HASH-MISMATCH</span>")
+    P -->|"<small>yes</small>"| T("resolve tier T0-T3 to a model<br/><span style='font-size:0.85em'>local manifest</span>")
+    T --> C2("inject CONSTITUTION.md verbatim<br/><span style='font-size:0.85em'>record its sha256</span>")
+    C2 --> R("<b style='font-size:1.15em'>bounded run</b><br/><span style='font-size:0.85em'>max turns + wall-clock timeout</span>")
+    R --> G{"<b>guard_pretooluse.py</b><br/><span style='font-size:0.8em'>every tool call</span>"}
+    G -->|"<small>destructive</small>"| B2("<b style='font-size:1.15em'>blocked, exit 2</b><br/><span style='font-size:0.85em'>never executes</span>")
+    G -->|"<small>safe</small>"| R
+    R --> W("<b style='font-size:1.15em'>receipt.json</b><br/><span style='font-size:0.85em'>model, constitution_hash, outcome, cost</span>")
+    W --> RC("<b style='font-size:1.15em'>receipt_chain.py</b><br/><span style='font-size:0.85em'>append-only JSONL, each line hashes the previous</span>")
+    class H gate
+    class P gate
+    class G gate
+    class X halt
+    class PX halt
+    class B2 halt
+    class W pass
+    class RC pass
+
+    classDef default fill:#0d1117,stroke:#8b949e,stroke-width:1.5px,color:#e6edf3
+    classDef gate fill:#0d1117,stroke:#ffd699,stroke-width:2px,color:#ffd699
+    classDef pass fill:#0d1117,stroke:#2ea043,stroke-width:1.5px,color:#7ee2a8
+    classDef halt fill:#0d1117,stroke:#ffd699,stroke-width:1.5px,color:#ffd699

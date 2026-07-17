@@ -14,13 +14,9 @@ stdlib and bash. Every functional claim in this README points at a
 fixture in the test suite, not at prose — see
 [Every claim has a fixture](#every-claim-has-a-fixture).
 
-```mermaid
-flowchart LR
-    A["agent: done<br/>(a claim)"] --> B{"deterministic checks<br/>exit codes, git state,<br/>file hashes"}
-    B -->|all pass| C["receipt appended to<br/>hash-chained log"]
-    B -->|any fail| D["full stop<br/>no auto-retry,<br/>operator review"]
-    C --> E["git commit<br/>= tamper anchor"]
-```
+<p align="center"><img src="docs/diagrams/claim-to-receipt.png" width="860" alt="An agent says done, which is a claim. Deterministic checks reconcile exit codes, git state, and file hashes. All pass appends a receipt to the hash-chained log anchored by a git commit, any fail is a full stop with no auto-retry"></p>
+
+<sub>Color key: amber marks a gate or anything waiting on the operator, green marks a verified pass, grey is neutral state.</sub>
 
 ## Why
 
@@ -41,22 +37,7 @@ match the pinned hash; it resolves an abstract tier to a concrete
 model through your private manifest; it bounds the run; and the guard
 hook screens every tool call while the run is in flight.
 
-```mermaid
-flowchart TD
-    S["spec.md<br/>goal, tier, mode, budget,<br/>stop conditions"] --> L["launch_worker.sh"]
-    L --> H{".harness/HALT<br/>present?"}
-    H -->|yes| X["refuse to launch"]
-    H -->|no| P{"CONSTITUTION.md sha256<br/>== pinned hash?"}
-    P -->|no| PX["refuse:<br/>CONST-HASH-MISMATCH"]
-    P -->|yes| T["resolve tier T0-T3<br/>to a model via<br/>local manifest"]
-    T --> C2["inject CONSTITUTION.md<br/>verbatim; record its sha256"]
-    C2 --> R["bounded run:<br/>max turns + wall-clock timeout"]
-    R --> G{"guard_pretooluse.py<br/>on every tool call"}
-    G -->|destructive| B2["blocked, exit 2<br/>never executes"]
-    G -->|safe| R
-    R --> W["receipt.json:<br/>model, constitution_hash,<br/>outcome, cost"]
-    W --> RC["receipt_chain.py<br/>append-only JSONL,<br/>each line hashes the previous"]
-```
+<p align="center"><img src="docs/diagrams/launch-flow.png" width="520" alt="Launch flow: spec.md feeds launch_worker.sh, which runs the HALT check and the constitution hash check, refuses on failure, resolves the tier to a model, injects the constitution verbatim, runs a bounded session with the guard on every tool call, and lands in receipt.json appended to the hash-chained log"></p>
 
 ## The HALT kill-switch
 
@@ -68,13 +49,7 @@ directory and `CLAUDE_PROJECT_DIR`, so a worker cannot dodge it by
 `cd`-ing into a subdirectory. Deleting the file lifts the halt; no
 restart or state cleanup required.
 
-```mermaid
-flowchart LR
-    O["operator:<br/>touch .harness/HALT"] --> L2["launch_worker.sh"]
-    O --> G2["guard hook<br/>(every tool call)"]
-    L2 -->|HALT present| RF["refuses to launch"]
-    G2 -->|"HALT found walking up<br/>from cwd or<br/>CLAUDE_PROJECT_DIR"| BK["blocks Edit, Bash,<br/>every tool — exit 2"]
-```
+<p align="center"><img src="docs/diagrams/halt-kill-switch.png" width="860" alt="HALT kill switch: the operator touches .harness/HALT. The launcher refuses to launch while it exists, and the guard hook finds it on every tool call and blocks every tool with exit 2"></p>
 
 ## What's in the box
 
