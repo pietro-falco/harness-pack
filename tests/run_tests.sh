@@ -289,6 +289,47 @@ else
   echo "ok [D6: union dedups by source_filename, seq order, tail dash, drift note on sha mismatch]"
 fi
 
+echo "== D6: chain status (advisory working-tree + HEAD-anchored, ADR-005 D6) =="
+TMPD8="$(mktemp -d)"
+trap 'rm -rf "$TMPD" "$TMPD2" "$TMPD3" "$TMPD3R" "$TMPD4" "$TMPD4N" "$TMPD5" "$TMPD6" "$TMPD7" "$TMPD8"' EXIT
+printf 'src-a\n' > "$TMPD8/a.receipt.json"
+printf 'src-b\n' > "$TMPD8/b.receipt.json"
+python3 scripts/receipt_chain.py append --chain "$TMPD8/receipt-chain.jsonl" \
+  --run-id run-chain-status "$TMPD8/a.receipt.json" "$TMPD8/b.receipt.json" >/dev/null
+set +e
+out="$(python3 -c '
+import sys
+sys.path.insert(0, "scripts")
+import harness_stats as hs
+r = hs.chain_status(sys.argv[1])
+print(r["path_exists"], r["working_tree"], r["head"])
+' "$TMPD8")"
+rc=$?
+set -e
+# TMPD8 is a bare mktemp dir with no ancestor git repo, so the chain is
+# valid working-tree but has no HEAD anchor: the expected neutral state,
+# not a warning (harness-pack's own .harness/ is gitignored the same way).
+if [ "$rc" -ne 0 ] || [ "$out" != "True VALID no HEAD anchor" ]; then
+  echo "FAIL [chain_status: expected 'True VALID no HEAD anchor']: rc=$rc out=$out"; fail=1
+else
+  echo "ok [chain_status: working-tree VALID, no-HEAD-anchor renders neutral outside a repo]"
+fi
+# Absent chain file degrades to unavailable, not an error.
+TMPD8B="$(mktemp -d)"
+trap 'rm -rf "$TMPD" "$TMPD2" "$TMPD3" "$TMPD3R" "$TMPD4" "$TMPD4N" "$TMPD5" "$TMPD6" "$TMPD7" "$TMPD8" "$TMPD8B"' EXIT
+out2="$(python3 -c '
+import sys
+sys.path.insert(0, "scripts")
+import harness_stats as hs
+r = hs.chain_status(sys.argv[1])
+print(r["path_exists"], r["working_tree"], r["head"])
+' "$TMPD8B")"
+if [ "$out2" = "False None None" ]; then
+  echo "ok [chain_status: missing chain file degrades to unavailable, not an error]"
+else
+  echo "FAIL [chain_status: expected 'False None None' for missing chain]: $out2"; fail=1
+fi
+
 echo "== receipt_chain selftest =="
 python3 scripts/receipt_chain.py selftest || fail=1
 

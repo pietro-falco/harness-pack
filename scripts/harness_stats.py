@@ -6,8 +6,10 @@ Emits stats.md + dashboard.html. Inefficiency flags:
 - num_turns >= 80% of a 15-turn default budget (tune per fleet)
 - missing constitution_hash (non-compliant run)
 """
-import glob, hashlib, html, json, os, subprocess, sys
+import glob, hashlib, html, json, os, subprocess, sys, tempfile
 from collections import Counter
+
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 TURN_BUDGET = 15
 # 80% of TURN_BUDGET: 15 * 0.8 == 12, kept as an integer so the flag
@@ -155,6 +157,60 @@ def merge_runs(rdir, index_rows, loose_pairs):
         row["_tail"] = True
         merged.append(row)
     return merged
+
+
+def chain_status(rdir):
+    """S3: receipt-chain.jsonl integrity (ADR-005 D6). The working-tree
+    verify is advisory only; the authoritative check is against the
+    blob committed at HEAD (receipt_chain.py's guarantee-boundary
+    docstring) -- an uncommitted tail is expected, not a fault. A repo
+    with no HEAD anchor for the chain (untracked, gitignored, or not a
+    git repo at all) degrades to "no HEAD anchor", rendered neutral --
+    that is the normal state for a gitignored .harness/, not a warning."""
+    result = {"path_exists": False, "working_tree": None, "head": None}
+    chain_path = os.path.join(rdir, "receipt-chain.jsonl")
+    if not os.path.exists(chain_path):
+        return result
+    result["path_exists"] = True
+
+    script = os.path.join(SCRIPT_DIR, "receipt_chain.py")
+    wt = run_cmd([sys.executable, script, "verify", "--chain", chain_path])
+    if wt is None:
+        result["working_tree"] = "unavailable"
+    else:
+        rc, out, err = wt
+        result["working_tree"] = "VALID" if rc == 0 else "INVALID"
+        result["working_tree_detail"] = (out or err or "").strip()
+
+    root_res = run_cmd(["git", "rev-parse", "--show-toplevel"], cwd=rdir)
+    if root_res is None or root_res[0] != 0:
+        result["head"] = "no HEAD anchor"
+        return result
+    root = root_res[1].strip()
+
+    try:
+        relpath = os.path.relpath(os.path.realpath(chain_path), os.path.realpath(root))
+    except ValueError:
+        result["head"] = "no HEAD anchor"
+        return result
+
+    show_res = run_cmd(["git", "show", f"HEAD:{relpath}"], cwd=root)
+    if show_res is None or show_res[0] != 0:
+        result["head"] = "no HEAD anchor"
+        return result
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        head_chain = os.path.join(tmpdir, "receipt-chain.head.jsonl")
+        with open(head_chain, "w", encoding="utf-8") as f:
+            f.write(show_res[1])
+        hv = run_cmd([sys.executable, script, "verify", "--chain", head_chain])
+        if hv is None:
+            result["head"] = "unavailable"
+        else:
+            rc, out, err = hv
+            result["head"] = "VALID" if rc == 0 else "INVALID"
+            result["head_detail"] = (out or err or "").strip()
+    return result
 
 
 def collect(rdir):
