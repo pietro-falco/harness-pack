@@ -447,6 +447,50 @@ else
   echo "FAIL [repo state: expected 'None unavailable unavailable', got $out3]"; fail=1
 fi
 
+echo "== D6: external tools (next --json defensive, detect_tamper states, ADR-005 D6) =="
+TMPD11="$(mktemp -d)"
+trap 'rm -rf "$TMPD" "$TMPD2" "$TMPD3" "$TMPD3R" "$TMPD4" "$TMPD4N" "$TMPD5" "$TMPD6" "$TMPD7" "$TMPD8" "$TMPD8B" "$TMPD9" "$TMPD9B" "$TMPD10" "$TMPD10B" "$TMPD11"' EXIT
+# Pin the environment for determinism: this machine has a real /opt/harness
+# and may have HARNESSWRIGHT_CLI exported, either of which would make this
+# test depend on live deploy/tool state instead of the collector's logic.
+out="$(HARNESSWRIGHT_CLI=/nonexistent/hw python3 -c '
+import sys
+sys.path.insert(0, "scripts")
+import harness_stats as hs
+print(hs.next_slice(sys.argv[1])["status"])
+' "$TMPD11")"
+if [ "$out" = "unavailable" ]; then
+  echo "ok [next_slice: unresolvable harnesswright CLI degrades to unavailable]"
+else
+  echo "FAIL [next_slice: expected unavailable, got $out]"; fail=1
+fi
+out2="$(ENFORCED="$TMPD11/no-such-enforced-root" python3 -c '
+import sys
+sys.path.insert(0, "scripts")
+import harness_stats as hs
+print(hs.tamper()["status"])
+')"
+if [ "$out2" = "not-deployed" ]; then
+  echo "ok [tamper: absent enforced root renders not-deployed (neutral), not diverges]"
+else
+  echo "FAIL [tamper: expected not-deployed, got $out2]"; fail=1
+fi
+# A present-but-empty enforced root (manifest missing) must ALSO render
+# not-deployed, never diverges -- detect_tamper.sh's own distinction.
+mkdir -p "$TMPD11/empty-enforced"
+out3="$(ENFORCED="$TMPD11/empty-enforced" python3 -c '
+import sys
+sys.path.insert(0, "scripts")
+import harness_stats as hs
+r = hs.tamper()
+print(r["status"], "manifest missing or empty" in r.get("detail", ""))
+')"
+if [ "$out3" = "not-deployed True" ]; then
+  echo "ok [tamper: missing manifest under an existing enforced root also renders not-deployed]"
+else
+  echo "FAIL [tamper: expected 'not-deployed True', got $out3]"; fail=1
+fi
+
 echo "== receipt_chain selftest =="
 python3 scripts/receipt_chain.py selftest || fail=1
 

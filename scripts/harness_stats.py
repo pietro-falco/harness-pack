@@ -272,6 +272,85 @@ def repo_root(rdir):
     return res[1].strip()
 
 
+def _resolve_harnesswright_cli():
+    """Same resolution order as launch_worker.sh: HARNESSWRIGHT_CLI env
+    (empty string counts as unset) wins, invoked via `node`; otherwise
+    a `harnesswright` binary on PATH. None if neither resolves --
+    harnesswright is optional (ADR-005 D6)."""
+    cli = os.environ.get("HARNESSWRIGHT_CLI", "")
+    if cli:
+        return ["node", cli]
+    import shutil
+    path_bin = shutil.which("harnesswright")
+    if path_bin:
+        return [path_bin]
+    return None
+
+
+def next_slice(root):
+    """S4: harnesswright next --json (the eligible slice). Parsed
+    defensively field-by-field, mirroring the launcher's own consumer
+    (launch_worker.sh) -- the schema is derived from that consumer, not
+    verified against a live harnesswright (ADR-005 D6). spec.model is
+    an opaque model_string (e.g. "executor"), never a real model id, so
+    it is safe to surface here."""
+    base = _resolve_harnesswright_cli()
+    if base is None:
+        return {"status": "unavailable"}
+    res = run_cmd(base + ["next", "--json"], cwd=root, timeout=10)
+    if res is None:
+        return {"status": "unavailable"}
+    rc, out, err = res
+    if rc != 0:
+        return {"status": "unavailable", "detail": (err or out or "").strip()}
+    try:
+        data = json.loads(out)
+    except Exception:
+        return {"status": "unavailable", "detail": "next --json returned non-JSON output"}
+    if not isinstance(data, dict):
+        return {"status": "unavailable"}
+
+    kind = data.get("kind")
+    if kind != "unlocked":
+        return {"status": kind or "unavailable"}
+
+    spec = data.get("spec") if isinstance(data.get("spec"), dict) else {}
+    budget = spec.get("budget") if isinstance(spec.get("budget"), dict) else {}
+    tools = spec.get("tools") if isinstance(spec.get("tools"), list) else []
+    criteria = spec.get("criteria") if isinstance(spec.get("criteria"), list) else []
+    return {
+        "status": "unlocked",
+        "id": data.get("id"),
+        "eligible_mode_b": data.get("eligible_mode_b"),
+        "model": spec.get("model"),
+        "turns": budget.get("turns"),
+        "wall_clock": budget.get("wall_clock"),
+        "tools": [t for t in tools if isinstance(t, str) and t],
+        "criteria": [c for c in criteria if isinstance(c, str) and c],
+    }
+
+
+def tamper():
+    """S7: enforced-tree integrity via detect_tamper.sh. Distinguishes
+    "not deployed" (enforced root absent -- neutral, expected on a dev
+    machine) from "diverges" (tampered or incomplete -- an operator
+    full-stop), never conflating the two (ADR-005 D6)."""
+    script = os.path.join(SCRIPT_DIR, "detect_tamper.sh")
+    res = run_cmd(["bash", script], timeout=30)
+    if res is None:
+        return {"status": "unavailable"}
+    rc, out, err = res
+    text = (out or "") + (err or "")
+    if rc == 0:
+        return {"status": "ok", "detail": out.strip()}
+    # detect_tamper.sh's own two non-tamper messages: an absent enforced
+    # root or a missing/empty manifest both mean "not deployed yet", not
+    # tampering -- only its shasum-mismatch message means "diverges".
+    if "enforced root absent" in text or "manifest missing or empty" in text:
+        return {"status": "not-deployed", "detail": text.strip()}
+    return {"status": "diverges", "detail": text.strip()}
+
+
 def collect(rdir):
     # Gather render sources (ADR-005 D6). Skeleton: only S2 (loose
     # receipts) is active; collectors S1/S3-S7 land in follow-up slices.
