@@ -26,12 +26,22 @@ def flags(r):
     if n >= 12: out.append("TURNS>=80%BUDGET")
     return out
 
+def tier_cell(r):
+    # ADR-005 D4 schema tolerance: new-form receipts carry tier_resolved; old-form
+    # receipts have neither tier_resolved nor model_string, only tier_requested.
+    # Prefer tier_resolved; else fall back model_string -> tier_requested; else None.
+    tr = r.get("tier_resolved")
+    if tr is not None:
+        return tr
+    ms = r.get("model_string")
+    return ms if ms is not None else r.get("tier_requested")
+
 def main():
-    rdir = sys.argv[1] if len(sys.argv) > 1 else "./.harness/pack/receipts"
+    rdir = sys.argv[1] if len(sys.argv) > 1 else "./.harness/receipts"
     odir = sys.argv[2] if len(sys.argv) > 2 else rdir
     rows = load(rdir)
     by_sub = Counter(r.get("subtype", "?") for r in rows)
-    by_tier = Counter(r.get("tier_resolved", "?") for r in rows)
+    by_tier = Counter(tier_cell(r) for r in rows)
     turns = sum(r.get("num_turns") or 0 for r in rows)
     cost = sum(r.get("total_cost_usd") or 0 for r in rows)
     lines = ["# Harness stats", "",
@@ -45,7 +55,7 @@ def main():
             lines.append(f"- {r.get('run_id','?')} [{r.get('spec_id','?')}] "
                          f"turns={r.get('num_turns')} -> {', '.join(fl)}")
         tr.append((r.get("run_id","?"), r.get("spec_id","?"),
-                   r.get("tier_resolved","?"), r.get("subtype","?"),
+                   tier_cell(r), r.get("subtype","?"),
                    r.get("num_turns"), r.get("total_cost_usd"),
                    ", ".join(fl)))
     open(os.path.join(odir, "stats.md"), "w").write("\n".join(lines) + "\n")

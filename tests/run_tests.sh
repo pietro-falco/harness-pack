@@ -168,6 +168,56 @@ rm -f "$TMPD4/.harness/HALT"
 halt_case "HALT lifted: benign Bash allowed" \
   "$(printf '{"tool_name":"Bash","tool_input":{"command":"ls"},"cwd":"%s"}' "$TMPD4")" 0
 
+echo "== D1: canonical receipts dir resolution (ADR-005) =="
+TMPD5="$(mktemp -d)"
+trap 'rm -rf "$TMPD" "$TMPD2" "$TMPD3" "$TMPD3R" "$TMPD4" "$TMPD4N" "$TMPD5"' EXIT
+mkdir -p "$TMPD5/.harness/receipts"
+printf '{"run_id":"r1","subtype":"success","num_turns":1}\n' > "$TMPD5/.harness/receipts/r1.receipt.json"
+set +e
+( cd "$TMPD5" && ROLLUP_THRESHOLD=1 "$PACK/scripts/rollup_due.sh" ) >/dev/null 2>&1
+rc=$?
+set -e
+if [ "$rc" -ne 0 ]; then
+  echo "FAIL [rollup_due.sh must default to ./.harness/receipts]: rc=$rc"; fail=1
+else
+  echo "ok [rollup_due.sh resolves canonical ./.harness/receipts]"
+fi
+set +e
+( cd "$TMPD5" && python3 "$PACK/scripts/harness_stats.py" ) >/dev/null 2>&1
+rc=$?
+set -e
+if [ "$rc" -ne 0 ] || ! grep -q "runs: 1" "$TMPD5/.harness/receipts/stats.md" 2>/dev/null; then
+  echo "FAIL [harness_stats.py must default to ./.harness/receipts]: rc=$rc"; fail=1
+else
+  echo "ok [harness_stats.py resolves canonical ./.harness/receipts]"
+fi
+if grep -Eq 'RECEIPTS_DIR:-\./\.harness/receipts\}' "$PACK/scripts/launch_worker.sh"; then
+  echo "ok [launch_worker.sh default is canonical ./.harness/receipts (source-level)]"
+else
+  echo "FAIL [launch_worker.sh default must be ./.harness/receipts]"; fail=1
+fi
+
+echo "== D4: reader tolerates both receipt schema forms (ADR-005) =="
+TMPD6="$(mktemp -d)"
+trap 'rm -rf "$TMPD" "$TMPD2" "$TMPD3" "$TMPD3R" "$TMPD4" "$TMPD4N" "$TMPD5" "$TMPD6"' EXIT
+mkdir -p "$TMPD6/receipts"
+printf '{"run_id":"old","spec_id":"S-OLD","tier_requested":"T1","subtype":"success","num_turns":2}\n' > "$TMPD6/receipts/old.receipt.json"
+printf '{"run_id":"new","spec_id":"S-NEW","model_string":"executor","tier_resolved":"T2","model_used":"SONNET_CLASS_MODEL","subtype":"success","num_turns":3}\n' > "$TMPD6/receipts/new.receipt.json"
+set +e
+python3 "$PACK/scripts/harness_stats.py" "$TMPD6/receipts" >/dev/null 2>"$TMPD6/err"
+rc=$?
+set -e
+if [ "$rc" -ne 0 ]; then
+  echo "FAIL [reader must parse both schema forms]: rc=$rc"; cat "$TMPD6/err" 2>/dev/null; fail=1
+else
+  echo "ok [reader parsed both schema forms]"
+fi
+if grep -q "<td>T2</td>" "$TMPD6/receipts/dashboard.html" 2>/dev/null && grep -q "<td>T1</td>" "$TMPD6/receipts/dashboard.html" 2>/dev/null; then
+  echo "ok [D4 fallback: new->tier_resolved T2, old->tier_requested T1]"
+else
+  echo "FAIL [D4 fallback: expected T2 (new) and T1 (old) in dashboard]"; fail=1
+fi
+
 echo "== receipt_chain selftest =="
 python3 scripts/receipt_chain.py selftest || fail=1
 
