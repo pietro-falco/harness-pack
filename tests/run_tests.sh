@@ -218,6 +218,77 @@ else
   echo "FAIL [D4 fallback: expected T2 (new) and T1 (old) in dashboard]"; fail=1
 fi
 
+echo "== D6: union index+loose (dedup + tail ordering, ADR-005 D2/D6) =="
+TMPD7="$(mktemp -d)"
+trap 'rm -rf "$TMPD" "$TMPD2" "$TMPD3" "$TMPD3R" "$TMPD4" "$TMPD4N" "$TMPD5" "$TMPD6" "$TMPD7"' EXIT
+set +e
+python3 - "$TMPD7" <<'PY'
+import hashlib, json, os, sys
+sys.path.insert(0, "scripts")
+import harness_stats as hs
+
+rdir = sys.argv[1]
+
+def write(name, content):
+    with open(os.path.join(rdir, name), "w") as f:
+        f.write(content)
+
+# Loose receipt still present after being rolled up (overlap, sha now diverges).
+write("run-A.receipt.json", '{"run_id":"run-A","subtype":"success","num_turns":5}\n')
+# Loose receipt still present after being rolled up (overlap, sha matches exactly).
+write("run-D.receipt.json", '{"run_id":"run-D","subtype":"success","num_turns":9}\n')
+d_sha = hashlib.sha256(open(os.path.join(rdir, "run-D.receipt.json"), "rb").read()).hexdigest()
+# Tail: not yet rolled up.
+write("run-C.receipt.json", '{"run_id":"run-C","subtype":"success","num_turns":4}\n')
+
+index_lines = [
+    {"seq": 1, "run_id": "run-A", "spec_id": "S-A", "subtype": "success",
+     "num_turns": 5, "total_cost_usd": 0.2, "source_filename": "run-A.receipt.json",
+     "source_sha256": "deadbeef"},
+    {"seq": 2, "run_id": "run-B", "spec_id": "S-B", "subtype": "success",
+     "num_turns": 7, "total_cost_usd": None, "source_filename": "run-B.receipt.json",
+     "source_sha256": "badc0de"},
+    {"seq": 3, "run_id": "run-D", "spec_id": "S-D", "subtype": "success",
+     "num_turns": 9, "total_cost_usd": 0.3, "source_filename": "run-D.receipt.json",
+     "source_sha256": d_sha},
+]
+with open(os.path.join(rdir, "receipts-index.jsonl"), "w") as f:
+    for row in index_lines:
+        f.write(json.dumps(row) + "\n")
+
+idx = hs.load_index(rdir)
+assert len(idx) == 3, f"load_index: expected 3 rows, got {len(idx)}"
+
+loose = hs.list_loose_receipts(rdir)
+names = sorted(n for n, _ in loose)
+assert names == ["run-A.receipt.json", "run-C.receipt.json", "run-D.receipt.json"], names
+
+merged = hs.merge_runs(rdir, idx, loose)
+assert len(merged) == 4, f"expected 4 (3 index + 1 tail), got {len(merged)}"
+
+by_name = {r["source_filename"]: r for r in merged}
+assert by_name["run-A.receipt.json"]["_tail"] is False
+assert by_name["run-A.receipt.json"].get("_drift"), "expected a drift note on sha mismatch"
+assert by_name["run-D.receipt.json"].get("_drift") is None, "matching sha must not raise a false drift note"
+assert by_name["run-B.receipt.json"]["_seq_display"] == 2
+assert by_name["run-B.receipt.json"]["_cost_display"] == "—"
+assert by_name["run-C.receipt.json"]["_tail"] is True
+assert by_name["run-C.receipt.json"]["_seq_display"] == "—"
+
+assert [r["source_filename"] for r in merged] == [
+    "run-A.receipt.json", "run-B.receipt.json", "run-D.receipt.json", "run-C.receipt.json"
+], "expected index rows in seq order, then tail lexicographic"
+
+print("PASS")
+PY
+rc=$?
+set -e
+if [ "$rc" -ne 0 ]; then
+  echo "FAIL [D6 union index+loose]: rc=$rc"; fail=1
+else
+  echo "ok [D6: union dedups by source_filename, seq order, tail dash, drift note on sha mismatch]"
+fi
+
 echo "== receipt_chain selftest =="
 python3 scripts/receipt_chain.py selftest || fail=1
 

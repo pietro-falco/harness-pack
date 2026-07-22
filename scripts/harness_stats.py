@@ -6,7 +6,7 @@ Emits stats.md + dashboard.html. Inefficiency flags:
 - num_turns >= 80% of a 15-turn default budget (tune per fleet)
 - missing constitution_hash (non-compliant run)
 """
-import glob, html, json, os, subprocess, sys
+import glob, hashlib, html, json, os, subprocess, sys
 from collections import Counter
 
 TURN_BUDGET = 15
@@ -61,6 +61,100 @@ def tier_cell(r):
         return tr
     ms = r.get("model_string")
     return ms if ms is not None else r.get("tier_requested")
+
+
+def display_value(v):
+    """Render a schema-tolerant field for the mission-control table: an
+    absent value is a dash, never zero or an empty cell (ADR-005 D4)."""
+    return "—" if v is None else v
+
+
+def _sha256_file(path):
+    try:
+        with open(path, "rb") as f:
+            return hashlib.sha256(f.read()).hexdigest()
+    except OSError:
+        return None
+
+
+def load_index(rdir):
+    """S1: receipts-index.jsonl beside the loose receipts (ADR-005 D2).
+    A missing file is simply an empty history (the caller decides how to
+    surface that as "unavailable"). A malformed line is skipped with a
+    parse-error note rather than raised (ADR-005 D6 graceful degradation
+    -- the index never blocks the render)."""
+    path = os.path.join(rdir, "receipts-index.jsonl")
+    rows = []
+    if not os.path.exists(path):
+        return rows
+    with open(path, encoding="utf-8") as f:
+        for i, line in enumerate(f, 1):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                rows.append(json.loads(line))
+            except Exception:
+                rows.append({"seq": None, "source_filename": None,
+                             "_index_parse_error": f"line {i} unreadable"})
+    return rows
+
+
+def list_loose_receipts(rdir):
+    """Like load_loose(), but keeps each receipt's basename alongside its
+    parsed content so callers (merge_runs) can dedup index<->loose overlap
+    by source_filename -- the ADR-005 D2 join key, never run_id."""
+    pairs = []
+    for p in sorted(glob.glob(os.path.join(rdir, "*.receipt.json"))):
+        basename = os.path.basename(p)
+        try:
+            pairs.append((basename, json.load(open(p))))
+        except Exception:
+            pairs.append((basename, {"run_id": basename, "subtype": "unreadable"}))
+    return pairs
+
+
+def merge_runs(rdir, index_rows, loose_pairs):
+    """Union of receipts-index.jsonl (rolled-up history) and loose
+    *.receipt.json (the tail since the last rollup). Dedup key is
+    source_filename/basename (ADR-005 D2 join rule; never run_id).
+    Index rows win on overlap; if the still-present loose copy no longer
+    hashes to the index's source_sha256, a drift note is attached rather
+    than silently trusting either side. Tail rows (not yet rolled up)
+    render seq as a dash, ordered lexicographically by basename -- the
+    same order the next rollup will assign seq numbers in (RS-001 R1)."""
+    def seq_key(r):
+        seq = r.get("seq")
+        return (seq is None, seq if seq is not None else 0)
+
+    indexed = {r["source_filename"]: r for r in index_rows if r.get("source_filename")}
+
+    merged = []
+    for r in sorted(index_rows, key=seq_key):
+        row = dict(r)
+        row["_seq_display"] = display_value(row.get("seq"))
+        row["_cost_display"] = display_value(row.get("total_cost_usd"))
+        row["_tail"] = False
+        name = row.get("source_filename")
+        if name:
+            loose_path = os.path.join(rdir, name)
+            if os.path.exists(loose_path):
+                actual = _sha256_file(loose_path)
+                expected = row.get("source_sha256")
+                if actual and expected and actual != expected:
+                    row["_drift"] = "source_sha256 mismatch vs loose copy"
+        merged.append(row)
+
+    tail = [(name, receipt) for name, receipt in loose_pairs if name not in indexed]
+    tail.sort(key=lambda t: t[0])
+    for name, receipt in tail:
+        row = dict(receipt)
+        row["source_filename"] = name
+        row["_seq_display"] = "—"
+        row["_cost_display"] = display_value(row.get("total_cost_usd"))
+        row["_tail"] = True
+        merged.append(row)
+    return merged
 
 
 def collect(rdir):
