@@ -1,6 +1,6 @@
 # ADR-005: Mission-control dashboard & receipts-index rollup projection
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-07-22
 - **Deciders:** Pietro Falco
 - **Related:** ADR-001 (enforced deploy topology, Accepted; the enforced copy under `$HARNESS_ROOT` is root-owned and the worker-side `.harness/pack` is a symlink into it, so `.harness/pack/receipts` is read-only and never a write target, D1 here). ADR-002 (hermetic launch checks, Accepted; `resolve-tier` in `scripts/launch_checks.py` stays the single live model resolver, reused by the model-preview ergonomics with no logic fork). ADR-004 (parameterized topology & sanitization, Accepted; its privacy-lint claim set in `.verity/claims.json` is the invariant every tracked artifact of this ADR must keep green, placeholders only, D5 here). RS-001 (`specs/recurring/RS-001-receipt-rollup.md`, the recurring rollup slice this ADR makes the single writer of the receipts-index). Cross-repo, qualified: **harnesswright** ADR-005 D4 (that is harnesswright's own ADR-005 in a different repo, the pack-side model-string to tier resolution the launcher consumes, not this document) and harnesswright's slice-ledger (`README.md:120-121`, whose claimed term "ledger" this ADR deliberately avoids); **verity** ADR-004 (the gate). Those three are external and only referenced. This ADR decides; implementation is one or more separate slices against it; no script, Justfile, template, or code is edited here.
