@@ -5,3 +5,6 @@ dashboard.html
 stats.md
 .DS_Store
 receipts/
+
+# Generated verity run reports (ADR-005 D5: tooling clean, generated data untracked)
+.verity/reports/
