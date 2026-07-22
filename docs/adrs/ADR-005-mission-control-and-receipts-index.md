@@ -122,4 +122,4 @@ Risks:
 
 ## Status note
 
-Proposed. No implementation until Accepted. Two-commit lifecycle: this Proposed commit, then a separate Accept commit after operator review; the implementation slice or slices become eligible only on that flip. This document decides only what to build and where the artifacts live; it edits no code.
+Accepted via the two-commit lifecycle: the original Proposed commit, then a separate Accept commit after operator review. Implementation slices are now eligible against this ADR. This document decides only what to build and where the artifacts live; it edits no code.
