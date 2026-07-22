@@ -234,6 +234,44 @@ def co_index_status(rdir):
             "detail": (out or err or "").strip()}
 
 
+def halt(root):
+    """S6: .harness/HALT presence (the operator kill-switch, ADR-005
+    D6). `root` is None (no git repo) -> unavailable; the file's mtime
+    is surfaced when present so the banner can show since-when."""
+    if root is None:
+        return {"status": "unavailable"}
+    path = os.path.join(root, ".harness", "HALT")
+    if not os.path.exists(path):
+        return {"status": "clear"}
+    try:
+        mtime = os.path.getmtime(path)
+    except OSError:
+        mtime = None
+    return {"status": "engaged", "mtime": mtime}
+
+
+def git_ops(root, n=15):
+    """S5: recent operator commits (rollups, ADR propose/accept, deploy
+    markers). No repo -> unavailable; never raises."""
+    if root is None:
+        return {"status": "unavailable"}
+    res = run_cmd(["git", "log", "--oneline", f"-n{n}"], cwd=root)
+    if res is None or res[0] != 0:
+        return {"status": "unavailable"}
+    lines = [l for l in res[1].splitlines() if l.strip()]
+    return {"status": "ok", "lines": lines}
+
+
+def repo_root(rdir):
+    """Shared root resolution for the S4-S7 collectors: rc 128 (not a
+    git repo) or any other subprocess failure degrades to None, which
+    each collector treats as "unavailable" -- never a raised error."""
+    res = run_cmd(["git", "rev-parse", "--show-toplevel"], cwd=rdir)
+    if res is None or res[0] != 0:
+        return None
+    return res[1].strip()
+
+
 def collect(rdir):
     # Gather render sources (ADR-005 D6). Skeleton: only S2 (loose
     # receipts) is active; collectors S1/S3-S7 land in follow-up slices.

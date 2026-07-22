@@ -394,6 +394,59 @@ else
   echo "FAIL [co_index_status: expected unavailable, got $out3]"; fail=1
 fi
 
+echo "== D6: repo state (HALT banner + git log, ADR-005 D6) =="
+TMPD10="$(mktemp -d)"
+trap 'rm -rf "$TMPD" "$TMPD2" "$TMPD3" "$TMPD3R" "$TMPD4" "$TMPD4N" "$TMPD5" "$TMPD6" "$TMPD7" "$TMPD8" "$TMPD8B" "$TMPD9" "$TMPD9B" "$TMPD10"' EXIT
+# A real (throwaway) git repo so git_ops has commits to show and
+# repo_root() resolves a real toplevel.
+( cd "$TMPD10" && git init -q && git config user.email t@example.invalid \
+    && git config user.name tester && touch keep && git add -- keep \
+    && git commit -q -m "fixture: seed commit" )
+mkdir -p "$TMPD10/.harness"
+touch "$TMPD10/.harness/HALT"
+out="$(python3 -c '
+import sys
+sys.path.insert(0, "scripts")
+import harness_stats as hs
+root = hs.repo_root(sys.argv[1])
+h = hs.halt(root)
+g = hs.git_ops(root)
+print(h["status"], h.get("mtime") is not None, g["status"], len(g.get("lines", [])) >= 1)
+' "$TMPD10")"
+if [ "$out" = "engaged True ok True" ]; then
+  echo "ok [repo state: HALT engaged with mtime, git log returns commits]"
+else
+  echo "FAIL [repo state engaged case]: $out"; fail=1
+fi
+rm -f "$TMPD10/.harness/HALT"
+out2="$(python3 -c '
+import sys
+sys.path.insert(0, "scripts")
+import harness_stats as hs
+root = hs.repo_root(sys.argv[1])
+print(hs.halt(root)["status"])
+' "$TMPD10")"
+if [ "$out2" = "clear" ]; then
+  echo "ok [repo state: HALT lifted renders clear]"
+else
+  echo "FAIL [repo state: expected clear, got $out2]"; fail=1
+fi
+# A bare, non-git temp dir: both collectors degrade to unavailable, no raise.
+TMPD10B="$(mktemp -d)"
+trap 'rm -rf "$TMPD" "$TMPD2" "$TMPD3" "$TMPD3R" "$TMPD4" "$TMPD4N" "$TMPD5" "$TMPD6" "$TMPD7" "$TMPD8" "$TMPD8B" "$TMPD9" "$TMPD9B" "$TMPD10" "$TMPD10B"' EXIT
+out3="$(python3 -c '
+import sys
+sys.path.insert(0, "scripts")
+import harness_stats as hs
+root = hs.repo_root(sys.argv[1])
+print(root, hs.halt(root)["status"], hs.git_ops(root)["status"])
+' "$TMPD10B")"
+if [ "$out3" = "None unavailable unavailable" ]; then
+  echo "ok [repo state: outside a git repo, HALT and git log both degrade to unavailable]"
+else
+  echo "FAIL [repo state: expected 'None unavailable unavailable', got $out3]"; fail=1
+fi
+
 echo "== receipt_chain selftest =="
 python3 scripts/receipt_chain.py selftest || fail=1
 
