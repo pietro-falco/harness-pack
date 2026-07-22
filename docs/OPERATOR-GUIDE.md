@@ -105,6 +105,8 @@ A receipt is metadata and hashes, never transcript content: run id, spec id, res
 
 Loose `*.receipt.json` files accumulate in the receipts directory. The recurring slice RS-001 consolidates them: each receipt is appended to the hash-chained `receipt-chain.jsonl`, originals are archived via `git mv` (never `rm`), and the whole rollup lands as one atomic commit. The trigger is `scripts/rollup_due.sh`, due at 25 loose receipts by default.
 
+The same rollup also writes `receipts-index.jsonl`: a per-run distilled projection co-indexed to the chain by `seq`. The index is a gitignored convenience view, never evidence — the chain stays authoritative. Its gate (`receipts_index.py gate`) asserts that index and chain agree line-for-line on `seq`, `source_sha256`, and `source_filename`; a one-time `receipts_index.py backfill` rebuilds the index from an existing chain and fails closed if an archived receipt no longer hashes to its chain-recorded sha256.
+
 That atomic commit is not bookkeeping, it is the security anchor. A working-tree verify cannot detect a mutated final line or a cleanly truncated tail; the committed blob can. Authoritative verification therefore reads the chain from git, via `git show HEAD:` on the chain path, and verifies those bytes rather than the working tree.
 
 The chain has a single writer. The rollup takes a path-scoped lease on the receipts directory, and the recon snapshot taken at the start of the run is the scope: receipts appearing later are left untouched and picked up next time.

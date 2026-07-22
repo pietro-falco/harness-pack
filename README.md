@@ -104,6 +104,7 @@ header) that fails CI if the claim stops being true.
 | HALT in the *target* repo refuses launch even when `RECEIPTS_DIR` points elsewhere | `== HALT kill-switch in target repo refuses launch ==` |
 | HALT neutralizes a run in flight: Edit, benign Bash, from a deep subdirectory, and via `CLAUDE_PROJECT_DIR` when the payload cwd is clean; lifting it restores normal operation | `== HALT kill-switch neutralises a run in flight (guard, all tools) ==` |
 | The chain detects mutation of an interior line and removal of the first line | `== receipt_chain selftest ==` (`receipt_chain.py selftest`) |
+| The receipts-index stays co-indexed to the chain by `seq`; the gate fails on sha drift, a dropped line, or a reorder, a corrupt receipt stays faithfully co-indexed, and backfill fails closed on a tampered archived receipt | `== receipts-index co-indexing selftest ==` (`receipts_index.py selftest`) |
 | A mode-B spec whose checks are not fully deterministic is rejected | `== spec lint ==` (`lint_specs.py`) |
 
 ## Vocabulary
