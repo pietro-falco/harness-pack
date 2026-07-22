@@ -330,6 +330,70 @@ else
   echo "FAIL [chain_status: expected 'False None None' for missing chain]: $out2"; fail=1
 fi
 
+echo "== D6: co-index gate signal (receipts_index.py gate, read-only) =="
+TMPD9="$(mktemp -d)"
+trap 'rm -rf "$TMPD" "$TMPD2" "$TMPD3" "$TMPD3R" "$TMPD4" "$TMPD4N" "$TMPD5" "$TMPD6" "$TMPD7" "$TMPD8" "$TMPD8B" "$TMPD9"' EXIT
+printf '{"x":"a"}' > "$TMPD9/a.receipt.json"
+printf '{"x":"b"}' > "$TMPD9/b.receipt.json"
+python3 scripts/receipt_chain.py append --chain "$TMPD9/receipt-chain.jsonl" \
+  --run-id run-co-index "$TMPD9/a.receipt.json" "$TMPD9/b.receipt.json" >/dev/null
+python3 scripts/receipts_index.py append --index "$TMPD9/receipts-index.jsonl" \
+  "$TMPD9/a.receipt.json" "$TMPD9/b.receipt.json" >/dev/null
+out="$(python3 -c '
+import sys
+sys.path.insert(0, "scripts")
+import harness_stats as hs
+print(hs.co_index_status(sys.argv[1])["status"])
+' "$TMPD9")"
+if [ "$out" = "VALID" ]; then
+  echo "ok [co_index_status: VALID on a freshly co-indexed pair]"
+else
+  echo "FAIL [co_index_status: expected VALID, got $out]"; fail=1
+fi
+# Mutate the index's recorded sha -- receipts_index.py gate must catch it.
+python3 -c '
+import json
+p = "'"$TMPD9"'/receipts-index.jsonl"
+lines = open(p).read().splitlines(keepends=True)
+o = json.loads(lines[0]); o["source_sha256"] = "0" * 64
+lines[0] = json.dumps(o, sort_keys=True, separators=(",", ":")) + "\n"
+open(p, "w").writelines(lines)
+'
+out2="$(python3 -c '
+import sys
+sys.path.insert(0, "scripts")
+import harness_stats as hs
+print(hs.co_index_status(sys.argv[1])["status"])
+' "$TMPD9")"
+if [ "$out2" = "DRIFT" ]; then
+  echo "ok [co_index_status: DRIFT signal on sha mismatch, non-fatal]"
+else
+  echo "FAIL [co_index_status: expected DRIFT, got $out2]"; fail=1
+fi
+set +e
+python3 scripts/harness_stats.py "$TMPD9" >/dev/null 2>&1
+rc=$?
+set -e
+if [ "$rc" -ne 0 ]; then
+  echo "FAIL [renderer must stay exit 0 despite co-index drift]: rc=$rc"; fail=1
+else
+  echo "ok [renderer exit 0 despite co-index drift (collector unwired, degradation-only)]"
+fi
+# Missing chain or index degrades to unavailable, not an error.
+TMPD9B="$(mktemp -d)"
+trap 'rm -rf "$TMPD" "$TMPD2" "$TMPD3" "$TMPD3R" "$TMPD4" "$TMPD4N" "$TMPD5" "$TMPD6" "$TMPD7" "$TMPD8" "$TMPD8B" "$TMPD9" "$TMPD9B"' EXIT
+out3="$(python3 -c '
+import sys
+sys.path.insert(0, "scripts")
+import harness_stats as hs
+print(hs.co_index_status(sys.argv[1])["status"])
+' "$TMPD9B")"
+if [ "$out3" = "unavailable" ]; then
+  echo "ok [co_index_status: missing index+chain degrades to unavailable]"
+else
+  echo "FAIL [co_index_status: expected unavailable, got $out3]"; fail=1
+fi
+
 echo "== receipt_chain selftest =="
 python3 scripts/receipt_chain.py selftest || fail=1
 

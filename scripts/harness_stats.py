@@ -213,6 +213,27 @@ def chain_status(rdir):
     return result
 
 
+def co_index_status(rdir):
+    """S1+S3 cross-check: receipts_index.py gate -- the canonical V8
+    co-indexing assertion (ADR-005 D3 single writer; never hand-roll a
+    seq/sha comparison here, that would fork the logic). Either file
+    missing degrades to "unavailable". A gate failure is a drift signal
+    for the operator, not a renderer error: main() still exits 0
+    (ADR-005 D6 graceful degradation)."""
+    index_path = os.path.join(rdir, "receipts-index.jsonl")
+    chain_path = os.path.join(rdir, "receipt-chain.jsonl")
+    if not (os.path.exists(index_path) and os.path.exists(chain_path)):
+        return {"status": "unavailable"}
+    script = os.path.join(SCRIPT_DIR, "receipts_index.py")
+    res = run_cmd([sys.executable, script, "gate",
+                   "--index", index_path, "--chain", chain_path])
+    if res is None:
+        return {"status": "unavailable"}
+    rc, out, err = res
+    return {"status": "VALID" if rc == 0 else "DRIFT",
+            "detail": (out or err or "").strip()}
+
+
 def collect(rdir):
     # Gather render sources (ADR-005 D6). Skeleton: only S2 (loose
     # receipts) is active; collectors S1/S3-S7 land in follow-up slices.
