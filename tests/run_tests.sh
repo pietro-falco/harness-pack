@@ -221,6 +221,9 @@ fi
 echo "== receipt_chain selftest =="
 python3 scripts/receipt_chain.py selftest || fail=1
 
+echo "== receipts-index co-indexing selftest =="
+python3 scripts/receipts_index.py selftest || fail=1
+
 echo "== spec lint =="
 python3 scripts/lint_specs.py || fail=1
 
