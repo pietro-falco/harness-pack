@@ -1,5 +1,6 @@
 # harness-pack build surface.
 # D5 adds `deploy`; D6 will add verify / preflight / run.
+# D7 adds `stats` (mission-control renderer).
 
 enforced := "/opt/harness"
 
@@ -82,3 +83,12 @@ run SPEC:
     just --justfile "{{justfile()}}" preflight
     echo "preflight green; launching supervised run over enforced pack (HARNESS_HOME=$enforced)"
     HARNESS_HOME="$enforced" "$enforced/scripts/launch_worker.sh" "$spec"
+
+# Render the mission-control dashboard (ADR-005 D6/D7) from a target repo's
+# receipts. Runs from the invocation directory so RECEIPTS_DIR resolves
+# relative to whatever repo you invoke `just` from, not this pack's own tree.
+stats RECEIPTS_DIR="./.harness/receipts":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd "{{invocation_directory()}}"
+    python3 "{{justfile_directory()}}/scripts/harness_stats.py" "{{RECEIPTS_DIR}}"
