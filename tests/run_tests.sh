@@ -491,6 +491,112 @@ else
   echo "FAIL [tamper: expected 'not-deployed True', got $out3]"; fail=1
 fi
 
+echo "== D7: mission-control render (ADR-005 D6/D7) =="
+TMPD12="$(mktemp -d)"
+trap 'rm -rf "$TMPD" "$TMPD2" "$TMPD3" "$TMPD3R" "$TMPD4" "$TMPD4N" "$TMPD5" "$TMPD6" "$TMPD7" "$TMPD8" "$TMPD8B" "$TMPD9" "$TMPD9B" "$TMPD10" "$TMPD10B" "$TMPD11" "$TMPD12"' EXIT
+mkdir -p "$TMPD12/receipts"
+# A full board: two run receipts and one JSON non-receipt source (a
+# valid JSON dict with no run fields, so the five distilled run fields
+# are all null -> a source-only row), co-indexed into chain + index.
+# Env pinned as in the D6 external-tools block: this machine has a real
+# /opt/harness and the render must not depend on live deploy state.
+printf '{"run_id":"run-a","spec_id":"S-A","model_string":"executor","tier_resolved":"T2","model_used":"SONNET_CLASS_MODEL","subtype":"success","num_turns":3,"total_cost_usd":0.178,"constitution_hash":"c1","started_at":"t1","gate_verdict":"PASS"}\n' > "$TMPD12/receipts/run-a.receipt.json"
+printf '{"run_id":"run-b","spec_id":"S-B","tier_requested":"T1","subtype":"success","num_turns":2,"constitution_hash":"c2","started_at":"t2"}\n' > "$TMPD12/receipts/run-b.receipt.json"
+printf '{"report":"rollup summary artifact"}\n' > "$TMPD12/receipts/rollup-report.json"
+# Only run-a and the report are rolled up. run-b stays a loose tail on
+# purpose: distill() does not carry tier_requested (ADR-005 D2), so an
+# old-form receipt keeps its T1 tier only while it is still loose --
+# the bare-td assertion below depends on that.
+python3 scripts/receipt_chain.py append --chain "$TMPD12/receipts/receipt-chain.jsonl" \
+  --run-id run-d7 "$TMPD12/receipts/run-a.receipt.json" \
+  "$TMPD12/receipts/rollup-report.json" >/dev/null
+python3 scripts/receipts_index.py append --index "$TMPD12/receipts/receipts-index.jsonl" \
+  "$TMPD12/receipts/run-a.receipt.json" \
+  "$TMPD12/receipts/rollup-report.json" >/dev/null
+# The report rolls away; run-a stays loose (overlap, no drift);
+# run-t arrives after the rollup (tail row, seq dash).
+rm "$TMPD12/receipts/rollup-report.json"
+printf '{"run_id":"run-t","spec_id":"S-T","model_string":"executor","tier_resolved":"T2","subtype":"error_max_turns","num_turns":14,"constitution_hash":"c3","started_at":"t3"}\n' > "$TMPD12/receipts/run-t.receipt.json"
+set +e
+HARNESSWRIGHT_CLI=/nonexistent/hw ENFORCED="$TMPD12/none" \
+  python3 scripts/harness_stats.py "$TMPD12/receipts" >/dev/null 2>&1
+rc=$?
+set -e
+DASH="$TMPD12/receipts/dashboard.html"
+if [ "$rc" -eq 0 ] && [ -s "$DASH" ]; then
+  echo "ok [D7: full-board render exits 0]"
+else
+  echo "FAIL [D7: render rc=$rc or dashboard missing]"; fail=1
+fi
+if grep -q "<td>T2</td>" "$DASH" && grep -q "<td>T1</td>" "$DASH"; then
+  echo "ok [D7: tier column stays a bare td under the full render]"
+else
+  echo "FAIL [D7: bare-td tier literals lost]"; fail=1
+fi
+if grep -q 'data-rail="halt"' "$DASH" && grep -q 'data-rail="chain"' "$DASH" \
+   && grep -q 'data-rail="tree"' "$DASH" && grep -q 'data-rail="gate"' "$DASH" \
+   && grep -q 'data-rail="slice"' "$DASH"; then
+  echo "ok [D7: five-cell status rail present]"
+else
+  echo "FAIL [D7: status rail incomplete]"; fail=1
+fi
+# The source-only row renders as a non-run source, never as a failed
+# run (ledger rows are newline-separated, so the check is per-row).
+srcline="$(grep 'non-run source' "$DASH" || true)"
+if [ -n "$srcline" ] && ! printf '%s' "$srcline" | grep -q 'NOT-SUCCESS'; then
+  echo "ok [D7: source-only row rendered as non-run source, unflagged]"
+else
+  echo "FAIL [D7: source-only row missing or wrongly flagged]"; fail=1
+fi
+if ! grep -q '>None<' "$DASH"; then
+  echo "ok [D7: null fields render as a dash, never None]"
+else
+  echo "FAIL [D7: literal None leaked into the dashboard]"; fail=1
+fi
+if ! grep -qF "$TMPD12" "$DASH"; then
+  echo "ok [D7: no absolute fixture path leaks into the dashboard]"
+else
+  echo "FAIL [D7: absolute path leaked into the dashboard]"; fail=1
+fi
+if grep -q "^runs: " "$TMPD12/receipts/stats.md" \
+   && grep -q "^## Chain" "$TMPD12/receipts/stats.md"; then
+  echo "ok [D7: stats.md keeps its header line and gains detail sections]"
+else
+  echo "FAIL [D7: stats.md header/sections wrong]"; fail=1
+fi
+# HALT banner: engaged in a real repo renders the banner; lifted, gone.
+TMPD12B="$(mktemp -d)"
+trap 'rm -rf "$TMPD" "$TMPD2" "$TMPD3" "$TMPD3R" "$TMPD4" "$TMPD4N" "$TMPD5" "$TMPD6" "$TMPD7" "$TMPD8" "$TMPD8B" "$TMPD9" "$TMPD9B" "$TMPD10" "$TMPD10B" "$TMPD11" "$TMPD12" "$TMPD12B"' EXIT
+( cd "$TMPD12B" && git init -q && git config user.email t@example.invalid \
+    && git config user.name tester )
+mkdir -p "$TMPD12B/.harness/receipts"
+printf '{"run_id":"h1","subtype":"success","num_turns":1}\n' > "$TMPD12B/.harness/receipts/h1.receipt.json"
+touch "$TMPD12B/.harness/HALT"
+set +e
+( cd "$TMPD12B" && HARNESSWRIGHT_CLI=/nonexistent/hw ENFORCED="$TMPD12B/none" \
+    python3 "$PACK/scripts/harness_stats.py" ) >/dev/null 2>&1
+rc=$?
+set -e
+BOARD="$TMPD12B/.harness/receipts/dashboard.html"
+if [ "$rc" -eq 0 ] && grep -q '<div class="halt-banner"' "$BOARD"; then
+  echo "ok [D7: HALT engaged renders the banner]"
+else
+  echo "FAIL [D7: HALT banner missing while engaged]: rc=$rc"; fail=1
+fi
+rm -f "$TMPD12B/.harness/HALT"
+set +e
+( cd "$TMPD12B" && HARNESSWRIGHT_CLI=/nonexistent/hw ENFORCED="$TMPD12B/none" \
+    python3 "$PACK/scripts/harness_stats.py" ) >/dev/null 2>&1
+rc=$?
+set -e
+# The grep targets the banner div, not the bare class name: the CSS
+# block defines .halt-banner on every page, banner present or not.
+if [ "$rc" -eq 0 ] && ! grep -q '<div class="halt-banner"' "$BOARD"; then
+  echo "ok [D7: HALT lifted removes the banner]"
+else
+  echo "FAIL [D7: banner persisted after HALT lift]: rc=$rc"; fail=1
+fi
+
 echo "== receipt_chain selftest =="
 python3 scripts/receipt_chain.py selftest || fail=1
 
