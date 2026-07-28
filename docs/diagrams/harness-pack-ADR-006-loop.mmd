@@ -1,0 +1,24 @@
+%%{init: {"theme":"dark","securityLevel":"loose","themeVariables":{"fontFamily":"'SF Pro Text','Segoe UI',Helvetica,Arial,sans-serif","fontSize":"17px","primaryColor":"#0d1117","primaryTextColor":"#e6edf3","primaryBorderColor":"#8b949e","lineColor":"#6e7681","edgeLabelBackground":"#0d1117"},"flowchart":{"htmlLabels":true,"curve":"basis","padding":18,"nodeSpacing":60,"rankSpacing":70}}}%%
+flowchart LR
+    SPEC("<b style='font-size:1.15em'>spec</b><br/><span style='font-size:0.85em'>frontmatter tipizzato: type, budget, allowed_arms, learning</span>") --> SEL{"<b>router select</b><br/><span style='font-size:0.8em'>posterior Beta scontato, vincolo di budget</span>"}
+    ARCH[("<b style='font-size:1.15em'>archivio</b><br/><span style='font-size:0.85em'>lezioni QD per nicchia, stato JSON locale</span>")] -->|"<small>top-k lezioni</small>"| PB
+    SEL -->|"<small>nessun arm feasible</small>"| STOP("<b style='font-size:1.15em'>STOP</b><br/><span style='font-size:0.85em'>exit 3, slice mai partito, nessun retry</span>")
+    SEL -->|"<small>routing_decision</small>"| PB("<b style='font-size:1.15em'>prompt builder</b><br/><span style='font-size:0.85em'>f(template@vN, spec, lezioni, stop_conditions)</span>")
+    PB --> SLICE("<b style='font-size:1.15em'>slice</b><br/><span style='font-size:0.85em'>run Mode B bounded via adapter</span>")
+    SLICE --> GATE{"<b>gate</b><br/><span style='font-size:0.8em'>deterministico + verity, mai LLM-as-judge</span>"}
+    GATE -->|"<small>exit != 0</small>"| STOP
+    GATE -->|"<small>exit 0</small>"| LED[("<b style='font-size:1.15em'>ledger di runtime</b><br/><span style='font-size:0.85em'>ricevute append-only, hash-chain</span>")]
+    LED -->|"<small>reward, costo</small>"| UPD("<b style='font-size:1.15em'>update</b><br/><span style='font-size:0.85em'>router.update + archive.update, O(1) in chiusa forma</span>")
+    UPD --> SEL
+    UPD --> ARCH
+    STOP --> OP("<b style='font-size:1.15em'>operatore</b><br/><span style='font-size:0.85em'>rituale del mattino</span>")
+    class SEL gate
+    class GATE gate
+    class STOP halt
+    class LED pass
+    class UPD pass
+
+    classDef default fill:#0d1117,stroke:#8b949e,stroke-width:1.5px,color:#e6edf3
+    classDef gate fill:#0d1117,stroke:#ffd699,stroke-width:2px,color:#ffd699
+    classDef pass fill:#0d1117,stroke:#2ea043,stroke-width:1.5px,color:#7ee2a8
+    classDef halt fill:#0d1117,stroke:#ffd699,stroke-width:1.5px,color:#ffd699
