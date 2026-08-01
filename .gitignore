@@ -9,3 +9,4 @@ receipts-index.jsonl
 
 # Generated verity run reports (ADR-005 D5: tooling clean, generated data untracked)
 .verity/reports/
+.claude/
