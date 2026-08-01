@@ -109,7 +109,7 @@ Authority over autonomy arming stays in the vault per vault/ADR-061. This docume
 - **B5.** The sandbox covers the shell subprocess; the tool layer is covered solely by permission rules, where an Edit rule was observed to constrain Write.
 - **B6.** Adoption constraints under the strict profile: local git configuration refused, staging and object writes permitted.
 - **B7.** The auto-mode classifier is advisory rather than a gate, having refused and permitted adjacent paths within the same tree.
-- **B8.** Signing is what makes commits impossible under the profile, by way of the credential deny on the ssh directory. The refusal is receipted (A13); the attribution is not. The competing explanation, that the signing key is genuinely absent, was not excluded, and cannot be excluded from inside the profile. Weak corroboration only: commits landed on this machine the same day under the same global configuration. The twin is the same commit attempted outside the profile, paired with an existence check on the key path.
+- **B8.** Signing is what makes commits impossible under the profile, by way of the credential deny on the ssh directory. The refusal is receipted (A13); the attribution is not. The competing explanation, that the signing key is genuinely absent, was not excluded, and cannot be excluded from inside the profile. Weak corroboration only: commits landed on this machine the same day under the same global configuration. The twin is the same commit attempted outside the profile, paired with an existence check on the key path. Superseded by Amendment 1 — the twin was run, and this claim is promoted to finding A14.
 
 ## Withdrawn — tier C
 
@@ -135,3 +135,19 @@ Authored as a specification at acceptance, one fixture per item, each with its n
 **Cited authority.** D11 is cited as the governing discipline for the fixtures. It is currently carried by a Proposed ADR inside a project folder, while an Accepted ADR, the lessons file, and executing code in the vault all cite it as settled. Elevating it to an accepted governance ADR is a registered vault follow-up. Until then this document cites it as convention, and marks the citation as such rather than borrowing authority it does not have.
 
 **Provenance.** The two commits carrying this document were written by the operator from outside the strict profile, because the profile refused to write a commit object while this document was being committed. The document could not be landed by the configuration it describes. That is recorded as evidence for B8 and for the second consequence above, not as an aside.
+
+## Amendment 1 — 2026-08-01 — B8 promoted to A14, attribution of the commit refusal closed
+
+B8 was recorded as an open requirement because its twin had not been run. The twin has now been run, and it needed no separate probe: landing this document supplied it.
+
+Both commits carrying this ADR were written by the operator outside the strict profile, on the same machine, within hours of the refusal, under a global git configuration confirmed still to name the same signing key path. Both commits are signed, and the signature verifies against the key at that path. Git therefore loaded, outside the profile, the exact file it had reported as missing inside it: the same program, the same path, the same operation, differing only in whether the profile was in force.
+
+- **A14.** The strict profile's credential deny on the ssh directory is what prevents commit creation under it. The competing explanation — that the signing key is absent or the signing configuration broken — is excluded by a positive control rather than by plausibility.
+
+Two consequences follow.
+
+**A misattributed failure is worse than an unattributed one.** Git named a missing file. The remedy that error invites is to regenerate the signing key or to disable signing: both destructive, both wrong, and both reachable by an agent instructed to fix a failing commit. D4 recorded that failure reports misname their cause; this records what that costs. A denial that announces nothing stalls an agent. A denial that announces the wrong cause moves it, confidently, in the wrong direction.
+
+**The read boundary is the credential list, not the repository root.** In the session that suffered the refusal, the global git configuration file under the home directory was read successfully while the signing key path under that same home directory refused. The deny is narrow and specific, and that narrowness is what makes the misreport possible: nothing in the failure distinguishes a denied path from an absent one.
+
+Ledger. Closes B8, promoted to A14. Amends the second Consequences bullet, whose reservation about an unresolved cause no longer holds. Removes from Open requirements the commit-refusal re-run paired with an existence check, which this amendment satisfies. Adds no new open requirement. This amendment is docs-only; the document's status remains Proposed.
