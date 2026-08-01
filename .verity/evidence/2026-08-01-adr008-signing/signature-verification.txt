@@ -1,0 +1,23 @@
+commit 9f2cf0a51d75555410d43d1e7a476e3113a04ca6
+Good "git" signature for ptr.falco@gmail.com with ED25519 key SHA256:jjaHSf/gDRgNLpeKmbrpHSB1z/LvMx4W4FTp6nua/no
+Author: Pietro Falco <pietrofalco.dev@gmail.com>
+Date:   Sat Aug 1 03:04:26 2026 +0200
+
+    docs(adr): ADR-008 Amendment 1 — promote B8 to A14, close attribution
+
+commit 80b049fa3f8a2119b7dbf89bdf2eedb4f918890f
+Good "git" signature for ptr.falco@gmail.com with ED25519 key SHA256:jjaHSf/gDRgNLpeKmbrpHSB1z/LvMx4W4FTp6nua/no
+Author: Pietro Falco <pietrofalco.dev@gmail.com>
+Date:   Sat Aug 1 02:56:14 2026 +0200
+
+    docs(adr): add ADR-008 Claude Code sandbox surface (Proposed)
+
+commit 5b1a4ab199174e16b07733df73a9468ee2ab363e
+Good "git" signature for ptr.falco@gmail.com with ED25519 key SHA256:jjaHSf/gDRgNLpeKmbrpHSB1z/LvMx4W4FTp6nua/no
+Author: Pietro Falco <pietrofalco.dev@gmail.com>
+Date:   Sat Aug 1 02:55:37 2026 +0200
+
+    chore(gitignore): ignore .claude/
+9f2cf0a51d75555410d43d1e7a476e3113a04ca6 G SHA256:jjaHSf/gDRgNLpeKmbrpHSB1z/LvMx4W4FTp6nua/no Pietro Falco pietrofalco.dev@gmail.com
+80b049fa3f8a2119b7dbf89bdf2eedb4f918890f G SHA256:jjaHSf/gDRgNLpeKmbrpHSB1z/LvMx4W4FTp6nua/no Pietro Falco pietrofalco.dev@gmail.com
+5b1a4ab199174e16b07733df73a9468ee2ab363e G SHA256:jjaHSf/gDRgNLpeKmbrpHSB1z/LvMx4W4FTp6nua/no Pietro Falco pietrofalco.dev@gmail.com
