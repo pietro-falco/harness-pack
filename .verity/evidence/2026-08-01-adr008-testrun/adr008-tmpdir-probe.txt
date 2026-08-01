@@ -1,0 +1,7 @@
+profile undetermined
+# printenv TMPDIR, then the path 'mktemp -d' actually resolves to
+--- printenv TMPDIR ---
+/tmp/claude-501
+--- mktemp -d (stdout+stderr, then exit status) ---
+mktemp: mkdtemp failed on /var/folders/m_/g_tkxnpx281c87w19ws8fsyr0000gn/T/tmp.mjm5rlm32t: Operation not permitted
+EXIT STATUS: 1

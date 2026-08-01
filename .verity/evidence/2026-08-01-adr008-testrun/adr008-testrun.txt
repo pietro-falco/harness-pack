@@ -1,0 +1,26 @@
+profile undetermined
+# full output of: bash tests/run_tests.sh (stdout+stderr, followed by exit status)
+== guard fixtures ==
+ok [allow]: ls -la
+ok [allow]: git add -- path/to/file.md
+ok [allow]: npm install
+ok [allow]: echo firmware-update
+ok [allow]: git commit -m 'chore: rollup'
+ok [block]: rm -rf /tmp/x
+ok [block]: sudo rm file
+ok [block]: xargs rm < list.txt
+ok [block]: find . -name '*.tmp' -delete
+ok [block]: git push --force origin main
+ok [block]: git push --force-with-lease origin main
+ok [block]: git push origin +main
+ok [block]: git commit --no-verify -m x
+ok [block]: git add -A
+ok [block]: git add --all
+ok [block]: git reset --hard HEAD~1
+ok [block]: git clean -fd
+ok [block]: git filter-branch --all
+ok [block]: bash -c "rm x"
+ok [block]: grep -r 'rm -rf' docs/
+== single-hop tier resolution unit (D8b, ADR-002) ==
+mktemp: mkdtemp failed on /var/folders/m_/g_tkxnpx281c87w19ws8fsyr0000gn/T/tmp.KEJGGfvLpm: Operation not permitted
+EXIT STATUS: 1
