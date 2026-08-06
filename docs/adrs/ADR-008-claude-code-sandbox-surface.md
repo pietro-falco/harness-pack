@@ -1,3 +1,12 @@
+---
+type: adr
+status: proposed
+title: "Claude Code sandbox surface — measured boundary, attribution discipline, and enforcement-plane partition"
+id: ADR-008
+date: 2026-07-31
+related-adrs: [vault/ADR-051, vault/ADR-055, vault/ADR-061, vault/ADR-067, harness-pack/ADR-005, harness-pack/ADR-006]
+---
+
 # ADR-008: Claude Code sandbox surface — measured boundary, attribution discipline, and enforcement-plane partition
 
 - **Status:** Proposed

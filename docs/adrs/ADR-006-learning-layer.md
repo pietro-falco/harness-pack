@@ -1,3 +1,12 @@
+---
+type: adr
+status: proposed
+title: "Learning layer for Mode B — BDTS router + Quality-Diversity lesson archive"
+id: ADR-006
+date: 2026-07-28
+related-adrs: [harness-pack/ADR-001, harness-pack/ADR-005, vault/ADR-046, vault/ADR-049, vault/ADR-051, harnesswright/ADR-006]
+---
+
 # ADR-006: Learning layer for Mode B — BDTS router + Quality-Diversity lesson archive
 
 - **Status:** Proposed
