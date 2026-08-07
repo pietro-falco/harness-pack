@@ -1,6 +1,6 @@
 ---
 type: adr
-status: proposed
+status: accepted
 title: "Learning layer for Mode B — BDTS router + Quality-Diversity lesson archive"
 id: ADR-006
 date: 2026-07-28
