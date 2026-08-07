@@ -618,6 +618,12 @@ else
   echo "ok [legacy claimer still red: presence-check-only admits every claimer]"
 fi
 
+echo "== session transcript renderer =="
+# Pins the two properties that make the renderer trustworthy to watch a live
+# run: it survives a ragged JSONL tail, and it never renders a blocked action
+# as successful work.
+bash tests/render_session_fixture.sh || fail=1
+
 echo "== shellcheck (local, optional) =="
 if command -v shellcheck >/dev/null 2>&1; then
   shellcheck scripts/*.sh tests/*.sh || fail=1
