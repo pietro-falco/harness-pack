@@ -3,6 +3,31 @@ set -euo pipefail
 cd "$(dirname "$0")/.." || exit 1
 fail=0
 
+# Every scratch dir is templated under $TMPDIR. BSD `mktemp -d` with no
+# template ignores $TMPDIR and reaches for the Darwin per-user temp dir, which
+# an agent session's sandbox denies -- the suite then halts on its first
+# scratch dir and reports nothing. A gate that cannot run is not a gate, so
+# the template is mandatory here, not stylistic.
+
+# Every throwaway git repo the suite builds as a fixture is created through
+# here, so its isolation from the operator's ~/.gitconfig is one fact in one
+# place. Identity was already pinned locally; signing is pinned the same way.
+# Without it the fixture inherits commit.gpgsign/user.signingkey from the
+# global config and `git commit` dies reaching for a key under ~/.ssh -- the
+# suite's verdict then depends on whose machine it runs on.
+#
+# The isolation is written into the throwaway repo's own .git/config and
+# nowhere else: no global config is read or written, no environment is
+# overridden for the rest of the suite, and no repo outside $TMPDIR is
+# touched. Real harness-pack commits keep signing exactly as before.
+init_fixture_repo() {
+  git -C "$1" init -q
+  git -C "$1" config user.email t@example.invalid
+  git -C "$1" config user.name tester
+  git -C "$1" config commit.gpgsign false
+  git -C "$1" config tag.gpgsign false
+}
+
 echo "== guard fixtures =="
 while IFS= read -r line; do
   [ -n "$line" ] || continue
@@ -26,7 +51,7 @@ echo "== single-hop tier resolution unit (D8b, ADR-002) =="
 # Assert on the extracted unit directly (scripts/launch_checks.py resolve-tier) — the
 # same code the launcher runs — with no next/CLI/git dependency. Illegal hop refused,
 # legal single-hop-down resolves (so the extraction is not hardcoded to fail).
-TMPD="$(mktemp -d)"
+TMPD="$(mktemp -d "${TMPDIR:-/tmp}/hp-test.XXXXXX")"
 trap 'rm -rf "$TMPD"' EXIT
 # Illegal hop: T0 has an empty chain and resolves_to T3 (three tiers down, not one).
 cat > "$TMPD/manifest-illegal.json" <<'JSON'
@@ -77,7 +102,7 @@ fi
 echo "== constitution hash pinning unit (ADR-002) =="
 # Assert on the extracted unit directly (scripts/launch_checks.py check-hash): wrong
 # expected hash refused, matching hash passes and echoes the computed digest.
-TMPD2="$(mktemp -d)"
+TMPD2="$(mktemp -d "${TMPDIR:-/tmp}/hp-test.XXXXXX")"
 trap 'rm -rf "$TMPD" "$TMPD2"' EXIT
 printf 'constitution body\n' > "$TMPD2/CONSTITUTION.md"
 # Wrong expected hash -> fail-closed refusal.
@@ -116,8 +141,8 @@ else
 fi
 
 echo "== HALT kill-switch in target repo refuses launch =="
-TMPD3="$(mktemp -d)"
-TMPD3R="$(mktemp -d)"
+TMPD3="$(mktemp -d "${TMPDIR:-/tmp}/hp-test.XXXXXX")"
+TMPD3R="$(mktemp -d "${TMPDIR:-/tmp}/hp-test.XXXXXX")"
 trap 'rm -rf "$TMPD" "$TMPD2" "$TMPD3" "$TMPD3R"' EXIT
 PACK="$PWD"
 mkdir -p "$TMPD3/.harness"
@@ -136,8 +161,8 @@ else
 fi
 
 echo "== HALT kill-switch neutralises a run in flight (guard, all tools) =="
-TMPD4="$(mktemp -d)"    # halted repo: holds .harness/HALT
-TMPD4N="$(mktemp -d)"   # clean repo: no HALT anywhere, for the env-fallback case
+TMPD4="$(mktemp -d "${TMPDIR:-/tmp}/hp-test.XXXXXX")"    # halted repo: holds .harness/HALT
+TMPD4N="$(mktemp -d "${TMPDIR:-/tmp}/hp-test.XXXXXX")"   # clean repo: no HALT anywhere, for the env-fallback case
 trap 'rm -rf "$TMPD" "$TMPD2" "$TMPD3" "$TMPD3R" "$TMPD4" "$TMPD4N"' EXIT
 mkdir -p "$TMPD4/.harness" "$TMPD4/a/b"
 touch "$TMPD4/.harness/HALT"
@@ -169,7 +194,7 @@ halt_case "HALT lifted: benign Bash allowed" \
   "$(printf '{"tool_name":"Bash","tool_input":{"command":"ls"},"cwd":"%s"}' "$TMPD4")" 0
 
 echo "== D1: canonical receipts dir resolution (ADR-005) =="
-TMPD5="$(mktemp -d)"
+TMPD5="$(mktemp -d "${TMPDIR:-/tmp}/hp-test.XXXXXX")"
 trap 'rm -rf "$TMPD" "$TMPD2" "$TMPD3" "$TMPD3R" "$TMPD4" "$TMPD4N" "$TMPD5"' EXIT
 mkdir -p "$TMPD5/.harness/receipts"
 printf '{"run_id":"r1","subtype":"success","num_turns":1}\n' > "$TMPD5/.harness/receipts/r1.receipt.json"
@@ -198,7 +223,7 @@ else
 fi
 
 echo "== D4: reader tolerates both receipt schema forms (ADR-005) =="
-TMPD6="$(mktemp -d)"
+TMPD6="$(mktemp -d "${TMPDIR:-/tmp}/hp-test.XXXXXX")"
 trap 'rm -rf "$TMPD" "$TMPD2" "$TMPD3" "$TMPD3R" "$TMPD4" "$TMPD4N" "$TMPD5" "$TMPD6"' EXIT
 mkdir -p "$TMPD6/receipts"
 printf '{"run_id":"old","spec_id":"S-OLD","tier_requested":"T1","subtype":"success","num_turns":2}\n' > "$TMPD6/receipts/old.receipt.json"
@@ -219,7 +244,7 @@ else
 fi
 
 echo "== D6: union index+loose (dedup + tail ordering, ADR-005 D2/D6) =="
-TMPD7="$(mktemp -d)"
+TMPD7="$(mktemp -d "${TMPDIR:-/tmp}/hp-test.XXXXXX")"
 trap 'rm -rf "$TMPD" "$TMPD2" "$TMPD3" "$TMPD3R" "$TMPD4" "$TMPD4N" "$TMPD5" "$TMPD6" "$TMPD7"' EXIT
 set +e
 python3 - "$TMPD7" <<'PY'
@@ -290,7 +315,7 @@ else
 fi
 
 echo "== D6: chain status (advisory working-tree + HEAD-anchored, ADR-005 D6) =="
-TMPD8="$(mktemp -d)"
+TMPD8="$(mktemp -d "${TMPDIR:-/tmp}/hp-test.XXXXXX")"
 trap 'rm -rf "$TMPD" "$TMPD2" "$TMPD3" "$TMPD3R" "$TMPD4" "$TMPD4N" "$TMPD5" "$TMPD6" "$TMPD7" "$TMPD8"' EXIT
 printf 'src-a\n' > "$TMPD8/a.receipt.json"
 printf 'src-b\n' > "$TMPD8/b.receipt.json"
@@ -315,7 +340,7 @@ else
   echo "ok [chain_status: working-tree VALID, no-HEAD-anchor renders neutral outside a repo]"
 fi
 # Absent chain file degrades to unavailable, not an error.
-TMPD8B="$(mktemp -d)"
+TMPD8B="$(mktemp -d "${TMPDIR:-/tmp}/hp-test.XXXXXX")"
 trap 'rm -rf "$TMPD" "$TMPD2" "$TMPD3" "$TMPD3R" "$TMPD4" "$TMPD4N" "$TMPD5" "$TMPD6" "$TMPD7" "$TMPD8" "$TMPD8B"' EXIT
 out2="$(python3 -c '
 import sys
@@ -331,7 +356,7 @@ else
 fi
 
 echo "== D6: co-index gate signal (receipts_index.py gate, read-only) =="
-TMPD9="$(mktemp -d)"
+TMPD9="$(mktemp -d "${TMPDIR:-/tmp}/hp-test.XXXXXX")"
 trap 'rm -rf "$TMPD" "$TMPD2" "$TMPD3" "$TMPD3R" "$TMPD4" "$TMPD4N" "$TMPD5" "$TMPD6" "$TMPD7" "$TMPD8" "$TMPD8B" "$TMPD9"' EXIT
 printf '{"x":"a"}' > "$TMPD9/a.receipt.json"
 printf '{"x":"b"}' > "$TMPD9/b.receipt.json"
@@ -380,7 +405,7 @@ else
   echo "ok [renderer exit 0 despite co-index drift (collector unwired, degradation-only)]"
 fi
 # Missing chain or index degrades to unavailable, not an error.
-TMPD9B="$(mktemp -d)"
+TMPD9B="$(mktemp -d "${TMPDIR:-/tmp}/hp-test.XXXXXX")"
 trap 'rm -rf "$TMPD" "$TMPD2" "$TMPD3" "$TMPD3R" "$TMPD4" "$TMPD4N" "$TMPD5" "$TMPD6" "$TMPD7" "$TMPD8" "$TMPD8B" "$TMPD9" "$TMPD9B"' EXIT
 out3="$(python3 -c '
 import sys
@@ -395,12 +420,12 @@ else
 fi
 
 echo "== D6: repo state (HALT banner + git log, ADR-005 D6) =="
-TMPD10="$(mktemp -d)"
+TMPD10="$(mktemp -d "${TMPDIR:-/tmp}/hp-test.XXXXXX")"
 trap 'rm -rf "$TMPD" "$TMPD2" "$TMPD3" "$TMPD3R" "$TMPD4" "$TMPD4N" "$TMPD5" "$TMPD6" "$TMPD7" "$TMPD8" "$TMPD8B" "$TMPD9" "$TMPD9B" "$TMPD10"' EXIT
 # A real (throwaway) git repo so git_ops has commits to show and
 # repo_root() resolves a real toplevel.
-( cd "$TMPD10" && git init -q && git config user.email t@example.invalid \
-    && git config user.name tester && touch keep && git add -- keep \
+init_fixture_repo "$TMPD10"
+( cd "$TMPD10" && touch keep && git add -- keep \
     && git commit -q -m "fixture: seed commit" )
 mkdir -p "$TMPD10/.harness"
 touch "$TMPD10/.harness/HALT"
@@ -432,7 +457,7 @@ else
   echo "FAIL [repo state: expected clear, got $out2]"; fail=1
 fi
 # A bare, non-git temp dir: both collectors degrade to unavailable, no raise.
-TMPD10B="$(mktemp -d)"
+TMPD10B="$(mktemp -d "${TMPDIR:-/tmp}/hp-test.XXXXXX")"
 trap 'rm -rf "$TMPD" "$TMPD2" "$TMPD3" "$TMPD3R" "$TMPD4" "$TMPD4N" "$TMPD5" "$TMPD6" "$TMPD7" "$TMPD8" "$TMPD8B" "$TMPD9" "$TMPD9B" "$TMPD10" "$TMPD10B"' EXIT
 out3="$(python3 -c '
 import sys
@@ -448,7 +473,7 @@ else
 fi
 
 echo "== D6: external tools (next --json defensive, detect_tamper states, ADR-005 D6) =="
-TMPD11="$(mktemp -d)"
+TMPD11="$(mktemp -d "${TMPDIR:-/tmp}/hp-test.XXXXXX")"
 trap 'rm -rf "$TMPD" "$TMPD2" "$TMPD3" "$TMPD3R" "$TMPD4" "$TMPD4N" "$TMPD5" "$TMPD6" "$TMPD7" "$TMPD8" "$TMPD8B" "$TMPD9" "$TMPD9B" "$TMPD10" "$TMPD10B" "$TMPD11"' EXIT
 # Pin the environment for determinism: this machine has a real /opt/harness
 # and may have HARNESSWRIGHT_CLI exported, either of which would make this
@@ -492,7 +517,7 @@ else
 fi
 
 echo "== D7: mission-control render (ADR-005 D6/D7) =="
-TMPD12="$(mktemp -d)"
+TMPD12="$(mktemp -d "${TMPDIR:-/tmp}/hp-test.XXXXXX")"
 trap 'rm -rf "$TMPD" "$TMPD2" "$TMPD3" "$TMPD3R" "$TMPD4" "$TMPD4N" "$TMPD5" "$TMPD6" "$TMPD7" "$TMPD8" "$TMPD8B" "$TMPD9" "$TMPD9B" "$TMPD10" "$TMPD10B" "$TMPD11" "$TMPD12"' EXIT
 mkdir -p "$TMPD12/receipts"
 # A full board: two run receipts and one JSON non-receipt source (a
@@ -565,10 +590,9 @@ else
   echo "FAIL [D7: stats.md header/sections wrong]"; fail=1
 fi
 # HALT banner: engaged in a real repo renders the banner; lifted, gone.
-TMPD12B="$(mktemp -d)"
+TMPD12B="$(mktemp -d "${TMPDIR:-/tmp}/hp-test.XXXXXX")"
 trap 'rm -rf "$TMPD" "$TMPD2" "$TMPD3" "$TMPD3R" "$TMPD4" "$TMPD4N" "$TMPD5" "$TMPD6" "$TMPD7" "$TMPD8" "$TMPD8B" "$TMPD9" "$TMPD9B" "$TMPD10" "$TMPD10B" "$TMPD11" "$TMPD12" "$TMPD12B"' EXIT
-( cd "$TMPD12B" && git init -q && git config user.email t@example.invalid \
-    && git config user.name tester )
+init_fixture_repo "$TMPD12B"
 mkdir -p "$TMPD12B/.harness/receipts"
 printf '{"run_id":"h1","subtype":"success","num_turns":1}\n' > "$TMPD12B/.harness/receipts/h1.receipt.json"
 touch "$TMPD12B/.harness/HALT"
