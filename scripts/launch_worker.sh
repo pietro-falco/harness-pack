@@ -192,6 +192,43 @@ TOOLVER="$(claude --version 2>/dev/null || echo unknown)"
 RUN_ID="run-$(date -u +%Y%m%dT%H%M%SZ)-$$"
 STARTED="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 OUT="$RECEIPTS_DIR/$RUN_ID.cc.json"
+
+# Claim, then spawn -- never spawn on a slice we only read as free (vault ADR-054 D3).
+# `next --json` above consulted the lock state, but consulting is all it does:
+# harnesswright's next.ts:127 is an existsSync and nothing in the stack ever created
+# the file, so two launchers racing on one repo both resolved the same slice as
+# unlocked and both would launch. The take is here, it is a single O_EXCL create, and
+# the launch does not happen without it. Two keys, in this order:
+#   _workspace    one git index, one live run. A linked worktree has its own toplevel
+#                 and therefore its own locks dir, so runs in SEPARATE worktrees never
+#                 contend here -- which is the parallelism this buys.
+#   $RESOLVED_ID  one slice, one live run. Same path harnesswright already reads.
+# --pid $$ records THIS shell as the holder: the python acquirer exits immediately, and
+# a lease naming a dead pid is reclaimable at once. That is also what keeps a SIGKILLed
+# launcher from stranding its slice for the whole TTL.
+LEASE="$SELF_DIR/slice_lease.py"
+[ -f "$LEASE" ] || { echo "STOP: slice_lease.py not resolvable at $LEASE" >&2; exit 1; }
+LEASE_TTL=3600
+[ "$WALLSEC" != "0" ] && LEASE_TTL=$((WALLSEC + 300))
+LEASE_HELD_WORKSPACE=""
+LEASE_HELD_SLICE=""
+release_leases() {
+  [ -n "$LEASE_HELD_SLICE" ] && python3 "$LEASE" release --root "$HALT_ROOT" \
+    --key "$LEASE_HELD_SLICE" --run-id "$RUN_ID" >/dev/null 2>&1
+  [ -n "$LEASE_HELD_WORKSPACE" ] && python3 "$LEASE" release --root "$HALT_ROOT" \
+    --key "$LEASE_HELD_WORKSPACE" --run-id "$RUN_ID" >/dev/null 2>&1
+  return 0
+}
+trap release_leases EXIT
+python3 "$LEASE" acquire --root "$HALT_ROOT" --key "_workspace" --run-id "$RUN_ID" \
+  --ttl "$LEASE_TTL" --pid $$ \
+  || { echo "STOP: workspace $HALT_ROOT is claimed by a live run; refusing to share its git index." >&2; exit 1; }
+LEASE_HELD_WORKSPACE="_workspace"
+python3 "$LEASE" acquire --root "$HALT_ROOT" --key "$RESOLVED_ID" --run-id "$RUN_ID" \
+  --ttl "$LEASE_TTL" --pid $$ \
+  || { echo "STOP: slice $RESOLVED_ID is claimed by a live run; refusing to take the same task twice." >&2; exit 1; }
+LEASE_HELD_SLICE="$RESOLVED_ID"
+
 echo "spec=$RESOLVED_ID model_string=$MODEL_STRING tier_resolved=$TIER_RESOLVED model=$MODEL manifest=$MVER constitution=$CHASH"
 
 # Budget -> flags (ADR-005 D6): a declared dimension produces its flag; an undeclared

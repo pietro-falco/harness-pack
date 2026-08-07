@@ -606,6 +606,18 @@ python3 scripts/receipts_index.py selftest || fail=1
 echo "== spec lint =="
 python3 scripts/lint_specs.py || fail=1
 
+echo "== parallel claim isolation (vault ADR-054 D3) =="
+# Races real processes rather than reading code. Both directions are asserted every
+# run: the lease must admit exactly one claimer, and the mechanism it replaced must
+# still admit all of them. A gate never seen failing is not a gate, so the falsifier
+# stays wired in rather than being described in a comment.
+bash tests/parallel_claim_fixture.sh --mode lease || fail=1
+if bash tests/parallel_claim_fixture.sh --mode legacy >/dev/null 2>&1; then
+  echo "FAIL [legacy claimer must stay red]: presence-check-only admitted one claimer"; fail=1
+else
+  echo "ok [legacy claimer still red: presence-check-only admits every claimer]"
+fi
+
 echo "== shellcheck (local, optional) =="
 if command -v shellcheck >/dev/null 2>&1; then
   shellcheck scripts/*.sh tests/*.sh || fail=1
