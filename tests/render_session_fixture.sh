@@ -37,7 +37,7 @@ python3 - "$PROJ" "$SID_A" "$SID_B" <<'PY'
 import json, os, sys
 
 proj, sid_a, sid_b = sys.argv[1], sys.argv[2], sys.argv[3]
-CWD = "/Users/op/Code/harness-pack"
+CWD = "/repo/harness-pack"
 
 
 def rec(sid, typ, ts, **kw):
@@ -49,7 +49,7 @@ def rec(sid, typ, ts, **kw):
 
 def assistant(sid, ts, content, stop_reason="tool_use", **kw):
     return rec(sid, "assistant", ts,
-               message={"role": "assistant", "model": "claude-opus-5",
+               message={"role": "assistant", "model": "OPUS_CLASS_MODEL",
                         "stop_reason": stop_reason, "content": content}, **kw)
 
 
@@ -84,7 +84,7 @@ a.append(result(sid_a, "2026-08-07T09:00:03.000Z", "toolu_read1",
 # 4-5. a tool that was BLOCKED -- never ran. This must NOT read as work done.
 a.append(assistant(sid_a, "2026-08-07T09:00:04.000Z", [
     {"type": "tool_use", "id": "toolu_bash1", "name": "Bash",
-     "input": {"command": "rm -rf /Users/op/Code/harness-pack/receipts",
+     "input": {"command": "rm -rf /repo/harness-pack/receipts",
                "description": "Clear receipts"}}]))
 a.append(result(sid_a, "2026-08-07T09:00:05.000Z", "toolu_bash1",
                 "The user doesn't want to take this action right now.",
@@ -129,88 +129,170 @@ PY
 
 FIX_A="$PROJ/$SID_A.jsonl"
 FIX_B="$PROJ/$SID_B.jsonl"
-OUT="$TMPD/out.txt"
 
-echo "== render_session: finished file with a truncated line =="
-set +e
-python3 "$RENDER" "$FIX_A" >"$OUT" 2>"$TMPD/err"
-rc=$?
-set -e
-if [ "$rc" -ne 0 ]; then
-  echo "FAIL [must survive a malformed line and exit 0]: rc=$rc"
-  sed -n '1,15p' "$TMPD/err"
-  fail=1
-else
-  echo "ok [survives a malformed line, rc=0]"
-fi
+count_in() { # count_in <file> <pattern>
+  grep -c -- "$2" "$1" 2>/dev/null || true
+}
 
-check() { # check <label> <expected-count> <pattern>
-  n=$(grep -c -- "$3" "$OUT" 2>/dev/null || true)
-  if [ "$n" != "$2" ]; then
-    echo "FAIL [$1]: expected $2 line(s) matching '$3', got $n"; fail=1
+check_in() { # check_in <file> <label> <expected-count> <pattern>
+  n=$(count_in "$1" "$4")
+  if [ "$n" != "$3" ]; then
+    echo "FAIL [$2]: expected $3 line(s) matching '$4', got $n"; fail=1
   else
-    echo "ok [$1]"
+    echo "ok [$2]"
   fi
 }
 
-# The malformed line is marked, not silently dropped.
-check "malformed line is marked ILLEGGIBILE" 1 "ILLEGGIBILE"
-# ...and the renderer keeps going: the Edit AFTER the truncated line renders.
-n=$(grep -c "launch_worker.sh" "$OUT" 2>/dev/null || true)
-if [ "$n" -lt 2 ]; then
-  echo "FAIL [events after the malformed line still render]: launch_worker.sh seen $n time(s), want >=2"
+# ---------------------------------------------------------------------------
+# One assertion body, run once per language the catalog carries. A language
+# path that is not exercised on every run is dead code, so both are asserted
+# here rather than one being left switched off and rotting.
+#
+# The caller sets W_* to that language's expected words. The MARKS are words,
+# not only glyphs, in every language -- an operator greps this output.
+# ---------------------------------------------------------------------------
+assert_render() { # assert_render <label> <out-file>
+  local tag="$1" out="$2"
+
+  # The malformed line is marked, not silently dropped.
+  check_in "$out" "$tag: malformed line marked $W_UNREADABLE" 1 "$W_UNREADABLE"
+  # ...and the renderer keeps going: the Edit AFTER the truncated line renders.
+  local n
+  n=$(count_in "$out" "launch_worker.sh")
+  if [ "$n" -lt 2 ]; then
+    echo "FAIL [$tag: events after the malformed line still render]: seen $n, want >=2"
+    fail=1
+  else
+    echo "ok [$tag: events after the malformed line still render]"
+  fi
+
+  # Refusals: the permission denial AND the model refusal, both marked.
+  check_in "$out" "$tag: refusals marked $W_REFUSAL" 2 "$W_REFUSAL"
+  # A run-and-fail is an error, never a refusal.
+  check_in "$out" "$tag: failed tool marked $W_ERROR" 1 "$W_ERROR"
+  # End of turn is marked.
+  check_in "$out" "$tag: end of turn marked $W_STOP" 1 "$W_STOP"
+
+  # THE core assertion: a blocked action must not render as successful work.
+  # Only the Read actually succeeded. If the denied Bash renders ok, this is 2.
+  local ok_n
+  ok_n=$(count_in "$out" "ok$")
+  if [ "$ok_n" != "1" ]; then
+    echo "FAIL [$tag: a refusal must not render as successful work]: $ok_n ok, want 1"
+    fail=1
+  else
+    echo "ok [$tag: a refusal does not render as successful work]"
+  fi
+
+  # The denial reason reaches the operator as prose, in this language.
+  if grep -qi -- "$W_DENIAL" "$out"; then
+    echo "ok [$tag: denial reason surfaced in prose]"
+  else
+    echo "FAIL [$tag: denial reason must be surfaced in prose as '$W_DENIAL']"; fail=1
+  fi
+
+  # A slash command reads as a command, and its markup never reaches the screen.
+  check_in "$out" "$tag: slash command rendered as a command" 1 "$W_COMMAND: /usage"
+  if grep -q "command-name\|local-command-stdout\|command-args" "$out"; then
+    echo "FAIL [$tag: TUI command markup must not reach the rendered view]"; fail=1
+  else
+    echo "ok [$tag: no TUI command markup in the rendered view]"
+  fi
+
+  # The outcome continuation line must not carry the ordinary-activity glyph.
+  if grep -q "↳ ·" "$out"; then
+    echo "FAIL [$tag: outcome lines must not carry the plain-activity glyph]"; fail=1
+  else
+    echo "ok [$tag: outcome lines carry no stray activity glyph]"
+  fi
+
+  # Machine field names and uuids must not leak into the human view.
+  if grep -qi "toolDenialKind\|stop_reason\|tool_use_id\|toolu_\|\"type\":" "$out"; then
+    echo "FAIL [$tag: raw JSON field names / uuids leaked into the view]"
+    grep -n -i "toolDenialKind\|stop_reason\|tool_use_id\|toolu_\|\"type\":" "$out" \
+      | sed -n '1,3p' || true
+    fail=1
+  else
+    echo "ok [$tag: no raw field names or tool uuids in the rendered view]"
+  fi
+}
+
+render_to() { # render_to <out-file> <renderer args...>
+  local out="$1"; shift
+  set +e
+  python3 "$RENDER" "$@" >"$out" 2>"$TMPD/err"
+  local rc=$?
+  set -e
+  if [ "$rc" -ne 0 ]; then
+    echo "FAIL [renderer must survive a malformed line and exit 0]: rc=$rc"
+    sed -n '1,15p' "$TMPD/err"
+    fail=1
+  fi
+  return 0
+}
+
+echo "== render_session: English is what you get with no flag =="
+# On-disk policy is English. No flag, no environment: plain English out.
+OUT_EN="$TMPD/out.en.txt"
+render_to "$OUT_EN" "$FIX_A"
+W_UNREADABLE="UNREADABLE"; W_REFUSAL="REFUSED"; W_ERROR="ERROR"; W_STOP="STOP"
+W_COMMAND="command"; W_DENIAL="refused by the operator"
+assert_render "en" "$OUT_EN"
+
+echo "== render_session: Italian is reachable by explicit selection =="
+OUT_IT="$TMPD/out.it.txt"
+render_to "$OUT_IT" --lang it "$FIX_A"
+W_UNREADABLE="ILLEGGIBILE"; W_REFUSAL="RIFIUTO"; W_ERROR="ERRORE"; W_STOP="STOP"
+W_COMMAND="comando"; W_DENIAL="negato dall'operatore"
+assert_render "it" "$OUT_IT"
+
+echo "== render_session: language never changes classification =="
+# The three categories are decided from the record alone. Translating the
+# labels must not merge, drop or move a single event between them.
+for pair in "REFUSED:RIFIUTO:2:refusal" "ERROR:ERRORE:1:error" "STOP:STOP:1:stop"; do
+  en_w=${pair%%:*}; rest=${pair#*:}
+  it_w=${rest%%:*}; rest=${rest#*:}
+  want=${rest%%:*}; name=${rest#*:}
+  en_n=$(count_in "$OUT_EN" "$en_w"); it_n=$(count_in "$OUT_IT" "$it_w")
+  if [ "$en_n" != "$want" ] || [ "$it_n" != "$want" ]; then
+    echo "FAIL [$name count must be $want in every language]: en=$en_n it=$it_n"; fail=1
+  else
+    echo "ok [$name classified identically in both languages: $want]"
+  fi
+done
+# Total rendered events must match line for line across languages: a language
+# that drops or invents an event is not a translation.
+en_lines=$(wc -l <"$OUT_EN"); it_lines=$(wc -l <"$OUT_IT")
+if [ "$en_lines" != "$it_lines" ]; then
+  echo "FAIL [both languages must render the same number of events]: en=$en_lines it=$it_lines"
   fail=1
 else
-  echo "ok [events after the malformed line still render]"
+  echo "ok [both languages render the same number of events: $en_lines]"
 fi
 
-# Refusals: the permission denial AND the model refusal, both marked.
-check "permission denial marked RIFIUTO" 2 "RIFIUTO"
-# A run-and-fail is an error, never a refusal.
-check "failed tool marked ERRORE" 1 "ERRORE"
-# End of turn is marked.
-check "end of turn marked STOP" 1 "STOP"
-
-# THE core assertion: a blocked action must not be rendered as successful work.
-# Only the Read actually succeeded. If the denied Bash renders as ok, this is 2.
-ok_n=$(grep -c "ok$" "$OUT" 2>/dev/null || true)
-if [ "$ok_n" != "1" ]; then
-  echo "FAIL [a refusal must not render as successful work]: $ok_n success outcome(s), want exactly 1"
+echo "== render_session: every catalog carries every key =="
+# Adding a third language must not require touching the logic -- and must not
+# be able to half-land. Key parity is what makes that true.
+if ! python3 - "$RENDER" <<'PY'
+import importlib.util, sys
+spec = importlib.util.spec_from_file_location("render_session", sys.argv[1])
+mod = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(mod)
+cat = mod.STRINGS
+base = set(cat[mod.DEFAULT_LANG])
+bad = {lang: (base ^ set(table)) for lang, table in cat.items()
+       if set(table) != base}
+if bad:
+    print("FAIL [catalogs must all carry the same keys]: %s" % bad)
+    sys.exit(1)
+if mod.DEFAULT_LANG != "en":
+    print("FAIL [default language must be en]: %s" % mod.DEFAULT_LANG)
+    sys.exit(1)
+print("ok [%d catalogs, %d keys each, default %s]"
+      % (len(cat), len(base), mod.DEFAULT_LANG))
+PY
+then
   fail=1
-else
-  echo "ok [a refusal does not render as successful work]"
-fi
-
-# The denied command's outcome line carries RIFIUTO, not a success token.
-if grep -q "user-rejected\|negato\|rifiut" "$OUT"; then
-  echo "ok [denial reason is surfaced in prose]"
-else
-  echo "FAIL [denial reason must be surfaced in prose]"; fail=1
-fi
-
-# A slash command reads as a command, and its markup never reaches the screen.
-check "slash command rendered as a command" 1 "comando: /usage"
-if grep -q "command-name\|local-command-stdout\|command-args" "$OUT"; then
-  echo "FAIL [TUI command markup must not reach the rendered view]"; fail=1
-else
-  echo "ok [no TUI command markup in the rendered view]"
-fi
-
-# The outcome continuation line must not also carry the ordinary-activity glyph.
-if grep -q "↳ ·" "$OUT"; then
-  echo "FAIL [outcome lines must not carry the plain-activity glyph]"; fail=1
-else
-  echo "ok [outcome lines carry no stray activity glyph]"
-fi
-
-# Machine field names and uuids must not leak into the human view.
-if grep -qi "toolDenialKind\|stop_reason\|tool_use_id\|toolu_\|\"type\":" "$OUT"; then
-  echo "FAIL [raw JSON field names / uuids must not leak into the rendered view]"
-  grep -n -i "toolDenialKind\|stop_reason\|tool_use_id\|toolu_\|\"type\":" "$OUT" \
-    | sed -n '1,3p' || true
-  fail=1
-else
-  echo "ok [no raw field names or tool uuids in the rendered view]"
 fi
 
 echo "== render_session: multiple sessions, each line names its session =="
@@ -243,7 +325,7 @@ rc=$?
 set -e
 if [ "$rc" -ne 0 ]; then
   echo "FAIL [unterminated tail must not crash the renderer]: rc=$rc"; fail=1
-elif ! grep -q "ILLEGGIBILE\|parziale" "$TMPD/grow.txt"; then
+elif ! grep -q "UNREADABLE" "$TMPD/grow.txt"; then
   echo "FAIL [unterminated tail must be flagged, not silently dropped]"; fail=1
 else
   echo "ok [unterminated tail flagged, not crashed on]"
@@ -261,7 +343,7 @@ while [ "$i" -lt 60 ]; do
 done
 kill "$follow_pid" 2>/dev/null || true
 wait "$follow_pid" 2>/dev/null || true
-if grep -q "STOP" "$TMPD/live.txt" 2>/dev/null && grep -q "RIFIUTO" "$TMPD/live.txt" 2>/dev/null; then
+if grep -q "STOP" "$TMPD/live.txt" 2>/dev/null && grep -q "REFUSED" "$TMPD/live.txt" 2>/dev/null; then
   echo "ok [--follow renders events appended after start]"
 else
   echo "FAIL [--follow must render events appended after start]"

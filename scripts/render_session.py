@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Render a Claude Code session JSONL as readable Italian, one line per event.
+"""Render a Claude Code session JSONL as readable lines, one per event.
 
 The operator has no way to see what a run is doing except by watching that
 run's TUI. This reads the per-session transcript Claude Code writes under
@@ -16,10 +16,20 @@ Three properties are load-bearing:
     a refusal as ordinary output is the receipt defect moved to the screen.
   * Refusal, error and stop are three distinct marks, not one.
 
+Language: every human string lives in STRINGS, keyed by language then by a
+stable message key. Nothing human is written at a call site. Classification is
+decided from the record alone and carried as a CATEGORY, never as a display
+string -- so selecting a language cannot merge, drop or move an event between
+refusal, error and stop. Adding a third language means adding one table to
+STRINGS: no logic changes, and the fixture's key-parity check refuses a table
+that half-lands. Argparse help stays English-only by policy, since it is what
+documents the flag that selects the language.
+
 Stdlib only. No daemon, no listener, no state on disk.
 
 Usage:
     render_session.py                       # latest session for this repo
+    render_session.py --lang it             # same, in Italian
     render_session.py -n 3 --follow         # tail the 3 most recent
     render_session.py <session-id> ...      # named sessions
     render_session.py path/to/file.jsonl    # an explicit transcript
@@ -37,25 +47,151 @@ import time
 PROJECTS = os.path.expanduser("~/.claude/projects")
 POLL_SECONDS = 0.2
 READ_CHUNK = 1 << 16
-
-# Marks. The three that matter are words, not only glyphs, so they survive a
-# pipe into grep and a terminal without unicode.
-PLAIN = "·"
-OUTCOME = "  ↳"
-MARK_REFUSAL = "⛔ RIFIUTO"
-MARK_ERROR = "✗ ERRORE"
-MARK_STOP = "■ STOP"
-MARK_BAD = "⚠ ILLEGGIBILE"
 MARK_WIDTH = 13
+
+DEFAULT_LANG = "en"
+
+# Stable, language-independent classification. render() emits these; only
+# emit() ever turns one into something a human reads.
+CAT_PLAIN = "plain"
+CAT_OUTCOME = "outcome"
+CAT_REFUSAL = "refusal"
+CAT_ERROR = "error"
+CAT_STOP = "stop"
+CAT_UNREADABLE = "unreadable"
+
+MARK_KEY = {
+    CAT_PLAIN: "mark.plain",
+    CAT_OUTCOME: "mark.outcome",
+    CAT_REFUSAL: "mark.refusal",
+    CAT_ERROR: "mark.error",
+    CAT_STOP: "mark.stop",
+    CAT_UNREADABLE: "mark.unreadable",
+}
+
+# Every human string, in one place. The marks that matter carry a WORD in
+# every language, not only a glyph: an operator greps this output, and a
+# terminal without unicode must still show which lines are the bad ones.
+STRINGS = {
+    "en": {
+        "mark.plain": "·",
+        "mark.outcome": "  ↳",
+        "mark.refusal": "⛔ REFUSED",
+        "mark.error": "✗ ERROR",
+        "mark.stop": "■ STOP",
+        "mark.unreadable": "⚠ UNREADABLE",
+
+        "evt.request": "request: {text}",
+        "evt.says": "says: {text}",
+        "evt.command": "command: {name}",
+        "evt.compacted": "context compacted",
+        "evt.system": "system: {text}",
+        "evt.turn_ended": "turn ended",
+        "evt.model_refused": "the model refused to answer: {text}",
+        "evt.ok": "ok",
+        "evt.not_run": "{tool} not run: {reason}",
+        "evt.failed": "{tool} failed: {detail}",
+        "evt.the_action": "the action",
+        "evt.unparseable": "unparseable line ({n} chars), skipped",
+        "evt.partial_tail":
+            "unterminated tail ({n} chars): the session is still writing",
+
+        "denial.user-rejected": "refused by the operator",
+        "denial.permission-rule": "refused by a permission rule",
+        "denial.automode-blocked": "blocked by the auto-mode classifier",
+        "denial.automode-unavailable": "auto-mode unavailable",
+        "denial.other": "refused ({kind})",
+
+        "act.read": "reads  {path}",
+        "act.write": "writes  {path}",
+        "act.edit": "edits  {path}",
+        "act.notebook": "edits the notebook  {path}",
+        "act.bash": "runs  {arg}",
+        "act.glob": "searches files  {arg}",
+        "act.grep": "searches text  {arg}",
+        "act.skill": "uses the skill  {arg}",
+        "act.agent": "delegates to a subagent ({kind})  {arg}",
+        "act.fetch": "fetches  {arg}",
+        "act.websearch": "searches the web  {arg}",
+        "act.toolsearch": "searches tools  {arg}",
+        "act.ask": "asks the operator",
+        "act.plan": "proposes the plan to the operator",
+        "act.generic_arg": "uses {name}  {arg}",
+        "act.generic": "uses {name}",
+
+        "hdr.session": "== session [{label}] -> {path}",
+        "err.none_found": "no session found in {dir}",
+        "err.missing": "missing transcript: {path}",
+    },
+    "it": {
+        "mark.plain": "·",
+        "mark.outcome": "  ↳",
+        "mark.refusal": "⛔ RIFIUTO",
+        "mark.error": "✗ ERRORE",
+        "mark.stop": "■ STOP",
+        "mark.unreadable": "⚠ ILLEGGIBILE",
+
+        "evt.request": "richiesta: {text}",
+        "evt.says": "dice: {text}",
+        "evt.command": "comando: {name}",
+        "evt.compacted": "contesto compattato",
+        "evt.system": "sistema: {text}",
+        "evt.turn_ended": "turno concluso",
+        "evt.model_refused": "il modello ha rifiutato di rispondere: {text}",
+        "evt.ok": "ok",
+        "evt.not_run": "{tool} non eseguito: {reason}",
+        "evt.failed": "{tool} fallito: {detail}",
+        "evt.the_action": "l'azione",
+        "evt.unparseable": "riga non interpretabile ({n} caratteri), saltata",
+        "evt.partial_tail":
+            "coda non terminata ({n} caratteri): la sessione sta ancora scrivendo",
+
+        "denial.user-rejected": "negato dall'operatore",
+        "denial.permission-rule": "negato da una regola di permessi",
+        "denial.automode-blocked": "bloccato dal classificatore auto-mode",
+        "denial.automode-unavailable": "auto-mode non disponibile",
+        "denial.other": "negato ({kind})",
+
+        "act.read": "legge  {path}",
+        "act.write": "scrive  {path}",
+        "act.edit": "modifica  {path}",
+        "act.notebook": "modifica il notebook  {path}",
+        "act.bash": "esegue  {arg}",
+        "act.glob": "cerca file  {arg}",
+        "act.grep": "cerca nel testo  {arg}",
+        "act.skill": "usa la skill  {arg}",
+        "act.agent": "delega a un sottoagente ({kind})  {arg}",
+        "act.fetch": "scarica  {arg}",
+        "act.websearch": "cerca sul web  {arg}",
+        "act.toolsearch": "cerca strumenti  {arg}",
+        "act.ask": "chiede all'operatore",
+        "act.plan": "propone il piano all'operatore",
+        "act.generic_arg": "usa {name}  {arg}",
+        "act.generic": "usa {name}",
+
+        "hdr.session": "== sessione [{label}] -> {path}",
+        "err.none_found": "nessuna sessione trovata in {dir}",
+        "err.missing": "transcript assente: {path}",
+    },
+}
+
+
+class Catalog:
+    """Message lookup for one language. A missing key raises, loudly."""
+
+    def __init__(self, lang):
+        self.lang = lang
+        self._table = STRINGS[lang]
+
+    def __call__(self, key, **kw):
+        template = self._table[key]
+        return template.format(**kw) if kw else template
+
 
 # toolDenialKind is the literal field Claude Code writes on the user record
 # when a tool was blocked instead of run. Absent means the tool actually ran.
-DENIAL_REASON = {
-    "user-rejected": "negato dall'operatore",
-    "permission-rule": "negato da una regola di permessi",
-    "automode-blocked": "bloccato dal classificatore auto-mode",
-    "automode-unavailable": "auto-mode non disponibile",
-}
+DENIAL_KINDS = ("user-rejected", "permission-rule", "automode-blocked",
+                "automode-unavailable")
 
 # Record types that carry no operator-visible activity: UI state, titles,
 # queue bookkeeping, snapshots. Rendering them would bury the signal.
@@ -186,71 +322,6 @@ def shorten_path(path, cwd):
     return path.replace(os.path.expanduser("~"), "~", 1)
 
 
-def describe_tool(name, args, cwd):
-    """One Italian phrase for a tool call: the verb and its object."""
-    def p(key):
-        return shorten_path(args.get(key, ""), cwd)
-
-    if name == "Read":
-        return "legge  " + p("file_path")
-    if name == "Write":
-        return "scrive  " + p("file_path")
-    if name in ("Edit", "MultiEdit"):
-        return "modifica  " + p("file_path")
-    if name == "NotebookEdit":
-        return "modifica il notebook  " + p("notebook_path")
-    if name == "Bash":
-        cmd = squeeze(args.get("command", ""), 88)
-        return "esegue  " + cmd
-    if name == "Glob":
-        return "cerca file  " + squeeze(args.get("pattern", ""), 60)
-    if name == "Grep":
-        return "cerca nel testo  " + squeeze(args.get("pattern", ""), 60)
-    if name == "Skill":
-        return "usa la skill  " + squeeze(args.get("skill", ""), 40)
-    if name == "Agent":
-        return ("delega a un sottoagente (%s)  %s"
-                % (args.get("subagent_type", "?"),
-                   squeeze(args.get("description", ""), 60)))
-    if name == "WebFetch":
-        return "scarica  " + squeeze(args.get("url", ""), 70)
-    if name == "WebSearch":
-        return "cerca sul web  " + squeeze(args.get("query", ""), 60)
-    if name == "ToolSearch":
-        return "cerca strumenti  " + squeeze(args.get("query", ""), 60)
-    if name == "AskUserQuestion":
-        return "chiede all'operatore"
-    if name == "ExitPlanMode":
-        return "propone il piano all'operatore"
-    for key in ("file_path", "path", "query", "description", "command"):
-        if isinstance(args.get(key), str):
-            return "usa %s  %s" % (name, squeeze(args[key], 60))
-    return "usa " + name
-
-
-def outcome_line(record, tools):
-    """Render a tool_result: refusal, error, or plain success -- never mixed."""
-    message = record.get("message")
-    blocks = message.get("content") if isinstance(message, dict) else None
-    if not isinstance(blocks, list):
-        return []
-    lines = []
-    for block in blocks:
-        if not isinstance(block, dict) or block.get("type") != "tool_result":
-            continue
-        tool = tools.get(block.get("tool_use_id"), "l'azione")
-        denial = record.get("toolDenialKind")
-        if denial:
-            reason = DENIAL_REASON.get(denial, "negato (%s)" % denial)
-            lines.append((MARK_REFUSAL, "%s non eseguito: %s" % (tool, reason)))
-        elif block.get("is_error"):
-            detail = squeeze(_as_text(block.get("content")), 90)
-            lines.append((MARK_ERROR, "%s fallito: %s" % (tool, detail)))
-        else:
-            lines.append((OUTCOME, "ok"))
-    return lines
-
-
 def _as_text(content):
     if isinstance(content, str):
         return content
@@ -260,8 +331,80 @@ def _as_text(content):
     return ""
 
 
-def render(record, tools):
-    """Return [(mark_or_None, text)] for one parsed record. May be empty."""
+def describe_tool(t, name, args, cwd):
+    """One phrase for a tool call: the verb and its object."""
+    def p(key):
+        return shorten_path(args.get(key, ""), cwd)
+
+    if name == "Read":
+        return t("act.read", path=p("file_path"))
+    if name == "Write":
+        return t("act.write", path=p("file_path"))
+    if name in ("Edit", "MultiEdit"):
+        return t("act.edit", path=p("file_path"))
+    if name == "NotebookEdit":
+        return t("act.notebook", path=p("notebook_path"))
+    if name == "Bash":
+        return t("act.bash", arg=squeeze(args.get("command", ""), 88))
+    if name == "Glob":
+        return t("act.glob", arg=squeeze(args.get("pattern", ""), 60))
+    if name == "Grep":
+        return t("act.grep", arg=squeeze(args.get("pattern", ""), 60))
+    if name == "Skill":
+        return t("act.skill", arg=squeeze(args.get("skill", ""), 40))
+    if name == "Agent":
+        return t("act.agent", kind=args.get("subagent_type", "?"),
+                 arg=squeeze(args.get("description", ""), 60))
+    if name == "WebFetch":
+        return t("act.fetch", arg=squeeze(args.get("url", ""), 70))
+    if name == "WebSearch":
+        return t("act.websearch", arg=squeeze(args.get("query", ""), 60))
+    if name == "ToolSearch":
+        return t("act.toolsearch", arg=squeeze(args.get("query", ""), 60))
+    if name == "AskUserQuestion":
+        return t("act.ask")
+    if name == "ExitPlanMode":
+        return t("act.plan")
+    for key in ("file_path", "path", "query", "description", "command"):
+        if isinstance(args.get(key), str):
+            return t("act.generic_arg", name=name, arg=squeeze(args[key], 60))
+    return t("act.generic", name=name)
+
+
+def outcome_line(t, record, tools):
+    """Render a tool_result: refusal, error, or plain success -- never mixed.
+
+    The branch order is the whole point. A blocked tool never ran, so it is a
+    refusal even though it also carries is_error; only a tool that actually
+    ran can have failed.
+    """
+    message = record.get("message")
+    blocks = message.get("content") if isinstance(message, dict) else None
+    if not isinstance(blocks, list):
+        return []
+    lines = []
+    for block in blocks:
+        if not isinstance(block, dict) or block.get("type") != "tool_result":
+            continue
+        tool = tools.get(block.get("tool_use_id")) or t("evt.the_action")
+        denial = record.get("toolDenialKind")
+        if denial:
+            reason = (t("denial." + denial) if denial in DENIAL_KINDS
+                      else t("denial.other", kind=denial))
+            lines.append((CAT_REFUSAL, t("evt.not_run", tool=tool, reason=reason)))
+        elif block.get("is_error"):
+            detail = squeeze(_as_text(block.get("content")), 90)
+            lines.append((CAT_ERROR, t("evt.failed", tool=tool, detail=detail)))
+        else:
+            lines.append((CAT_OUTCOME, t("evt.ok")))
+    return lines
+
+
+def render(t, record, tools):
+    """Return [(category, text)] for one parsed record. May be empty.
+
+    The category is decided from the record alone; `t` only dresses it.
+    """
     kind = record.get("type")
     if kind in SKIP_TYPES:
         return []
@@ -272,10 +415,10 @@ def render(record, tools):
         sub = record.get("subtype")
         if sub in SKIP_SYSTEM_SUBTYPES:
             return []
-        text = squeeze(record.get("content") or sub or "", 100)
         if sub == "compact_boundary":
-            return [(None, "contesto compattato")]
-        return [(None, "sistema: " + text)] if text else []
+            return [(CAT_PLAIN, t("evt.compacted"))]
+        text = squeeze(record.get("content") or sub or "", 100)
+        return [(CAT_PLAIN, t("evt.system", text=text))] if text else []
 
     if kind == "assistant" and isinstance(message, dict):
         lines = []
@@ -283,9 +426,8 @@ def render(record, tools):
         blocks = message.get("content")
         if stop == "refusal":
             # Fold the refusal text in; do not also render it as ordinary talk.
-            return [(MARK_REFUSAL,
-                     "il modello ha rifiutato di rispondere: "
-                     + squeeze(_as_text(blocks), 90))]
+            return [(CAT_REFUSAL,
+                     t("evt.model_refused", text=squeeze(_as_text(blocks), 90)))]
         if isinstance(blocks, list):
             for block in blocks:
                 if not isinstance(block, dict):
@@ -293,14 +435,15 @@ def render(record, tools):
                 if block.get("type") == "text":
                     said = squeeze(block.get("text", ""), 120)
                     if said:
-                        lines.append((None, "dice: " + said))
+                        lines.append((CAT_PLAIN, t("evt.says", text=said)))
                 elif block.get("type") == "tool_use":
                     name = block.get("name", "?")
                     tools[block.get("id")] = name
                     args = block.get("input") or {}
-                    lines.append((None, describe_tool(name, args, cwd)))
+                    lines.append((CAT_PLAIN,
+                                  describe_tool(t, name, args, cwd)))
         if stop in ("end_turn", "stop_sequence"):
-            lines.append((MARK_STOP, "turno concluso"))
+            lines.append((CAT_STOP, t("evt.turn_ended")))
         return lines
 
     if kind == "user" and isinstance(message, dict):
@@ -308,7 +451,7 @@ def render(record, tools):
         if isinstance(content, list) and any(
                 isinstance(b, dict) and b.get("type") == "tool_result"
                 for b in content):
-            return outcome_line(record, tools)
+            return outcome_line(t, record, tools)
         if record.get("isMeta"):
             return []
         raw = _as_text(content) if isinstance(content, list) else content or ""
@@ -316,21 +459,22 @@ def render(record, tools):
             return []
         # The TUI writes slash-command bookkeeping into the user stream. It is
         # not an operator request, and its markup is not for human eyes.
-        name = re.search(r"<command-name>\s*(.*?)\s*</command-name>", raw)
-        if name:
-            return [(None, "comando: " + squeeze(name.group(1), 60))]
+        named = re.search(r"<command-name>\s*(.*?)\s*</command-name>", raw)
+        if named:
+            return [(CAT_PLAIN,
+                     t("evt.command", name=squeeze(named.group(1), 60)))]
         if raw.lstrip().startswith("<local-command-stdout>"):
             return []
-        return ([(None, "richiesta: " + squeeze(raw, 120))]
-                if squeeze(raw, 120) else [])
+        text = squeeze(raw, 120)
+        return [(CAT_PLAIN, t("evt.request", text=text))] if text else []
 
     return []
 
 
-def emit(stream, when, label, mark, text, show_label):
+def emit(stream, t, when, label, category, text, show_label):
     tag = ("[%s] " % label) if show_label else ""
-    stream.write("%s %s%s %s\n"
-                 % (when, tag, (mark or PLAIN).ljust(MARK_WIDTH), text))
+    mark = t(MARK_KEY[category]).ljust(MARK_WIDTH)
+    stream.write("%s %s%s %s\n" % (when, tag, mark, text))
     stream.flush()
 
 
@@ -340,7 +484,7 @@ def emit(stream, when, label, mark, text, show_label):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(
-        description="Render Claude Code session transcripts in readable Italian.")
+        description="Render Claude Code session transcripts as readable lines.")
     ap.add_argument("sessions", nargs="*",
                     help="session id or path to a .jsonl (default: the latest)")
     ap.add_argument("-f", "--follow", action="store_true",
@@ -349,19 +493,22 @@ def main(argv=None):
                     help="render the N most recently modified sessions")
     ap.add_argument("--project", metavar="DIR",
                     help="project transcript dir (default: the slug for $PWD)")
+    ap.add_argument("--lang", choices=sorted(STRINGS), default=DEFAULT_LANG,
+                    help="output language (default: %s)" % DEFAULT_LANG)
     ap.add_argument("--label", action="store_true",
                     help="always prefix the session, even for a single one")
     ap.add_argument("--list", action="store_true",
                     help="list available transcripts and exit")
     args = ap.parse_args(argv)
 
+    t = Catalog(args.lang)
     project = args.project or project_dir_for(os.getcwd())
 
     if args.list:
         try:
             names = sorted(os.listdir(project), reverse=True)
         except OSError:
-            sys.stderr.write("nessuna sessione in %s\n" % project)
+            sys.stderr.write(t("err.none_found", dir=project) + "\n")
             return 1
         for name in names:
             if not name.endswith(".jsonl"):
@@ -374,7 +521,7 @@ def main(argv=None):
 
     found = find_sessions(project, args.sessions, max(1, args.latest))
     if not found:
-        sys.stderr.write("nessuna sessione trovata in %s\n" % project)
+        sys.stderr.write(t("err.none_found", dir=project) + "\n")
         return 1
 
     show_label = args.label or len(found) > 1
@@ -384,10 +531,11 @@ def main(argv=None):
 
     for reader in readers:
         if not os.path.exists(reader.path) and not args.follow:
-            sys.stderr.write("transcript assente: %s\n" % reader.path)
+            sys.stderr.write(t("err.missing", path=reader.path) + "\n")
             return 1
         if show_label:
-            out.write("== sessione [%s] -> %s\n" % (reader.label, reader.path))
+            out.write(t("hdr.session", label=reader.label, path=reader.path)
+                      + "\n")
     out.flush()
 
     try:
@@ -405,17 +553,16 @@ def main(argv=None):
                         # Report the damage, never echo it: the raw fragment is
                         # JSON, and JSON on screen is what this exists to avoid.
                         batch.append((reader.label, "--:--:--",
-                                      [(MARK_BAD,
-                                        "riga non interpretabile (%d caratteri), "
-                                        "saltata" % len(raw))]))
+                                      [(CAT_UNREADABLE,
+                                        t("evt.unparseable", n=len(raw)))]))
                         continue
                     if not isinstance(record, dict):
                         continue
                     batch.append((reader.label, clock(record),
-                                  render(record, tools)))
+                                  render(t, record, tools)))
             for label, when, lines in batch:
-                for mark, text in lines:
-                    emit(out, when, label, mark, text, show_label)
+                for category, text in lines:
+                    emit(out, t, when, label, category, text, show_label)
             if not args.follow:
                 break
             time.sleep(POLL_SECONDS)
@@ -425,9 +572,8 @@ def main(argv=None):
     for reader in readers:
         tail = reader.partial()
         if tail:
-            emit(out, "--:--:--", reader.label, MARK_BAD,
-                 "coda parziale non terminata (%d caratteri): la sessione sta "
-                 "ancora scrivendo" % len(tail), show_label)
+            emit(out, t, "--:--:--", reader.label, CAT_UNREADABLE,
+                 t("evt.partial_tail", n=len(tail)), show_label)
     return 0
 
 
