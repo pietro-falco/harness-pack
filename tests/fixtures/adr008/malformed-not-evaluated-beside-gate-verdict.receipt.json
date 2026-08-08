@@ -1,0 +1,40 @@
+{
+ "_why": "ADR-008 D3 (adrs/0008:89): the cross-field invariant -- contribution.verdict == NOT_EVALUATED if and only if gate has no verdict. Here gate.verdict is present. Every field templates/receipt.schema.json requires is present and every enum is in range, so the only thing that can reject this receipt is the contribution invariant.",
+ "run_id": "run-d3-not-evaluated-beside-gate-verdict",
+ "spec_id": "S-DEMO",
+ "mode": "B",
+ "model_string": "worker",
+ "tier_requested": "T3",
+ "tier_resolved": "T3",
+ "model_used": "HAIKU_CLASS_MODEL",
+ "manifest_version": 1,
+ "constitution_hash": "00a92e1544ba9dd55591388830a7f86bf1a8d555e22f455f05b5eb267ecaf97d",
+ "tool_version": "0.0.0-fixture (stub)",
+ "started_at": "2026-08-07T18:24:33Z",
+ "ended_at": "2026-08-07T18:24:34Z",
+ "subtype": "success",
+ "num_turns": 7,
+ "stop_reason": "gate-pass",
+ "gate": {
+  "verdict": "PASS",
+  "reason": "all declared criteria PASS",
+  "verity_exit": 0
+ },
+ "contribution": {
+  "phase": "working-tree-advisory",
+  "baseline": {
+   "verdict": "PASS",
+   "claims": [
+    { "id": "readme-committed", "verdict": "PASS" },
+    { "id": "checks-pass", "verdict": "PASS" }
+   ]
+  },
+  "delta": [],
+  "regressions": [],
+  "verdict": "NOT_EVALUATED"
+ },
+ "claims": [
+  { "id": "readme-committed", "type": "git_committed", "verdict": "PASS", "evidence": "git show HEAD:README.md exit 0" },
+  { "id": "checks-pass", "type": "command", "verdict": "PASS", "evidence": "exit 0" }
+ ]
+}

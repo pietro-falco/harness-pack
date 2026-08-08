@@ -1,0 +1,48 @@
+basis: 6ba2713960a8edfad45ed5b12354f02686147b78
+branch: main
+command: bash tests/adr008_falsifier_fixture.sh
+---
+== ADR-008 falsifier register: D6, D1, D3 ==
+RED [D6] ADR-008:149 register / ADR-008:127 -- a receipt produced by the
+     current launcher must validate against templates/receipt.schema.json.
+     receipt: run-20260807T212629Z-69382.receipt.json (written by scripts/launch_worker.sh, launcher exit 0)
+     REJECT missing=tier_requested enum=-
+     green when the schema and the launcher agree on tier_requested (ADR-008:123)
+RED [D1] ADR-008:143 register / ADR-008:47 -- two artifacts of twin runs whose
+     criteria were already PASS at baseline must differ in the contribution verdict.
+     twins: tests/fixtures/adr008/twin-a.receipt.json, twin-b.receipt.json
+     contribution.verdict a=<absent> b=<absent>; the two artifacts are indistinguishable
+     green when the launcher writes contribution.verdict (ADR-008:83)
+RED [D3] ADR-008:146 register / ADR-008:93 -- three malformed contribution
+     receipts must be rejected by the receipt contract. Accepted: malformed-contributed-empty-delta malformed-no-op-with-delta malformed-not-evaluated-beside-gate-verdict
+     templates/receipt.schema.json declares 0 rules about contribution,
+     so every value of contribution.verdict is legal and none of the three can be refused.
+     green when the contract expresses D3's total function (ADR-008:89, ADR-008:123)
+-- ADR-008 register: D6=RED D1=RED D3=RED
+ADR-008 FALSIFIER FIXTURE: RED (3/3 rows)
+exit: 1
+
+===
+command: bash tests/run_tests.sh   (register wired --expect-red)
+---
+== ADR-008 falsifier register: D6, D1, D3 must be seen red (harnesswright ADR-008:139) ==
+== ADR-008 falsifier register: D6, D1, D3 ==
+RED [D6] ADR-008:149 register / ADR-008:127 -- a receipt produced by the
+     current launcher must validate against templates/receipt.schema.json.
+     receipt: run-20260807T212718Z-71004.receipt.json (written by scripts/launch_worker.sh, launcher exit 0)
+     REJECT missing=tier_requested enum=-
+     green when the schema and the launcher agree on tier_requested (ADR-008:123)
+RED [D1] ADR-008:143 register / ADR-008:47 -- two artifacts of twin runs whose
+     criteria were already PASS at baseline must differ in the contribution verdict.
+     twins: tests/fixtures/adr008/twin-a.receipt.json, twin-b.receipt.json
+     contribution.verdict a=<absent> b=<absent>; the two artifacts are indistinguishable
+     green when the launcher writes contribution.verdict (ADR-008:83)
+RED [D3] ADR-008:146 register / ADR-008:93 -- three malformed contribution
+     receipts must be rejected by the receipt contract. Accepted: malformed-contributed-empty-delta malformed-no-op-with-delta malformed-not-evaluated-beside-gate-verdict
+     templates/receipt.schema.json declares 0 rules about contribution,
+     so every value of contribution.verdict is legal and none of the three can be refused.
+     green when the contract expresses D3's total function (ADR-008:89, ADR-008:123)
+-- ADR-008 register: D6=RED D1=RED D3=RED
+ADR-008 FALSIFIER FIXTURE: 3/3 rows RED as the register requires
+ALL TESTS PASSED
+exit: 0

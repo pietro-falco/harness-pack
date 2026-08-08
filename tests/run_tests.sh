@@ -642,6 +642,21 @@ else
   echo "ok [legacy claimer still red: presence-check-only admits every claimer]"
 fi
 
+echo "== ADR-008 falsifier register: D6, D1, D3 must be seen red (harnesswright ADR-008:139) =="
+# Three rows of an Accepted ADR's falsifier register, asserted before any of the
+# three decisions is implemented. The register is normative -- "each row must be
+# seen red before the decision it belongs to is implemented" -- so the red is
+# re-observed on every run here rather than being recounted in a commit message.
+#
+# --expect-red inverts the fixture's own verdict, exactly as the legacy claimer
+# above does, and for the same reason: a path not asserted on every run rots.
+# The difference from the legacy claimer is that these rows are MEANT to go
+# green. When a decision lands, its row goes green, this line goes red, and the
+# implementer flips the call to the plain `bash tests/adr008_falsifier_fixture.sh`
+# in the same commit. The suite's verdict is not red today; the register is, and
+# it prints its three reds in full below.
+bash tests/adr008_falsifier_fixture.sh --expect-red || fail=1
+
 echo "== session transcript renderer =="
 # Pins the two properties that make the renderer trustworthy to watch a live
 # run: it survives a ragged JSONL tail, and it never renders a blocked action

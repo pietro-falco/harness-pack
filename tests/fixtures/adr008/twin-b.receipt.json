@@ -1,0 +1,39 @@
+{
+ "run_id": "run-20260807T182435Z-60646",
+ "spec_id": "S-DEMO",
+ "mode": "B",
+ "model_string": "worker",
+ "tier_resolved": "T3",
+ "model_used": "HAIKU_CLASS_MODEL",
+ "manifest_version": 1,
+ "constitution_hash": "00a92e1544ba9dd55591388830a7f86bf1a8d555e22f455f05b5eb267ecaf97d",
+ "tool_version": "0.0.0-fixture (stub)",
+ "started_at": "2026-08-07T18:24:35Z",
+ "ended_at": "2026-08-07T18:24:35Z",
+ "subtype": "success",
+ "num_turns": 7,
+ "total_cost_usd": 0.0412,
+ "duration_ms": 41200,
+ "session_id": "3a7d81f5-0c92-4a17-b6d4-8e10cf6b2a93",
+ "gate": {
+  "verdict": "PASS",
+  "reason": "all declared criteria PASS",
+  "verity_exit": 0
+ },
+ "retries": 0,
+ "stop_reason": "gate-pass",
+ "claims": [
+  {
+   "id": "readme-committed",
+   "type": "git_committed",
+   "verdict": "PASS",
+   "evidence": "git show HEAD:README.md exit 0"
+  },
+  {
+   "id": "checks-pass",
+   "type": "command",
+   "verdict": "PASS",
+   "evidence": "exit 0"
+  }
+ ]
+}
