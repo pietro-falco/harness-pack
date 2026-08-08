@@ -52,6 +52,15 @@ lock aside to a unique name. rename is atomic and the source disappears with it,
 exactly one breaker succeeds and the losers simply retry. Nothing here polls, forks,
 listens, or imports off the standard library.
 
+WHEN A LEASE IS DATED. The clock is read inside the retry loop, once per attempt, and
+not once on entry. An attempt reached by breaking a stale lock aside has already had
+to observe that lock's expiry as past, so a stamp carried over from before the
+contention would date the lease earlier than the event that justified taking it, and
+the TTL it advertises would already be part-spent when the lease is published. Every
+attempt therefore stamps `acquired_at` from its own read and `expires_at` from that,
+so a lease is dated no earlier than the attempt that took it.
+tests/lease_expiry_fixture.sh measures that ordering.
+
 Not flock: a kernel-held advisory lock would need no TTL at all, but it dies with the
 process that opened the descriptor, and the process that runs this module is a
 short-lived subprocess of the launcher. Holding it across the run would mean keeping
@@ -137,7 +146,6 @@ def _staleness(rec, now):
 
 
 def cmd_acquire(args):
-    now = time.time()
     path = _lock_path(args.root, args.key)
     try:
         os.makedirs(_locks_dir(args.root), exist_ok=True)
@@ -147,6 +155,11 @@ def cmd_acquire(args):
         return 1
 
     for attempt in range(args.retries + 1):
+        # Per attempt, and not once on entry: an attempt reached by breaking a
+        # stale lock aside must not date its lease from before the contention it
+        # won. See WHEN A LEASE IS DATED above; the ordering is measured by
+        # tests/lease_expiry_fixture.sh.
+        now = time.time()
         expires = now + args.ttl
         rec = {
             "key": args.key,
@@ -274,7 +287,11 @@ def main(argv):
                        help="slice id, or _workspace for the git-index lease")
         s.add_argument("--run-id", default=None)
         s.add_argument("--ttl", type=float, default=3600.0,
-                       help="seconds before the lease may be reclaimed (default 3600)")
+                       help="a ceiling, not a floor: at most this many"
+                            " seconds before the lease may be reclaimed from a holder"
+                            " that still looks alive. A holder whose pid is gone on"
+                            " this host is reclaimed at once, TTL unspent, so the"
+                            " record buys no protected interval (default 3600)")
         s.add_argument("--retries", type=int, default=4,
                        help="re-attempts after breaking a stale lease (default 4)")
         s.add_argument("--pid", type=int, default=None,

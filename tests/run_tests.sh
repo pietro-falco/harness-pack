@@ -685,14 +685,14 @@ echo "== lease acquire window: the take is atomic (vault ADR-054 D3) =="
 bash tests/lease_window_fixture.sh || fail=1
 
 echo "== lease expiry ordering: a lease is dated no earlier than the attempt that took it (vault ADR-054 D3) =="
-# The second defect of the same acquire path, and the reason the row above going
-# green did not close it: cmd_acquire reads the clock once, before the retry
-# loop, so a claimer that breaks a stale lock and retries publishes a lease
-# stamped from before the contention it won -- its TTL already being spent when
-# the lease is created. Registered RED here on the same terms as the legacy
-# claimer and the ADR-008 register: a defect preserved deliberately in one commit
-# and asserted nowhere is a defect that gets closed in a commit message instead
-# of in the source.
+# The second defect of the same acquire path, registered RED before the dating
+# was repaired and asserted GREEN since. cmd_acquire read the clock once, before
+# the retry loop, so a claimer that broke a stale lock and retried published a
+# lease stamped from before the contention it won -- its TTL already being spent
+# when the lease was created. The read is now inside the loop, so every attempt
+# dates its own record and a lease is dated no earlier than the attempt that took
+# it; scripts/slice_lease.py says so at WHEN A LEASE IS DATED and this row is what
+# holds it to that.
 #
 # The row is an ORDERING, not a duration. The fixture hands the predecessor's
 # record to the claimer at the claimer's own _read(), through a FIFO at the
@@ -700,11 +700,11 @@ echo "== lease expiry ordering: a lease is dated no earlier than the attempt tha
 # waits on no interval, sleeps for no duration, and has no third outcome to
 # count. Its verdict cannot move with load.
 #
-# --expect-red inverts the verdict, exactly as the window row above was wired
-# before its take was repaired. Move that clock read inside the loop and the row
-# goes green, this line goes red, and the implementer flips the call to the plain
-# `bash tests/lease_expiry_fixture.sh` in the same commit -- deliberately.
-bash tests/lease_expiry_fixture.sh --expect-red || fail=1
+# --expect-red is gone from this call, not from the fixture: the row now stands
+# green on the fixture's own criterion, and the plain call is what holds it
+# there. Move that clock read back out of the loop and this line goes red again,
+# which is its whole job.
+bash tests/lease_expiry_fixture.sh || fail=1
 
 echo "== ADR-008 falsifier register: six rows in their registered state (harnesswright ADR-008:139) =="
 # Six rows of an Accepted ADR's falsifier register, asserted before any of the
