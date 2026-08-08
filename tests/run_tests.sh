@@ -706,27 +706,26 @@ echo "== lease expiry ordering: a lease is dated no earlier than the attempt tha
 # which is its whole job.
 bash tests/lease_expiry_fixture.sh || fail=1
 
-echo "== ADR-008 falsifier register: six rows in their registered state (harnesswright ADR-008:139) =="
-# Six rows of an Accepted ADR's falsifier register, asserted before any of the
-# decisions they belong to is implemented. The register is normative -- "each row
-# must be seen red before the decision it belongs to is implemented" -- so the
-# reds are re-observed on every run here rather than being recounted in a commit
-# message.
+echo "== ADR-008 falsifier register: six rows in their declared state (harnesswright ADR-008:139) =="
+# Six rows of an Accepted ADR's falsifier register. The register is normative --
+# "each row must be seen red before the decision it belongs to is implemented"
+# -- so the reds are re-observed on every run here rather than being recounted
+# in a commit message.
 #
-# --expect-registered inverts the fixture's verdict for the four FALSIFIER rows,
-# exactly as the legacy claimer above does and for the same reason: a path not
-# asserted on every run rots. It does NOT invert the two rows that are green by
-# construction -- D2's discrimination control and D4's pinned non-behaviour --
-# which must be green today and green after. That is why the flag is no longer
-# --expect-red: under an all-red mode those two rows could only be kept by
-# miscounting them as falsifiers, and a falsifier that is green before its
-# implementation is a vacuous gate.
+# --expect-registered no longer describes a posture the whole register shares.
+# ADR-008 lands one decision at a time, and from the D repair on the register is
+# mixed: D2's unknown-baseline row is green because the launcher now measures t0
+# before the spawn, while D6 and D3 are still red because the schema is
+# untouched. Neither an all-red mode nor an all-green one describes that tree.
+# The expected state is therefore DECLARED PER ROW, as six literals in the
+# fixture beside the register lines they answer to, and this call asserts that
+# every row is where its own literal says it is.
 #
-# The difference from the legacy claimer is that these rows are MEANT to go
-# green. When a decision lands, its row goes green, this line goes red, and the
-# implementer flips the call to the plain `bash tests/adr008_falsifier_fixture.sh`
-# in the same commit. The suite's verdict is not red today; the register is, and
-# it prints its reds in full below.
+# What that buys, and it is the point: the only way to make this line green
+# again after a row moves is to edit THAT ROW's literal, in the commit that
+# moved it, with the reason beside it. Changing a global mode so the suite goes
+# green is the defect ADR-009 exists to prevent, and there is no longer a global
+# mode to change.
 bash tests/adr008_falsifier_fixture.sh --expect-registered || fail=1
 
 echo "== ADR-008 discrimination control: the D1 and D2 rows can move =="

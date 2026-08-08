@@ -231,45 +231,25 @@ LEASE_HELD_SLICE="$RESOLVED_ID"
 
 echo "spec=$RESOLVED_ID model_string=$MODEL_STRING tier_resolved=$TIER_RESOLVED model=$MODEL manifest=$MVER constitution=$CHASH"
 
-# Budget -> flags (ADR-005 D6): a declared dimension produces its flag; an undeclared
-# dimension (sentinel 0) produces NO flag. The old silent 15/20 defaults are gone.
-CMD=(claude -p
-  --model "$MODEL"
-  --append-system-prompt "$(cat "$CONST")"
-  --settings "$HARNESS_HOME/templates/settings.mode-b.json"
-  --allowedTools "$TOOLS"
-  --permission-mode dontAsk
-  --output-format json)
-if [ "$MAXTURNS" != "0" ]; then CMD+=(--max-turns "$MAXTURNS"); fi
-# Wall-clock -> kill after N seconds, prefer gtimeout (coreutils) then timeout.
-if [ "$WALLSEC" != "0" ]; then
-  if command -v gtimeout >/dev/null; then CMD=(gtimeout "$WALLSEC" "${CMD[@]}")
-  elif command -v timeout >/dev/null; then CMD=(timeout "$WALLSEC" "${CMD[@]}")
-  fi
-fi
-
-set +e
-"${CMD[@]}" < "$SPEC" > "$OUT"
-CC_EXIT=$?
-set -e
-ENDED="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-
-# Gate (ADR-004 D7): a Mode B run's "done" is a claim, not a fact. When CC exited 0, run
-# verity over the target repo's manifest and judge THIS slice's declared criteria only
-# (ADR-004 criteria = claim IDs; the manifest is repo-level and accretes across slices, so
-# the gate is scoped to spec.criteria, not verity's overall verdict). verity is a black box:
-# invoke, read --json report + exit code, filter by criteria. verity writes its own report
-# under .verity/reports/; we embed the item-level verdicts here (D6). If CC did not exit 0,
-# the stop condition is the CC failure itself and the gate is skipped.
-GATE_JSON="{}"
-if [ "$CC_EXIT" -eq 0 ]; then
-  VERITY_ERR="${TMPDIR:-/tmp}/verity.$$.err"
+# ONE measurement path, used by t0 and by t1 (ADR-008 D2, 0008:51): the runner
+# already resolved fail-closed above, the same target root, the same invocation
+# form, and the same filter reducing verity's report to spec.criteria -- a
+# function called twice, never a second copy. "t0 and t1 are commensurable by
+# construction or they are not commensurable at all." Sets MEASURED_JSON:
+#   {"verdict": PASS|FAIL|STOP|NO-VERDICT, "reason": str, "verity_exit": int,
+#    "claims": [{"id","type","verdict","evidence"}, ...]}
+# NO-VERDICT (and only NO-VERDICT) means no verdict was produced at all.
+MEASURED_JSON="{}"
+measure_criteria() {
+  local verity_err vout vexit
+  verity_err="${TMPDIR:-/tmp}/verity.$$.err"
   set +e
-  VERITY_OUT="$(cd "$HALT_ROOT" && node "$VERITY_CLI" verify --json 2>"$VERITY_ERR")"
-  VERITY_EXIT=$?
+  vout="$(cd "$HALT_ROOT" && node "$VERITY_CLI" verify --json 2>"$verity_err")"
+  vexit=$?
   set -e
-  GATE_JSON="$(
-    CRITERIA="$CRITERIA" VERITY_EXIT="$VERITY_EXIT" VERITY_OUT="$VERITY_OUT" python3 <<'PYEOF'
+  rm -f "$verity_err"
+  MEASURED_JSON="$(
+    CRITERIA="$CRITERIA" VERITY_EXIT="$vexit" VERITY_OUT="$vout" python3 <<'PYEOF'
 import json, os
 crit = [c for c in os.environ["CRITERIA"].split(",") if c]
 vexit = int(os.environ["VERITY_EXIT"])
@@ -304,18 +284,89 @@ else:
         print(json.dumps({"verdict": verdict, "reason": reason, "verity_exit": vexit, "claims": items}))
 PYEOF
   )"
-  rm -f "$VERITY_ERR"
+}
+
+# t0 -- the pre-launch baseline (ADR-008 D1, 0008:37). Measured HERE and nowhere
+# else, against the three ordering constraints 0008:53 states as constraints
+# rather than line numbers:
+#   0008:55  after the slice's path lease is held -- the acquire directly above.
+#            A baseline measured before the lease is measured on a tree another
+#            session may still move, and its delta is noise.
+#   0008:56  after criteria resolution -- $CRITERIA, read out of `next --json`
+#            at :164 of this file.
+#   0008:57  "Before the executor is spawned (`:236`), since a baseline taken
+#            after the executor has written is not a baseline." The spawn is the
+#            "${CMD[@]}" below.
+# Measurement only: t0 never accepts and never rejects.
+measure_criteria
+BASELINE_JSON="$MEASURED_JSON"
+BASELINE_VERDICT="$(printf '%s' "$BASELINE_JSON" | python3 -c 'import json,sys;print(json.load(sys.stdin).get("verdict","NO-VERDICT"))')"
+
+# Failure posture, reusing ADR-004 D3's distinguishing rule verbatim -- verdict
+# presence, not exit code (0008:61). Verdicts produced: the run proceeds,
+# whatever they are; a t0 in which every criterion reads FAIL or ABSENT is the
+# healthy normal case and must never stop a run (0008:63). No verdict at all:
+#   0008:64  "The baseline runner produced **no** verdict - spawn failure,
+#            unparseable output, interruption: the launcher stops **before
+#            spawning the executor**, with a distinct stop reason, and releases
+#            the lease. A run whose baseline is unknown cannot report a
+#            contribution."
+# The distinct stop reason is `baseline-unknown`; the leases are released by the
+# EXIT trap installed with the acquire. No receipt is written on this path: the
+# run stopped before the gate, and 0008:89 places that state outside the receipt
+# ("that one is an unknown *baseline*, which stops the run before spawn").
+if [ "$BASELINE_VERDICT" = "NO-VERDICT" ]; then
+  echo "STOP: baseline-unknown: t0 produced no verdict for $RESOLVED_ID; refusing to spawn the executor." >&2
+  printf '%s\n' "$BASELINE_JSON" | sed 's/^/  baseline: /' >&2
+  exit 1
+fi
+
+# Budget -> flags (ADR-005 D6): a declared dimension produces its flag; an undeclared
+# dimension (sentinel 0) produces NO flag. The old silent 15/20 defaults are gone.
+CMD=(claude -p
+  --model "$MODEL"
+  --append-system-prompt "$(cat "$CONST")"
+  --settings "$HARNESS_HOME/templates/settings.mode-b.json"
+  --allowedTools "$TOOLS"
+  --permission-mode dontAsk
+  --output-format json)
+if [ "$MAXTURNS" != "0" ]; then CMD+=(--max-turns "$MAXTURNS"); fi
+# Wall-clock -> kill after N seconds, prefer gtimeout (coreutils) then timeout.
+if [ "$WALLSEC" != "0" ]; then
+  if command -v gtimeout >/dev/null; then CMD=(gtimeout "$WALLSEC" "${CMD[@]}")
+  elif command -v timeout >/dev/null; then CMD=(timeout "$WALLSEC" "${CMD[@]}")
+  fi
+fi
+
+set +e
+"${CMD[@]}" < "$SPEC" > "$OUT"
+CC_EXIT=$?
+set -e
+ENDED="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+# Gate (ADR-004 D7): a Mode B run's "done" is a claim, not a fact. When CC exited 0, run
+# verity over the target repo's manifest and judge THIS slice's declared criteria only
+# (ADR-004 criteria = claim IDs; the manifest is repo-level and accretes across slices, so
+# the gate is scoped to spec.criteria, not verity's overall verdict). verity is a black box:
+# invoke, read --json report + exit code, filter by criteria. verity writes its own report
+# under .verity/reports/; we embed the item-level verdicts here (D6). If CC did not exit 0,
+# the stop condition is the CC failure itself and the gate is skipped.
+GATE_JSON="{}"
+if [ "$CC_EXIT" -eq 0 ]; then
+  measure_criteria
+  GATE_JSON="$MEASURED_JSON"
 fi
 
 # Receipt: reflects the gate, not just CC exit. claims[] carries item-level verdicts for
 # the slice's criteria (D6); stop_reason names what actually stopped the run (D7).
-GATE_JSON="$GATE_JSON" python3 - "$OUT" "$RECEIPTS_DIR/$RUN_ID.receipt.json" <<PYEOF
+GATE_JSON="$GATE_JSON" BASELINE_JSON="$BASELINE_JSON" python3 - "$OUT" "$RECEIPTS_DIR/$RUN_ID.receipt.json" <<PYEOF
 import json, os, sys
 try:
     cc = json.load(open(sys.argv[1]))
 except Exception:
     cc = {"subtype": "error_no_output"}
 gate = json.loads(os.environ.get("GATE_JSON") or "{}") or {}
+baseline = json.loads(os.environ.get("BASELINE_JSON") or "{}") or {}
 cc_exit = int("$CC_EXIT")
 if cc_exit != 0:
     stop_reason = "cc_exit=%d" % cc_exit
@@ -327,6 +378,47 @@ else:
     stop_reason = label if v == "PASS" else label + ": " + gate.get("reason", "")
     claims = gate.get("claims", [])
     gate_summary = {"verdict": v, "reason": gate.get("reason", ""), "verity_exit": gate.get("verity_exit")}
+
+# contribution (ADR-008 D3, 0008:72-84). The delta between t0 and t1: 0008:41,
+# "the set of declared criteria whose verdict moved from FAIL or ABSENT at the
+# earlier point to PASS at the later one".
+#   phase        always working-tree-advisory in a launcher-written receipt
+#                (0008:86) -- the t0-to-t1 pair, never inferred by the reader.
+#   baseline     the item-level verdict table at t0, persisted here because it
+#                is not regenerable (0008:87). Its roll-up verdict follows the
+#                shape 0008:74-80 illustrates -- FAIL beside a claims table
+#                holding an ABSENT -- so it is all-PASS or FAIL, not the
+#                acquiring filter's gate-acceptance word.
+#   regressions  diagnostic only (0008:88); it never becomes a second
+#                acceptance authority.
+#   verdict      the total function of 0008:89: CONTRIBUTED when delta is
+#                non-empty, NO_OP when it is empty, NOT_EVALUATED when and only
+#                when the run stopped before the gate produced any verdict --
+#                the cross-field invariant being that NOT_EVALUATED holds if and
+#                only if the gate has no verdict. With no t1 there is no later
+#                point, so delta and regressions are empty rather than guessed.
+# This heredoc is unquoted -- it interpolates $CC_EXIT and friends below -- so a
+# backtick pair in these comments is a live command substitution, not a
+# quotation mark. Quote decisions here in plain words.
+b_claims = baseline.get("claims", []) or []
+b_verdict = "PASS" if b_claims and all(c.get("verdict") == "PASS" for c in b_claims) else "FAIL"
+gate_has_verdict = gate_summary.get("verdict") in ("PASS", "FAIL", "STOP")
+t1 = {c.get("id"): c.get("verdict") for c in claims}
+if gate_has_verdict:
+    delta = [c["id"] for c in b_claims
+             if c.get("verdict") in ("FAIL", "ABSENT") and t1.get(c.get("id")) == "PASS"]
+    regressions = [c["id"] for c in b_claims
+                   if c.get("verdict") == "PASS" and t1.get(c.get("id")) != "PASS"]
+    contribution_verdict = "CONTRIBUTED" if delta else "NO_OP"
+else:
+    delta, regressions, contribution_verdict = [], [], "NOT_EVALUATED"
+contribution = {
+  "phase": "working-tree-advisory",
+  "baseline": {"verdict": b_verdict, "claims": b_claims},
+  "delta": delta,
+  "regressions": regressions,
+  "verdict": contribution_verdict
+}
 receipt = {
   "run_id": "$RUN_ID", "spec_id": "$RESOLVED_ID", "mode": "B",
   "model_string": "$MODEL_STRING", "tier_resolved": "$TIER_RESOLVED",
@@ -339,6 +431,7 @@ receipt = {
   "duration_ms": cc.get("duration_ms"),
   "session_id": cc.get("session_id",""),
   "gate": gate_summary,
+  "contribution": contribution,
   "retries": 0,
   "stop_reason": stop_reason,
   "claims": claims
@@ -353,6 +446,16 @@ RECEIPT_STOP_REASON="$(python3 -c 'import json,sys; print(json.load(open(sys.arg
 # Final outcome (ADR-004 D3/D7): CC failure dominates and is returned as-is. Otherwise the
 # gate decides: only an all-criteria-PASS verdict is a success; FAIL, STOP (absent criterion),
 # and NO-VERDICT are all terminal non-zero exits for the operator to review.
+#
+# This rule does not move now that the receipt carries a contribution, and the
+# non-movement is the decision, not an omission (ADR-008 D4, 0008:97): "A `NO_OP`
+# under `gate.verdict: PASS` **exits 0**, and `stop_reason` stays `gate-pass`."
+# 0008:99 gives the reason -- ADR-004 D3 classifies retryable versus terminal on
+# verdict presence read off this code, so loading contribution onto it as a
+# second, orthogonal axis makes the retry rule ambiguous and turns a legitimate
+# no-op into an infrastructure failure a runner may retry. Contribution and
+# acceptance are different questions and stay in different fields; the operator
+# hears about the no-op through the notification above, never through $?.
 if [ "$CC_EXIT" -ne 0 ]; then
   exit "$CC_EXIT"
 fi

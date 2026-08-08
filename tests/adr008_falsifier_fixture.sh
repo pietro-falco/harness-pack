@@ -69,9 +69,10 @@
 #       Asserted: with the baseline runner pinned to a script that exits
 #       non-zero and prints nothing, the executor is NEVER invoked. The absence
 #       of the invocation is the whole assertion, exactly as ADR-008:66 states
-#       it. Red today for the reason the decision exists: the launcher runs the
-#       runner only after the executor has returned (launch_worker.sh:265-268),
-#       so there is no baseline to be unknown and nothing to stop.
+#       it. Red until 2026-08-08 for the reason the decision exists: the
+#       launcher ran the runner only after the executor had returned, so there
+#       was no baseline to be unknown and nothing to stop. GREEN since the D
+#       repair, which measures t0 under the lease and before the spawn.
 #
 #   D2  CONTROL     ADR-008:145 (register) / ADR-008:63 (decision)
 #       "baseline all-`FAIL` | run blocked, when it must complete"
@@ -94,10 +95,12 @@
 #       registering it as either would misdescribe it. It cannot be red today:
 #       a gate-PASS run already exits 0, and the red the register names ("exit
 #       code differs from 0") is a red we must never see, on either side of the
-#       implementation. Its premise is also not yet observable -- no run can be
-#       known to be a `NO_OP` until `contribution.verdict` exists (D1/D3) -- so
-#       today it pins the run's SHAPE, and gains the name `NO_OP` when the field
-#       lands. What it defends is stated at ADR-008:103: a future reader who
+#       implementation. Until 2026-08-08 its premise was not observable either
+#       -- no run could be known to be a `NO_OP` until `contribution.verdict`
+#       existed -- so it pinned the run's SHAPE. The D repair landed the field,
+#       and twin B's receipt now reads `NO_OP` in as many words, so the row
+#       pins the named run and not merely one shaped like it. What it defends
+#       is unchanged and is stated at ADR-008:103: a future reader who
 #       finds the no-op, judges exit 0 wrong, and breaks D3's retry
 #       classification while believing they are tightening the gate.
 #
@@ -108,19 +111,32 @@
 #
 # Modes:
 #   (default)          the TDD posture. Exit 0 iff ALL six rows are GREEN.
-#   --expect-registered the register posture. Exit 0 iff every FALSIFIER row is
-#                      RED and every CONTROL/PIN row is GREEN -- each row in the
-#                      state the register declares for it. This replaces the
-#                      --expect-red of 2026-08-07, which could not survive rows
-#                      that are green by construction: under it, a control would
-#                      have to be miscounted as a falsifier to keep the suite
-#                      green, which is the one defect this register cannot
-#                      afford. This is how tests/run_tests.sh wires the fixture
-#                      while ADR-008 is unimplemented, so the reds are
-#                      re-observed on every run instead of being parked. When a
-#                      decision lands, its row goes GREEN, this mode goes red,
-#                      and the wiring is flipped to the default -- deliberately,
-#                      not silently.
+#   --expect-registered the register posture. Exit 0 iff every row is in the
+#                      state DECLARED FOR IT below, one literal per row. This is
+#                      the third wiring of this fixture and the reason for each
+#                      is worth keeping:
+#                        --expect-red (2026-08-07) demanded all rows red. It
+#                          could not survive rows that are green by construction:
+#                          a control would have to be miscounted as a falsifier
+#                          to keep the suite green.
+#                        --expect-registered by CLASS (2026-08-08, first form)
+#                          demanded all four FALSIFIER rows red and both
+#                          non-falsifier rows green. It could not survive the
+#                          first decision landing: from that moment neither the
+#                          default posture nor the registered one described the
+#                          tree, because the register's rows no longer share a
+#                          state.
+#                        per-row declaration (here) has no global state to
+#                          describe, so it survives ADR-008 landing one decision
+#                          at a time. A row's expected state moves by editing
+#                          that row's literal, in the commit that moves it, with
+#                          the reason beside it. There is no longer a mode to
+#                          flip in order to make the suite green -- which is the
+#                          defect ADR-009 exists to prevent -- because the mode
+#                          no longer says anything about any row.
+#                      The literals are read by a reader, not by a program: the
+#                      block below is compared against the ADR-008 register at
+#                      0008:143-150 with nothing executed.
 #   --discriminate     the discrimination control for the D1 and D2 FALSIFIER
 #                      rows. Exit 0 iff each of those two assertions can be made
 #                      to say GREEN, by fabricating under $TMPDIR the artifact
@@ -533,7 +549,18 @@ case "$D1_RC" in
      note "twin A (worked, committed README.md): $(basename "$RECEIPT_A"), launcher exit $RC_A"
      note "twin B (inert, changed nothing):      $(basename "$RECEIPT_B"), launcher exit $RC_B"
      note "${D1_OUT#RED }"
-     note "green when the launcher writes contribution.verdict (ADR-008:83)" ;;
+     # The note this replaced -- "green when the launcher writes
+     # contribution.verdict" -- became false on 2026-08-08: the launcher writes
+     # it, and the row is still red. The assertion above is unchanged; only this
+     # diagnostic is, because a fixture that keeps explaining a red it no longer
+     # has is the drift these registers exist to catch.
+     note "the launcher DOES write contribution.verdict, and both twins read NO_OP."
+     note "0008:41 moves a criterion into the delta only from FAIL or ABSENT to PASS;"
+     note "on 0008:47's premise -- a tree already PASS at t0 -- no criterion can move,"
+     note "for either twin. 0008:45 rules that case correct and not a regression, and"
+     note "says so 'here so it is never fixed'. The premise and the assertion of this"
+     note "row cannot both hold: see EXPECT_D1 below for the three ways to force it"
+     note "green and why none of them is a launcher repair." ;;
   *) broken "D1 premise: $D1_OUT" ;;
 esac
 
@@ -621,6 +648,70 @@ else
   note "a red here means the exit code moved, and D3's retry classification broke."
 fi
 
+# ---- the declared state, one literal per row --------------------------------
+# What --expect-registered compares against. Six literals, each naming its row's
+# class (ADR-009 D1), its register line, and why the row stands where it stands.
+# Nothing here is computed and nothing here is derived from a run: a reader holds
+# this block beside the ADR-008 register at 0008:143-150 and checks it by eye.
+#
+# A row's expected state moves by editing ITS literal, in the commit that moves
+# it. That is the whole mechanism, and it is why there is no mode that can be
+# flipped to make the suite green.
+
+# FALSIFIER, register 0008:149. Unimplemented, and not by this slice: the
+# schema requires `tier_requested` and the launcher writes `tier_resolved`.
+# Schema work is out of scope here (touching it would invalidate every
+# receipt already in the tree), so this red is carried forward unchanged.
+EXPECT_D6="RED"
+
+# FALSIFIER, register 0008:143. Still RED after the D repair, and the cause has
+# CHANGED -- which is the reason this literal carries prose instead of a word.
+# The launcher now writes contribution.verdict, so the red is no longer
+# "the field does not exist". Both twins now read NO_OP, and they must:
+#   0008:47 sets the premise "two launcher runs against a tree whose criteria
+#     are already PASS", and requires that "the two artifacts must differ in the
+#     contribution verdict".
+#   0008:41 defines the delta as "the set of declared criteria whose verdict
+#     moved from `FAIL` or `ABSENT` at the earlier point to `PASS` at the later
+#     one". On a tree already PASS at t0, no criterion can move, for either twin.
+#   0008:45 rules on exactly that case: "Re-running a slice that has already
+#     contributed yields an empty delta and `NO_OP`. That is **correct, not a
+#     regression** ... Stated here so it is never 'fixed'."
+# So the row's premise and the row's assertion cannot both hold. Under 0008:41
+# and 0008:45 the honest verdict for BOTH twins is NO_OP, and the artifacts are
+# identical because neither run contributed. The three ways to turn this green
+# are: compare something other than the contribution verdict (weakening the
+# assertion), give twin A a baseline that is not all-PASS (rewriting 0008:47's
+# premise into a different row), or define the delta on something other than
+# criterion movement (contradicting 0008:41). None is a launcher repair, and
+# none is taken here. The row stays RED and the seam is reported to the operator
+# rather than papered over by this literal.
+EXPECT_D1="RED"
+
+# FALSIFIER, register 0008:146. Unimplemented, and not by this slice: rejecting
+# the three malformed receipts requires the contract to express D3's total
+# function, which is schema work. Carried forward unchanged.
+EXPECT_D3="RED"
+
+# FALSIFIER, register 0008:144. CHANGED RED -> GREEN by the D repair, and this
+# is the one literal this commit flips. The launcher now measures t0 under the
+# lease and before the spawn, so a baseline that produces no verdict stops the
+# run where 0008:64 says it stops -- before the executor -- and the absence of
+# the invocation, which is the whole assertion at 0008:66, is now observable.
+EXPECT_D2F="GREEN"
+
+# CONTROL, register 0008:145, classified by ADR-009 D2. Green before the change
+# and green after: its evidentiary value is that D2 discriminates instead of
+# blocking everything. A red here means the repair blocks runs it must let
+# through, and that is the signal to stop, not to adjust this literal.
+EXPECT_D2C="GREEN"
+
+# PIN, register 0008:147, classified by ADR-009 D2. A non-behaviour fixed
+# against regression: the no-op-shaped run exits 0 with stop_reason gate-pass,
+# on both sides of the change (0008:97). A red here means the exit code moved
+# and D3's retry classification broke.
+EXPECT_D4="GREEN"
+
 # ---- verdict ---------------------------------------------------------------
 echo "-- ADR-008 register: falsifiers D6=$D6_STATE D1=$D1_STATE D3=$D3_STATE D2/unknown-baseline=$D2F_STATE | control D2/all-FAIL-baseline=$D2C_STATE | pin D4/no-op-exit-0=$D4_STATE"
 FALSIFIERS_RED=0
@@ -633,14 +724,31 @@ for s in "$D2C_STATE" "$D4_STATE"; do
 done
 
 if [ "$MODE" = "expect-registered" ]; then
-  if [ "$FALSIFIERS_RED" -eq 4 ] && [ "$GREENS_WANTED_RED" -eq 0 ]; then
-    echo "ADR-008 FALSIFIER FIXTURE: 4/4 falsifiers RED, 2/2 control+pin GREEN, as the register requires"
+  MISMATCH=""
+  # One comparison, applied per row. No counting: a count cannot say WHICH row
+  # left its declared state, and "3/4 red" is exactly the report that let a
+  # global mode stand in for six independent facts.
+  declared() {  # $1 = row, $2 = declared, $3 = observed
+    [ "$2" = "$3" ] || MISMATCH="$MISMATCH $1(declared=$2 observed=$3)"
+    return 0
+  }
+  declared D6/schema-tier-requested        "$EXPECT_D6"  "$D6_STATE"
+  declared D1/twin-contribution-verdict    "$EXPECT_D1"  "$D1_STATE"
+  declared D3/malformed-contribution       "$EXPECT_D3"  "$D3_STATE"
+  declared D2/unknown-baseline             "$EXPECT_D2F" "$D2F_STATE"
+  declared D2/all-FAIL-baseline            "$EXPECT_D2C" "$D2C_STATE"
+  declared D4/no-op-exit-0                 "$EXPECT_D4"  "$D4_STATE"
+  echo "-- declared:            D6=$EXPECT_D6 D1=$EXPECT_D1 D3=$EXPECT_D3 D2/unknown-baseline=$EXPECT_D2F | D2/all-FAIL-baseline=$EXPECT_D2C | D4/no-op-exit-0=$EXPECT_D4"
+  if [ -z "$MISMATCH" ]; then
+    echo "ADR-008 FALSIFIER FIXTURE: all six rows in the state declared for them"
     exit 0
   fi
-  echo "ADR-008 FALSIFIER FIXTURE: $FALSIFIERS_RED/4 falsifiers RED, $GREENS_WANTED_RED/2 control+pin RED"
-  note "a falsifier went green with no implementation behind it, or a control/pin went"
-  note "red, or an implementation landed and this fixture is still wired"
-  note "--expect-registered in tests/run_tests.sh"
+  echo "ADR-008 FALSIFIER FIXTURE: row(s) not in their declared state:$MISMATCH"
+  note "a row moved. Either an implementation landed and its literal in this file"
+  note "has not been updated in the same commit, or something moved a row nobody"
+  note "was implementing. Both are read by naming the row above, never by"
+  note "adjusting a mode: the literal is the declaration, and the commit that"
+  note "changes it says which row and why."
   exit 1
 fi
 if [ "$FALSIFIERS_RED" -eq 0 ] && [ "$GREENS_WANTED_RED" -eq 0 ]; then
