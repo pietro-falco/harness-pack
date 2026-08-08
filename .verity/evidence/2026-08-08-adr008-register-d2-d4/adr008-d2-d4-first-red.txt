@@ -1,0 +1,70 @@
+basis: e4ae047ebae8fd0c24e00e6e3f8f8f8b83aacbd1
+branch: main
+command: bash tests/adr008_falsifier_fixture.sh
+---
+== ADR-008 falsifier register: D6, D1, D3, D2, D2, D4 ==
+RED [D6 falsifier] ADR-008:149 register / ADR-008:127 -- a receipt produced by the
+     current launcher must validate against templates/receipt.schema.json.
+     receipt: run-20260808T012859Z-75614.receipt.json (written by scripts/launch_worker.sh, launcher exit 0)
+     REJECT missing=tier_requested enum=-
+     green when the schema and the launcher agree on tier_requested (ADR-008:123)
+RED [D1 falsifier] ADR-008:143 register / ADR-008:47 -- two LIVE launcher runs over
+     one tree whose criteria were already PASS at baseline, one executor working and
+     one inert, must write receipts that differ in the contribution verdict.
+     twin A (worked, committed README.md): run-20260808T012901Z-75668.receipt.json, launcher exit 0
+     twin B (inert, changed nothing):      run-20260808T012903Z-75714.receipt.json, launcher exit 0
+     contribution.verdict a=<absent> b=<absent>; the two artifacts are indistinguishable
+     green when the launcher writes contribution.verdict (ADR-008:83)
+RED [D3 falsifier] ADR-008:146 register / ADR-008:93 -- three malformed contribution
+     receipts must be rejected by the receipt contract. Accepted: malformed-contributed-empty-delta malformed-no-op-with-delta malformed-not-evaluated-beside-gate-verdict
+     templates/receipt.schema.json declares 0 rules about contribution,
+     so every value of contribution.verdict is legal and none of the three can be refused.
+     green when the contract expresses D3's total function (ADR-008:89, ADR-008:123)
+RED [D2 falsifier] ADR-008:144 register / ADR-008:66 -- with the baseline runner
+     exiting non-zero and printing nothing, the launcher must stop BEFORE the executor
+     is spawned; the absence of the invocation is the assertion.
+     the executor stub ran: d2f.spawned exists (launcher exit 1)
+     the launcher runs the runner only after the executor returns
+     (launch_worker.sh:265-268), so no baseline is taken and none can be unknown
+     green when the launcher measures t0 before spawning (ADR-008:57, ADR-008:64)
+GREEN [D2 control] all-FAIL baseline ran to completion: executor invoked, receipt run-20260808T012908Z-75824.receipt.json written (launcher exit 1)
+GREEN [D4 pin] no-op-shaped run exits 0 with stop_reason=gate-pass (twin B, run-20260808T012903Z-75714.receipt.json)
+-- ADR-008 register: falsifiers D6=RED D1=RED D3=RED D2/unknown-baseline=RED | control D2/all-FAIL-baseline=GREEN | pin D4/no-op-exit-0=GREEN
+ADR-008 FALSIFIER FIXTURE: RED (4/6 rows)
+exit: 1
+
+===
+command: bash tests/run_tests.sh   (register wired --expect-registered)
+---
+== ADR-008 falsifier register: six rows in their registered state (harnesswright ADR-008:139) ==
+== ADR-008 falsifier register: D6, D1, D3, D2, D2, D4 ==
+RED [D6 falsifier] ADR-008:149 register / ADR-008:127 -- a receipt produced by the
+     current launcher must validate against templates/receipt.schema.json.
+     receipt: run-20260808T012927Z-76499.receipt.json (written by scripts/launch_worker.sh, launcher exit 0)
+     REJECT missing=tier_requested enum=-
+     green when the schema and the launcher agree on tier_requested (ADR-008:123)
+RED [D1 falsifier] ADR-008:143 register / ADR-008:47 -- two LIVE launcher runs over
+     one tree whose criteria were already PASS at baseline, one executor working and
+     one inert, must write receipts that differ in the contribution verdict.
+     twin A (worked, committed README.md): run-20260808T012930Z-76553.receipt.json, launcher exit 0
+     twin B (inert, changed nothing):      run-20260808T013612Z-76599.receipt.json, launcher exit 0
+     contribution.verdict a=<absent> b=<absent>; the two artifacts are indistinguishable
+     green when the launcher writes contribution.verdict (ADR-008:83)
+RED [D3 falsifier] ADR-008:146 register / ADR-008:93 -- three malformed contribution
+     receipts must be rejected by the receipt contract. Accepted: malformed-contributed-empty-delta malformed-no-op-with-delta malformed-not-evaluated-beside-gate-verdict
+     templates/receipt.schema.json declares 0 rules about contribution,
+     so every value of contribution.verdict is legal and none of the three can be refused.
+     green when the contract expresses D3's total function (ADR-008:89, ADR-008:123)
+RED [D2 falsifier] ADR-008:144 register / ADR-008:66 -- with the baseline runner
+     exiting non-zero and printing nothing, the launcher must stop BEFORE the executor
+     is spawned; the absence of the invocation is the assertion.
+     the executor stub ran: d2f.spawned exists (launcher exit 1)
+     the launcher runs the runner only after the executor returns
+     (launch_worker.sh:265-268), so no baseline is taken and none can be unknown
+     green when the launcher measures t0 before spawning (ADR-008:57, ADR-008:64)
+GREEN [D2 control] all-FAIL baseline ran to completion: executor invoked, receipt run-20260808T013616Z-76843.receipt.json written (launcher exit 1)
+GREEN [D4 pin] no-op-shaped run exits 0 with stop_reason=gate-pass (twin B, run-20260808T013612Z-76599.receipt.json)
+-- ADR-008 register: falsifiers D6=RED D1=RED D3=RED D2/unknown-baseline=RED | control D2/all-FAIL-baseline=GREEN | pin D4/no-op-exit-0=GREEN
+ADR-008 FALSIFIER FIXTURE: 4/4 falsifiers RED, 2/2 control+pin GREEN, as the register requires
+ALL TESTS PASSED
+exit: 0

@@ -642,20 +642,28 @@ else
   echo "ok [legacy claimer still red: presence-check-only admits every claimer]"
 fi
 
-echo "== ADR-008 falsifier register: D6, D1, D3 must be seen red (harnesswright ADR-008:139) =="
-# Three rows of an Accepted ADR's falsifier register, asserted before any of the
-# three decisions is implemented. The register is normative -- "each row must be
-# seen red before the decision it belongs to is implemented" -- so the red is
-# re-observed on every run here rather than being recounted in a commit message.
+echo "== ADR-008 falsifier register: six rows in their registered state (harnesswright ADR-008:139) =="
+# Six rows of an Accepted ADR's falsifier register, asserted before any of the
+# decisions they belong to is implemented. The register is normative -- "each row
+# must be seen red before the decision it belongs to is implemented" -- so the
+# reds are re-observed on every run here rather than being recounted in a commit
+# message.
 #
-# --expect-red inverts the fixture's own verdict, exactly as the legacy claimer
-# above does, and for the same reason: a path not asserted on every run rots.
+# --expect-registered inverts the fixture's verdict for the four FALSIFIER rows,
+# exactly as the legacy claimer above does and for the same reason: a path not
+# asserted on every run rots. It does NOT invert the two rows that are green by
+# construction -- D2's discrimination control and D4's pinned non-behaviour --
+# which must be green today and green after. That is why the flag is no longer
+# --expect-red: under an all-red mode those two rows could only be kept by
+# miscounting them as falsifiers, and a falsifier that is green before its
+# implementation is a vacuous gate.
+#
 # The difference from the legacy claimer is that these rows are MEANT to go
 # green. When a decision lands, its row goes green, this line goes red, and the
 # implementer flips the call to the plain `bash tests/adr008_falsifier_fixture.sh`
 # in the same commit. The suite's verdict is not red today; the register is, and
-# it prints its three reds in full below.
-bash tests/adr008_falsifier_fixture.sh --expect-red || fail=1
+# it prints its reds in full below.
+bash tests/adr008_falsifier_fixture.sh --expect-registered || fail=1
 
 echo "== session transcript renderer =="
 # Pins the two properties that make the renderer trustworthy to watch a live
