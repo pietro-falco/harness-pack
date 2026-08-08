@@ -39,21 +39,52 @@
 #       launcher" and a hand-written stand-in would assert the stand-in.
 #
 #   D1  FALSIFIER   ADR-008:143 (register) / ADR-008:47 (decision)
+#                   PREMISE AMENDED by harnesswright/ADR-010 D1
 #       "twin runs, criteria green at t0, one working stub / one inert |
 #        artifacts identical; no contribution verdict exists"
-#       Asserted: two LIVE launcher invocations over the same tree -- criteria
-#       already PASS at baseline, one working executor stub, one inert -- write
-#       receipts whose contribution verdicts DIFFER.
+#       The row's ASSERTION is untouched -- "the two artifacts must differ in
+#       the contribution verdict" -- and its PREMISE is not the one printed
+#       above. ADR-010 D1 amends both loci of that premise (0008:47 and the
+#       register row itself) to:
+#         "At least one declared criterion is `FAIL` or `ABSENT` at t0. The
+#          working stub carries that criterion to `PASS`; the stub that returns
+#          immediately does not."
+#       The old premise made the row unclearable rather than merely red: with
+#       every criterion already PASS at t0, 0008:41 admits nothing to the delta
+#       for EITHER twin, 0008:45 rules the resulting empty delta "correct, not a
+#       regression", and both artifacts read `NO_OP` no matter what any launcher
+#       does. ADR-010 supplies a baseline on which 0008:41 is operative instead
+#       of vacuous, and declares 0008:41, 0008:45 and D1's assertion intact.
+#       Asserted here, in TWO halves observed in the same run, because ADR-010
+#       D3(c) binds the commit that lands this arm to see the amended red before
+#       it clears it (0008:139: "A row whose red has never been observed does not
+#       count as a gate"):
+#         half 1, the red -- the same twins run against the launcher as it stood
+#           BEFORE the contribution field existed, taken from this repo's own
+#           history and materialized under $TMPDIR. The artifacts do not differ,
+#           because neither carries the field at all. Under the amended premise
+#           this red had never been observed; the red on record was the old
+#           premise's.
+#         half 2, the green -- the same twins run against scripts/launch_worker.sh
+#           in tree. Arm A yields `CONTRIBUTED` with a non-empty delta, arm B
+#           `NO_OP` with an empty one, and the artifacts differ.
+#       The row is GREEN only when both halves are observed. A green half whose
+#       red never appeared is not evidence: it cannot distinguish a launcher that
+#       discriminates from an assertion wired green.
 #       Until 2026-08-08 this row compared two checked-in receipts under
 #       tests/fixtures/adr008/. Those files are static: no launcher change can
 #       ever move them, so the row could not go green by implementing D1 and was
 #       not a gate. They stay in the tree as the preserved 2026-08-07 exhibit --
 #       the committed evidence of that first red names their paths -- but the
 #       assertion no longer reads them. It runs the launcher.
-#       "The same tree" is realised as two byte-identical copies of one seeded
-#       repo, one per twin: run sequentially in a single directory, the second
+#       "The same tree" is realised as byte-identical copies of one seeded repo,
+#       one per twin per half: run sequentially in a single directory, the second
 #       twin would start from a tree the first one had already changed, which is
 #       a different premise from the one the row names.
+#       The in-tree launcher is never edited, patched or copied-with-changes to
+#       stage the red. The pre-contribution launcher is a real commit's real
+#       scripts/ tree, extracted read-only, so the red is an artefact of this
+#       repo's history rather than a doctored stand-in.
 #
 #   D3  FALSIFIER   ADR-008:146 (register) / ADR-008:93 (decision)
 #       "`delta: []` with `CONTRIBUTED`; `NOT_EVALUATED` beside a gate verdict;
@@ -88,9 +119,16 @@
 #
 #   D4  PIN         ADR-008:147 (register) / ADR-008:103, :97 (decision)
 #       "`NO_OP` run | exit code differs from 0"
-#       Asserted: the no-op-shaped run -- D1's inert twin, criteria already PASS
-#       at baseline, an executor that changes nothing -- exits 0 with
-#       `stop_reason: gate-pass`.
+#       Asserted: the no-op-shaped run -- criteria already PASS at baseline, an
+#       executor that changes nothing -- exits 0 with `stop_reason: gate-pass`
+#       and a receipt reading `contribution.verdict: NO_OP`.
+#       It is measured on D6's run, which is that run: verity pinned all-PASS
+#       and the inert stub. Until ADR-010 amended D1's premise it was measured
+#       on D1's inert twin, which was the same run; under the amended premise
+#       that twin sits on a baseline with a FAIL in it and its gate is FAIL, so
+#       it is no longer the run this pin is about. The pin did not move -- its
+#       subject did, and it moved to the run that still matches it rather than
+#       to a repo built to look like one.
 #       This row is neither a falsifier nor a discrimination control, and
 #       registering it as either would misdescribe it. It cannot be red today:
 #       a gate-PASS run already exits 0, and the red the register names ("exit
@@ -98,7 +136,7 @@
 #       implementation. Until 2026-08-08 its premise was not observable either
 #       -- no run could be known to be a `NO_OP` until `contribution.verdict`
 #       existed -- so it pinned the run's SHAPE. The D repair landed the field,
-#       and twin B's receipt now reads `NO_OP` in as many words, so the row
+#       and the receipt now reads `NO_OP` in as many words, so the row
 #       pins the named run and not merely one shaped like it. What it defends
 #       is unchanged and is stated at ADR-008:103: a future reader who
 #       finds the no-op, judges exit 0 wrong, and breaks D3's retry
@@ -206,16 +244,27 @@ VALIDATOR
 # has to run THIS program and not a restatement of it. A control that re-types
 # the assertion proves that the copy discriminates, which is worth nothing.
 # Prints GREEN / RED / PREMISE and exits 0 / 1 / 2.
+#
+# The premise is no longer read out of the artifacts. Under harnesswright/ADR-010
+# D1 it is a property of the TREE at t0 -- "at least one declared criterion is
+# FAIL or ABSENT" -- so the caller measures it on the seed both twins are copied
+# from, and checks the carry on each pair. It cannot be read here: the red half's
+# artifacts predate the contribution field and carry no baseline table at all, so
+# a premise check in this program would abort the very half 0008:139 demands.
+# What is left is D1's assertion and nothing else, which is what ADR-010 D1
+# declares intact: the two artifacts must differ in the contribution verdict.
+# The old gate-PASS/PASS check is gone with the old premise -- under the amended
+# one arm B's gate is FAIL by construction, and that is the point, not a defect.
 cat > "$WORK/assert_d1.py" <<'ASSERT_D1'
 import json, sys
-a = json.load(open(sys.argv[1]))
-b = json.load(open(sys.argv[2]))
-ga = (a.get("gate") or {}).get("verdict")
-gb = (b.get("gate") or {}).get("verdict")
-if ga != "PASS" or gb != "PASS":
-    print("PREMISE gate verdicts a=%s b=%s, expected PASS/PASS (criteria are "
-          "already PASS at baseline)" % (ga, gb))
-    sys.exit(2)
+def load(path):
+    try:
+        return json.load(open(path))
+    except Exception as e:
+        print("PREMISE receipt %s is not readable JSON: %s" % (path, e))
+        sys.exit(2)
+a = load(sys.argv[1])
+b = load(sys.argv[2])
 va = (a.get("contribution") or {}).get("verdict")
 vb = (b.get("contribution") or {}).get("verdict")
 if va is not None and vb is not None and va != vb:
@@ -316,6 +365,35 @@ process.stdout.write(JSON.stringify({
 }));
 VERITY_FAIL
 
+cat > "$WORK/verity-tree.js" <<'VERITY_TREE'
+// The runner for D1's amended premise (harnesswright/ADR-010 D1). Unlike the
+// three above it does not answer from a constant: it READS THE TREE, so a
+// criterion that is FAIL at t0 reaches PASS at t1 exactly when the executor did
+// the work -- which is the movement 0008:41 admits to the delta, and the whole
+// content of "the working stub carries that criterion to PASS; the stub that
+// returns immediately does not". Both declared criteria hang on one observable
+// fact, README.md committed at HEAD: the working stub establishes it and the
+// inert stub does not. Nothing here reads a clock, a load average or a pid, so
+// the verdict is a function of the tree and of nothing else.
+const { execFileSync } = require("child_process");
+let committed = false;
+try {
+  execFileSync("git", ["show", "HEAD:README.md"], { stdio: "ignore" });
+  committed = true;
+} catch (e) {
+  committed = false;
+}
+const verdict = committed ? "PASS" : "FAIL";
+process.stdout.write(JSON.stringify({
+  results: [
+    { id: "readme-committed", type: "git_committed", verdict: verdict,
+      evidence: "git show HEAD:README.md exit " + (committed ? "0" : "128") },
+    { id: "checks-pass", type: "command", verdict: verdict,
+      evidence: "exit " + (committed ? "0" : "1") }
+  ]
+}));
+VERITY_TREE
+
 cat > "$WORK/verity-silent.js" <<'VERITY_SILENT'
 // ADR-008:66's pinned runner: exits non-zero and prints nothing. No verdict is
 // produced, so the baseline is unknown -- and a run whose baseline is unknown
@@ -333,7 +411,14 @@ MANIFEST
 
 # One launcher invocation. TELEGRAM_* are blanked on purpose: the launcher's
 # notifier is fail-open and would otherwise send a real message from a test run.
-run_launcher() {  # $1=repo $2=verity_cli $3=stub_mode $4=spawn_marker $5=logfile
+#
+# $6 names WHICH launcher, defaulting to the one in tree. Only D1's red half
+# passes it, to run the pre-contribution launcher out of $TMPDIR; every other
+# caller gets scripts/launch_worker.sh exactly as before. HARNESS_HOME is pinned
+# to $PACK for both, which is already the in-tree launcher's own default -- the
+# materialized one needs it stated, since it resolves CONSTITUTION.md and
+# templates/ relative to a home it would otherwise take from $TMPDIR.
+run_launcher() {  # $1=repo $2=verity_cli $3=stub_mode $4=spawn_marker $5=logfile [$6=launcher]
   rm -f "$4"
   (
     cd "$1" || exit 1
@@ -342,11 +427,12 @@ run_launcher() {  # $1=repo $2=verity_cli $3=stub_mode $4=spawn_marker $5=logfil
     TELEGRAM_CHAT_ID="" \
     ADR008_STUB_MODE="$3" \
     ADR008_SPAWN_MARKER="$4" \
+    HARNESS_HOME="$PACK" \
     HARNESSWRIGHT_CLI="$WORK/hw.js" \
     VERITY_CLI="$2" \
     HARNESS_MANIFEST="$WORK/manifest.json" \
     RECEIPTS_DIR="$1/receipts" \
-    bash "$PACK/scripts/launch_worker.sh" specs/S-DEMO.md
+    bash "${6:-$PACK/scripts/launch_worker.sh}" specs/S-DEMO.md
   ) > "$5" 2>&1
   return $?
 }
@@ -514,55 +600,149 @@ else
 fi
 
 # ---- D1 (FALSIFIER) --------------------------------------------------------
-# ADR-008:143 / ADR-008:47. Two live launcher invocations over one tree, copied
-# byte-for-byte so both twins start from the same state. The premise -- criteria
-# already PASS at baseline, one executor that worked and one that did not -- is
-# CHECKED, not assumed: if it stops holding, the row is measuring a different
-# pair and must break loudly instead of going quietly red.
+# ADR-008:143 / ADR-008:47, on the premise harnesswright/ADR-010 D1 amends them
+# to. Live launcher invocations over one tree, copied byte-for-byte so every twin
+# starts from the same state, run TWICE: once against the launcher as it stood
+# before the contribution field existed (the red 0008:139 requires be seen first,
+# and which under the amended premise had never been seen), then against the
+# launcher in tree (the green). The premise is CHECKED on every pair, not
+# assumed: if it stops holding, the row is measuring a different pair and must
+# break loudly instead of going quietly either way.
 SEED="$WORK/twin-seed"
 seed_repo "$SEED" || broken "could not seed the D1 twin repo"
-REPO_A="$WORK/twin-a"; REPO_B="$WORK/twin-b"
-cp -a "$SEED" "$REPO_A" || broken "could not copy the twin tree for A"
-cp -a "$SEED" "$REPO_B" || broken "could not copy the twin tree for B"
 
-run_launcher "$REPO_A" "$WORK/verity-pass.js" working "$WORK/twin-a.spawned" "$WORK/twin-a.out"
-RC_A=$?
-run_launcher "$REPO_B" "$WORK/verity-pass.js" inert "$WORK/twin-b.spawned" "$WORK/twin-b.out"
-RC_B=$?
+# The amended premise itself, measured on the seed both twins are copied from,
+# with the same runner and the same invocation form the launcher uses for t0:
+# at least one declared criterion must be FAIL or ABSENT, or there is nothing
+# that can move and 0008:41 is vacuous again. It is measured HERE rather than
+# read out of a receipt because the red half's artifacts predate the field and
+# carry no baseline table at all.
+D1_T0_MOVABLE="$(
+  (cd "$SEED" && node "$WORK/verity-tree.js" verify --json) | python3 -c '
+import json, sys
+results = {r["id"]: r.get("verdict") for r in json.load(sys.stdin).get("results", [])}
+print(",".join(c for c in ("readme-committed", "checks-pass")
+                if results.get(c) in ("FAIL", None)))'
+)"
+[ -n "$D1_T0_MOVABLE" ] || broken "D1 premise (harnesswright/ADR-010 D1): no declared criterion reads FAIL or ABSENT at t0 on the seed tree, so neither twin has anything that can move"
 
-RECEIPT_A="$(receipt_of "$REPO_A")"
-RECEIPT_B="$(receipt_of "$REPO_B")"
-[ -n "$RECEIPT_A" ] || broken "twin A exited $RC_A and wrote no receipt"
-[ -n "$RECEIPT_B" ] || broken "twin B exited $RC_B and wrote no receipt"
-# The working twin worked and the inert twin did not -- otherwise the two runs
-# are not the pair ADR-008:47 names.
-[ -f "$REPO_A/README.md" ] || broken "twin A's working stub changed nothing"
-[ -f "$REPO_B/README.md" ] && broken "twin B's inert stub changed the tree"
+# The red half's artefact: the launcher as it stood BEFORE the contribution
+# field, located by the property that defines it rather than by a pinned sha --
+# the newest commit whose launch_worker.sh contains no "contribution" at all.
+# The whole scripts/ tree of that commit is extracted under $TMPDIR, so the
+# historical launcher runs beside the historical helpers it resolves next to
+# itself. scripts/ in tree is read by git and never written, patched or copied
+# with changes: the red is an artefact of this repo's history, not a doctored
+# stand-in of the current launcher.
+D1_PRE_COMMIT=""
+while IFS= read -r c; do
+  blob="$(git -C "$PACK" show "$c:scripts/launch_worker.sh" 2>/dev/null)" || continue
+  case "$blob" in *contribution*) continue ;; esac
+  D1_PRE_COMMIT="$c"
+  break
+done < <(git -C "$PACK" log --format=%H -- scripts/launch_worker.sh 2>/dev/null)
+[ -n "$D1_PRE_COMMIT" ] || broken "no commit reachable from HEAD carries a scripts/launch_worker.sh without the contribution field, so D1's amended red cannot be staged from history (a shallow clone has no such history: fetch the full one)"
+mkdir -p "$WORK/pre-contribution"
+git -C "$PACK" archive "$D1_PRE_COMMIT" scripts | tar -x -C "$WORK/pre-contribution" \
+  || broken "could not materialize the pre-contribution scripts/ tree at $D1_PRE_COMMIT"
+D1_PRE_LAUNCHER="$WORK/pre-contribution/scripts/launch_worker.sh"
+[ -f "$D1_PRE_LAUNCHER" ] || broken "the materialized pre-contribution tree has no scripts/launch_worker.sh"
+grep -q 'contribution' "$D1_PRE_LAUNCHER" \
+  && broken "the launcher materialized from $D1_PRE_COMMIT mentions contribution after all; it is not the pre-field artefact"
 
-D1_OUT="$(python3 "$WORK/assert_d1.py" "$RECEIPT_A" "$RECEIPT_B")"
-D1_RC=$?
-case "$D1_RC" in
-  0) D1_STATE="GREEN"; echo "GREEN [D1 falsifier] twin artifacts differ in the contribution verdict (${D1_OUT#GREEN })" ;;
-  1) echo "RED [D1 falsifier] ADR-008:143 register / ADR-008:47 -- two LIVE launcher runs over"
-     note "one tree whose criteria were already PASS at baseline, one executor working and"
-     note "one inert, must write receipts that differ in the contribution verdict."
-     note "twin A (worked, committed README.md): $(basename "$RECEIPT_A"), launcher exit $RC_A"
-     note "twin B (inert, changed nothing):      $(basename "$RECEIPT_B"), launcher exit $RC_B"
-     note "${D1_OUT#RED }"
-     # The note this replaced -- "green when the launcher writes
-     # contribution.verdict" -- became false on 2026-08-08: the launcher writes
-     # it, and the row is still red. The assertion above is unchanged; only this
-     # diagnostic is, because a fixture that keeps explaining a red it no longer
-     # has is the drift these registers exist to catch.
-     note "the launcher DOES write contribution.verdict, and both twins read NO_OP."
-     note "0008:41 moves a criterion into the delta only from FAIL or ABSENT to PASS;"
-     note "on 0008:47's premise -- a tree already PASS at t0 -- no criterion can move,"
-     note "for either twin. 0008:45 rules that case correct and not a regression, and"
-     note "says so 'here so it is never fixed'. The premise and the assertion of this"
-     note "row cannot both hold: see EXPECT_D1 below for the three ways to force it"
-     note "green and why none of them is a launcher repair." ;;
-  *) broken "D1 premise: $D1_OUT" ;;
-esac
+# One twin pair against one launcher. Leaves its measurement in TWIN_*, which
+# the caller copies out immediately -- both halves run the SAME assertion
+# program on the same kind of pair, so the only thing that differs between them
+# is which launcher wrote the artifacts.
+d1_run_twins() {  # $1 = tag, $2 = launcher path
+  local tag="$1" launcher="$2" a b ga gb
+  a="$WORK/twin-$tag-a"; b="$WORK/twin-$tag-b"
+  cp -a "$SEED" "$a" || broken "could not copy the twin tree for $tag/A"
+  cp -a "$SEED" "$b" || broken "could not copy the twin tree for $tag/B"
+  run_launcher "$a" "$WORK/verity-tree.js" working "$WORK/twin-$tag-a.spawned" "$WORK/twin-$tag-a.out" "$launcher"
+  TWIN_RC_A=$?
+  run_launcher "$b" "$WORK/verity-tree.js" inert "$WORK/twin-$tag-b.spawned" "$WORK/twin-$tag-b.out" "$launcher"
+  TWIN_RC_B=$?
+  TWIN_RECEIPT_A="$(receipt_of "$a")"
+  TWIN_RECEIPT_B="$(receipt_of "$b")"
+  [ -n "$TWIN_RECEIPT_A" ] || broken "twin $tag/A exited $TWIN_RC_A and wrote no receipt"
+  [ -n "$TWIN_RECEIPT_B" ] || broken "twin $tag/B exited $TWIN_RC_B and wrote no receipt"
+  # The carry, which is the half of the amended premise the seed measurement
+  # cannot see: the working stub took the movable criteria to PASS and the inert
+  # one left them where they were. Read off the tree AND off the gate the
+  # launcher wrote, since both artifacts carry a gate whatever else they lack.
+  git -C "$a" show HEAD:README.md >/dev/null 2>&1 \
+    || broken "twin $tag/A's working stub committed nothing; no criterion was carried to PASS"
+  ! git -C "$b" show HEAD:README.md >/dev/null 2>&1 \
+    || broken "twin $tag/B's inert stub changed the tree"
+  ga="$(python3 -c 'import json,sys;print((json.load(open(sys.argv[1])).get("gate") or {}).get("verdict",""))' "$TWIN_RECEIPT_A")"
+  gb="$(python3 -c 'import json,sys;print((json.load(open(sys.argv[1])).get("gate") or {}).get("verdict",""))' "$TWIN_RECEIPT_B")"
+  [ "$ga" = "PASS" ] || broken "twin $tag/A gate verdict=$ga, expected PASS: the working stub did not carry $D1_T0_MOVABLE to PASS"
+  [ "$gb" = "PASS" ] && broken "twin $tag/B gate verdict=PASS: the inert stub's criteria moved anyway, so the pair is not the one ADR-010 D1 names"
+  TWIN_OUT="$(python3 "$WORK/assert_d1.py" "$TWIN_RECEIPT_A" "$TWIN_RECEIPT_B")"
+  TWIN_RC=$?
+  return 0
+}
+
+# Half 1: the red, observed FIRST. 0008:139 is an ordering as much as an
+# obligation -- "seen red BEFORE the decision it belongs to is implemented" --
+# and this arm keeps that order inside a single run.
+d1_run_twins pre "$D1_PRE_LAUNCHER"
+D1_RED_OUT="$TWIN_OUT"; D1_RED_RC="$TWIN_RC"
+D1_RED_A="$TWIN_RECEIPT_A"; D1_RED_B="$TWIN_RECEIPT_B"
+D1_RED_RC_A="$TWIN_RC_A"; D1_RED_RC_B="$TWIN_RC_B"
+[ "$D1_RED_RC" -eq 2 ] && broken "D1 red half: $D1_RED_OUT"
+
+# Half 2: the green, on the same seed, the same stubs and the same assertion.
+d1_run_twins now "$PACK/scripts/launch_worker.sh"
+D1_GREEN_OUT="$TWIN_OUT"; D1_GREEN_RC="$TWIN_RC"
+D1_GREEN_A="$TWIN_RECEIPT_A"; D1_GREEN_B="$TWIN_RECEIPT_B"
+D1_GREEN_RC_A="$TWIN_RC_A"; D1_GREEN_RC_B="$TWIN_RC_B"
+[ "$D1_GREEN_RC" -eq 2 ] && broken "D1 green half: $D1_GREEN_OUT"
+
+D1_DELTA_A="$(python3 -c 'import json,sys;print(",".join((json.load(open(sys.argv[1])).get("contribution") or {}).get("delta") or []) or "<empty>")' "$D1_GREEN_A" 2>/dev/null)"
+D1_PRE_SHORT="$(git -C "$PACK" rev-parse --short "$D1_PRE_COMMIT" 2>/dev/null || printf '%s' "$D1_PRE_COMMIT")"
+
+if [ "$D1_RED_RC" -eq 1 ]; then
+  echo "RED  [D1 half 1/2, before the field] ADR-008:143 register / harnesswright/ADR-010 D3(c) --"
+  note "against scripts/launch_worker.sh as it stood at $D1_PRE_SHORT, materialized under \$TMPDIR:"
+  note "${D1_RED_OUT#RED }"
+  note "twin A worked (exit $D1_RED_RC_A, $(basename "$D1_RED_A")), twin B was inert (exit $D1_RED_RC_B, $(basename "$D1_RED_B"))"
+  note "criteria movable at t0: $D1_T0_MOVABLE. The premise holds and the artifacts still do"
+  note "not differ, because that launcher writes no contribution field at all."
+else
+  echo "RED  [D1 half 1/2, before the field] NOT OBSERVED -- the pre-contribution launcher at"
+  note "$D1_PRE_SHORT produced artifacts the assertion separates: ${D1_RED_OUT}"
+  note "a row whose red cannot be observed does not count as a gate (0008:139), so the"
+  note "green half below is evidence of nothing and this row cannot be reported green."
+fi
+
+if [ "$D1_GREEN_RC" -eq 0 ]; then
+  echo "GREEN [D1 half 2/2, after the field] against scripts/launch_worker.sh in tree, the same"
+  note "twins over the same seed differ: ${D1_GREEN_OUT#GREEN }"
+  note "arm A delta: $D1_DELTA_A (exit $D1_GREEN_RC_A, $(basename "$D1_GREEN_A"))"
+  note "arm B (inert): empty delta (exit $D1_GREEN_RC_B, $(basename "$D1_GREEN_B"))"
+else
+  echo "GREEN [D1 half 2/2, after the field] NOT OBSERVED -- ADR-008:47's assertion, which"
+  note "ADR-010 D1 declares intact, is not satisfied by the launcher in tree:"
+  note "${D1_GREEN_OUT#RED }"
+  note "twin A (worked): $(basename "$D1_GREEN_A"), exit $D1_GREEN_RC_A"
+  note "twin B (inert):  $(basename "$D1_GREEN_B"), exit $D1_GREEN_RC_B"
+fi
+
+if [ "$D1_RED_RC" -eq 1 ] && [ "$D1_GREEN_RC" -eq 0 ]; then
+  D1_STATE="GREEN"
+  echo "GREEN [D1 falsifier] the row was seen red and then cleared in THIS run, on the premise"
+  note "harnesswright/ADR-010 D1 amends 0008:47 and 0008:143 to. Both halves are asserted"
+  note "every run: a commit carrying only the green half leaves the gate in the state"
+  note "0008:139 refuses to count."
+else
+  echo "RED [D1 falsifier] ADR-008:143 register / harnesswright/ADR-010 D3(c) -- the row is"
+  note "green only when BOTH halves are observed in one run: red against a launcher"
+  note "without the contribution field, then green against the launcher in tree."
+  note "half 1 (red expected): $([ "$D1_RED_RC" -eq 1 ] && echo observed || echo "NOT observed")"
+  note "half 2 (green expected): $([ "$D1_GREEN_RC" -eq 0 ] && echo observed || echo "NOT observed")"
+fi
 
 # ---- D3 (FALSIFIER) --------------------------------------------------------
 # ADR-008:146 / ADR-008:93. "Accepted" is not rhetorical here: each fixture is
@@ -631,19 +811,23 @@ else
 fi
 
 # ---- D4 (PIN) --------------------------------------------------------------
-# ADR-008:147 / ADR-008:103, :97. Asserted on D1's inert twin: that IS the
-# no-op-shaped run -- criteria already PASS at baseline, an executor that
-# changed nothing -- so the pin is measured on the run it is about rather than
-# on a fourth repo built to look like it.
-D4_STOP="$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1])).get("stop_reason",""))' "$RECEIPT_B" 2>/dev/null)"
-if [ "$RC_B" -eq 0 ] && [ "$D4_STOP" = "gate-pass" ]; then
+# ADR-008:147 / ADR-008:103, :97. Asserted on D6's run: criteria already PASS at
+# baseline, an inert executor, so it IS the no-op run this pin is about and the
+# pin is measured on it rather than on a repo built to look like it. It was
+# asserted on D1's inert twin until harnesswright/ADR-010 amended D1's premise;
+# that twin now sits on a baseline with a FAIL in it and its gate is FAIL, which
+# is a different run. The pin is unchanged -- exit 0, stop_reason gate-pass, and
+# the receipt saying NO_OP in as many words -- and now reads it here.
+D4_STOP="$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1])).get("stop_reason",""))' "$RECEIPT" 2>/dev/null)"
+D4_VERDICT="$(python3 -c 'import json,sys;print((json.load(open(sys.argv[1])).get("contribution") or {}).get("verdict",""))' "$RECEIPT" 2>/dev/null)"
+if [ "$LAUNCH_RC" -eq 0 ] && [ "$D4_STOP" = "gate-pass" ] && [ "$D4_VERDICT" = "NO_OP" ]; then
   D4_STATE="GREEN"
-  echo "GREEN [D4 pin] no-op-shaped run exits 0 with stop_reason=gate-pass (twin B, $(basename "$RECEIPT_B"))"
+  echo "GREEN [D4 pin] NO_OP run exits 0 with stop_reason=gate-pass ($(basename "$RECEIPT"))"
 else
   echo "RED [D4 pin] ADR-008:147 register / ADR-008:97 -- a no-op under gate.verdict PASS"
   note "exits 0 and keeps stop_reason gate-pass. Contribution and acceptance are"
   note "different questions and stay in different fields (ADR-008:99)."
-  note "twin B: launcher exit $RC_B, stop_reason=${D4_STOP:-<absent>}"
+  note "run: launcher exit $LAUNCH_RC, stop_reason=${D4_STOP:-<absent>}, contribution.verdict=${D4_VERDICT:-<absent>}"
   note "this row is a pinned non-behaviour, red on neither side of the implementation:"
   note "a red here means the exit code moved, and D3's retry classification broke."
 fi
@@ -664,29 +848,27 @@ fi
 # receipt already in the tree), so this red is carried forward unchanged.
 EXPECT_D6="RED"
 
-# FALSIFIER, register 0008:143. Still RED after the D repair, and the cause has
-# CHANGED -- which is the reason this literal carries prose instead of a word.
-# The launcher now writes contribution.verdict, so the red is no longer
-# "the field does not exist". Both twins now read NO_OP, and they must:
-#   0008:47 sets the premise "two launcher runs against a tree whose criteria
-#     are already PASS", and requires that "the two artifacts must differ in the
-#     contribution verdict".
-#   0008:41 defines the delta as "the set of declared criteria whose verdict
-#     moved from `FAIL` or `ABSENT` at the earlier point to `PASS` at the later
-#     one". On a tree already PASS at t0, no criterion can move, for either twin.
-#   0008:45 rules on exactly that case: "Re-running a slice that has already
-#     contributed yields an empty delta and `NO_OP`. That is **correct, not a
-#     regression** ... Stated here so it is never 'fixed'."
-# So the row's premise and the row's assertion cannot both hold. Under 0008:41
-# and 0008:45 the honest verdict for BOTH twins is NO_OP, and the artifacts are
-# identical because neither run contributed. The three ways to turn this green
-# are: compare something other than the contribution verdict (weakening the
-# assertion), give twin A a baseline that is not all-PASS (rewriting 0008:47's
-# premise into a different row), or define the delta on something other than
-# criterion movement (contradicting 0008:41). None is a launcher repair, and
-# none is taken here. The row stays RED and the seam is reported to the operator
-# rather than papered over by this literal.
-EXPECT_D1="RED"
+# FALSIFIER, register 0008:143. CHANGED RED -> GREEN, and this is the one
+# literal this commit flips. What moved is the row's PREMISE, not its assertion
+# and not the launcher: harnesswright/ADR-010 D1 amends both loci of the premise
+# -- 0008:47's "a tree whose criteria are already PASS" and the register row's
+# "criteria green at t0" -- to "at least one declared criterion is FAIL or
+# ABSENT at t0; the working stub carries that criterion to PASS, the stub that
+# returns immediately does not", and declares 0008:41, 0008:45 and D1's
+# assertion each intact. The paragraph this replaces argued the old premise and
+# the assertion could not both hold, and named three ways to force the row green
+# that all damaged an accepted decision; ADR-010 took none of them and changed
+# the baseline instead, which is the one move that leaves 0008:41 operative
+# rather than vacuous.
+# The row is green because the arm above observed BOTH halves in this run, which
+# is what ADR-010 D3(c) binds this commit to: red against the launcher as it
+# stood before the contribution field existed, then green against the launcher
+# in tree. Under the amended premise that red had never been observed -- the red
+# on record was the old premise's -- and 0008:139 does not count a row whose red
+# has not been seen. A future red here is one of two facts, and the arm says
+# which: the launcher stopped discriminating, or the pre-field artefact is no
+# longer reachable and the gate is no longer being demonstrated.
+EXPECT_D1="GREEN"
 
 # FALSIFIER, register 0008:146. Unimplemented, and not by this slice: rejecting
 # the three malformed receipts requires the contract to express D3's total
