@@ -1,0 +1,151 @@
+basis: e7dd15160c3d4b9a34e27a6248f5281956423557
+branch: main
+command: bash tests/lease_window_fixture.sh
+---
+== lease acquire window: one row (vault ADR-054 D3) ==
+RED [lease acquire window] scripts/slice_lease.py:135 takes the lock with
+     O_CREAT|O_EXCL and only at :165-170 writes the record and prints ACQUIRED.
+     In between, the lock exists under its final name at 0 bytes: _read() returns
+     None (:81), _staleness() maps None to stale (:112), and the claimer
+     renames the lock aside (:147) and takes the key from a holder that is alive.
+     measured, with the holder alive and inside the window:
+       status state=stale reason=holder left an unwritable record (killed mid-acquire)
+       second claimer exit=0 ACQUIRED S-WINDOW-001 second 2026-08-08T02:50:35Z
+       locks after: S-WINDOW-001.lock S-WINDOW-001.lock.stale-<pid>-<attempt>
+       live lock names run_id=second; the holder then wrote its record and would
+       print ACQUIRED (:170) -> grants=2 for one key
+     the source declares the opposite of itself at scripts/slice_lease.py:13-15:
+       |                              The take is a single O_CREAT|O_EXCL open -- one
+       |                              syscall, one winner. Never a read followed by a
+       |                              write, which is what leaves a race to lose.
+     green when no second claimer can take the key while the first is inside that window
+-- lease acquire window: take-is-atomic=RED
+LEASE WINDOW FIXTURE: RED
+exit: 1
+
+===
+determinism, sequential. The two lines below are the literal output of
+the two commands as run; the fixture itself was silenced so the counters
+are the measurement.
+command: for i in $(seq 1 20); do bash tests/lease_window_fixture.sh >/dev/null 2>&1; ... done
+---
+invocations=20 red=20 green=0 other=0
+
+determinism, under self-inflicted load: eight instances started together.
+command: for i in $(seq 1 8); do ( bash tests/lease_window_fixture.sh ... ) & done; wait
+---
+concurrent=8 red=8
+
+===
+the repaired parallel-claim fixture, third state, budget one: the holders
+released before every claimer had decided.
+command: bash tests/parallel_claim_fixture.sh --mode lease --report-budget 0
+---
+== parallel claim fixture (mode=lease, claimers=8) ==
+UNATTRIB [I1 same slice]: only 0 of 8 claimers had reported after 0s, so the holders were released while the rest were still claiming; the count of 1 describes that race, not this invariant
+  neither pass nor fail: nothing was measured about the claim, so nothing is claimed
+UNATTRIB [I2 same workspace]: only 0 of 8 claimers had reported after 0s, so the holders were released while the rest were still claiming; the count of 3 describes that race, not this invariant
+  neither pass nor fail: nothing was measured about the claim, so nothing is claimed
+ok [I3 SIGKILL reclaim: successor acquired a lease held by a killed process]
+PARALLEL CLAIM FIXTURE: UNATTRIBUTABLE (mode=lease, 2 invariant(s) unmeasured, 0 violated)
+exit: 2
+
+===
+third state, budget two: every lease legally expired inside the race.
+This exact command could not be run before this commit -- the TTL was written
+into the claimer at parallel_claim_fixture.sh:75 and there was no flag to move
+it -- so what follows is not a before/after of one command. What IS measured
+below is the count: eight claimers acquired, and every one of them acquired
+legally, by reclaiming a lease that had already expired. The scoring rule this
+commit replaced read `[ "$W" = "1" ]` and printed FAIL for anything else, so it
+would have reported that count as "8 of 8 claimers acquired, expected exactly 1"
+with the note "the claim is not atomic" -- an accusation the fixture could not
+support. That inference is from the replaced rule, not from a run of it.
+command: bash tests/parallel_claim_fixture.sh --mode lease --ttl 0
+---
+== parallel claim fixture (mode=lease, claimers=8) ==
+UNATTRIB [I1 same slice]: the race took 1s against a 0s lease TTL; a lease taken at the start could have been reclaimed legally before scoring, so the count of 8 measured the clock as much as the take
+  neither pass nor fail: nothing was measured about the claim, so nothing is claimed
+UNATTRIB [I2 same workspace]: the race took 0s against a 0s lease TTL; a lease taken at the start could have been reclaimed legally before scoring, so the count of 8 measured the clock as much as the take
+  neither pass nor fail: nothing was measured about the claim, so nothing is claimed
+ok [I3 SIGKILL reclaim: successor acquired a lease held by a killed process]
+PARALLEL CLAIM FIXTURE: UNATTRIBUTABLE (mode=lease, 2 invariant(s) unmeasured, 0 violated)
+exit: 2
+
+===
+the fixture at its defaults, unchanged in verdict by this commit.
+command: bash tests/parallel_claim_fixture.sh --mode lease
+---
+== parallel claim fixture (mode=lease, claimers=8) ==
+ok [I1 same slice: exactly one of 8 claimers acquired]
+ok [I2 same workspace: exactly one of 8 claimers acquired]
+ok [I3 SIGKILL reclaim: successor acquired a lease held by a killed process]
+PARALLEL CLAIM FIXTURE: GREEN (mode=lease)
+exit: 0
+
+===
+command: bash tests/run_tests.sh   (new row wired --expect-red)
+sections: the parallel-claim section, the new row, the ADR-008 register in
+its registered state, and the suite verdict. Extracted by section range,
+as .verity/evidence/2026-08-08-adr008-register-d2-d4 does.
+---
+== parallel claim isolation (vault ADR-054 D3) ==
+== parallel claim fixture (mode=lease, claimers=8) ==
+ok [I1 same slice: exactly one of 8 claimers acquired]
+ok [I2 same workspace: exactly one of 8 claimers acquired]
+ok [I3 SIGKILL reclaim: successor acquired a lease held by a killed process]
+PARALLEL CLAIM FIXTURE: GREEN (mode=lease)
+ok [legacy claimer still red: presence-check-only admits every claimer]
+== lease acquire window: the take is not atomic (vault ADR-054 D3) ==
+== lease acquire window: one row (vault ADR-054 D3) ==
+RED [lease acquire window] scripts/slice_lease.py:135 takes the lock with
+     O_CREAT|O_EXCL and only at :165-170 writes the record and prints ACQUIRED.
+     In between, the lock exists under its final name at 0 bytes: _read() returns
+     None (:81), _staleness() maps None to stale (:112), and the claimer
+     renames the lock aside (:147) and takes the key from a holder that is alive.
+     measured, with the holder alive and inside the window:
+       status state=stale reason=holder left an unwritable record (killed mid-acquire)
+       second claimer exit=0 ACQUIRED S-WINDOW-001 second 2026-08-08T02:50:55Z
+       locks after: S-WINDOW-001.lock S-WINDOW-001.lock.stale-<pid>-<attempt>
+       live lock names run_id=second; the holder then wrote its record and would
+       print ACQUIRED (:170) -> grants=2 for one key
+     the source declares the opposite of itself at scripts/slice_lease.py:13-15:
+       |                              The take is a single O_CREAT|O_EXCL open -- one
+       |                              syscall, one winner. Never a read followed by a
+       |                              write, which is what leaves a race to lose.
+     green when no second claimer can take the key while the first is inside that window
+-- lease acquire window: take-is-atomic=RED
+LEASE WINDOW FIXTURE: RED, as registered (the take is not atomic)
+== ADR-008 falsifier register: six rows in their registered state (harnesswright ADR-008:139) ==
+== ADR-008 falsifier register: D6, D1, D3, D2, D2, D4 ==
+RED [D6 falsifier] ADR-008:149 register / ADR-008:127 -- a receipt produced by the
+     current launcher must validate against templates/receipt.schema.json.
+     receipt: run-20260808T024857Z-8029.receipt.json (written by scripts/launch_worker.sh, launcher exit 0)
+     REJECT missing=tier_requested enum=-
+     green when the schema and the launcher agree on tier_requested (ADR-008:123)
+RED [D1 falsifier] ADR-008:143 register / ADR-008:47 -- two LIVE launcher runs over
+     one tree whose criteria were already PASS at baseline, one executor working and
+     one inert, must write receipts that differ in the contribution verdict.
+     twin A (worked, committed README.md): run-20260808T024859Z-8083.receipt.json, launcher exit 0
+     twin B (inert, changed nothing):      run-20260808T024900Z-8129.receipt.json, launcher exit 0
+     contribution.verdict a=<absent> b=<absent>; the two artifacts are indistinguishable
+     green when the launcher writes contribution.verdict (ADR-008:83)
+RED [D3 falsifier] ADR-008:146 register / ADR-008:93 -- three malformed contribution
+     receipts must be rejected by the receipt contract. Accepted: malformed-contributed-empty-delta malformed-no-op-with-delta malformed-not-evaluated-beside-gate-verdict
+     templates/receipt.schema.json declares 0 rules about contribution,
+     so every value of contribution.verdict is legal and none of the three can be refused.
+     green when the contract expresses D3's total function (ADR-008:89, ADR-008:123)
+RED [D2 falsifier] ADR-008:144 register / ADR-008:66 -- with the baseline runner
+     exiting non-zero and printing nothing, the launcher must stop BEFORE the executor
+     is spawned; the absence of the invocation is the assertion.
+     the executor stub ran: d2f.spawned exists (launcher exit 1)
+     the launcher runs the runner only after the executor returns
+     (launch_worker.sh:265-268), so no baseline is taken and none can be unknown
+     green when the launcher measures t0 before spawning (ADR-008:57, ADR-008:64)
+GREEN [D2 control] all-FAIL baseline ran to completion: executor invoked, receipt run-20260808T024903Z-8239.receipt.json written (launcher exit 1)
+GREEN [D4 pin] no-op-shaped run exits 0 with stop_reason=gate-pass (twin B, run-20260808T024900Z-8129.receipt.json)
+-- ADR-008 register: falsifiers D6=RED D1=RED D3=RED D2/unknown-baseline=RED | control D2/all-FAIL-baseline=GREEN | pin D4/no-op-exit-0=GREEN
+ADR-008 FALSIFIER FIXTURE: 4/4 falsifiers RED, 2/2 control+pin GREEN, as the register requires
+[...]
+ALL TESTS PASSED
+exit: 0

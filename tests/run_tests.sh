@@ -2,6 +2,11 @@
 set -euo pipefail
 cd "$(dirname "$0")/.." || exit 1
 fail=0
+# Invariants that were neither upheld nor violated, because the fixture that
+# owns them could not attribute the run to the mechanism under test. Distinct
+# from `fail` on purpose: an unmeasured invariant accuses nothing, but it must
+# not be reported as a pass either. See the parallel-claim section below.
+unmeasured=0
 
 # Every scratch dir is templated under $TMPDIR. BSD `mktemp -d` with no
 # template ignores $TMPDIR and reaches for the Darwin per-user temp dir, which
@@ -635,12 +640,49 @@ echo "== parallel claim isolation (vault ADR-054 D3) =="
 # run: the lease must admit exactly one claimer, and the mechanism it replaced must
 # still admit all of them. A gate never seen failing is not a gate, so the falsifier
 # stays wired in rather than being described in a comment.
-bash tests/parallel_claim_fixture.sh --mode lease || fail=1
-if bash tests/parallel_claim_fixture.sh --mode legacy >/dev/null 2>&1; then
-  echo "FAIL [legacy claimer must stay red]: presence-check-only admitted one claimer"; fail=1
-else
-  echo "ok [legacy claimer still red: presence-check-only admits every claimer]"
-fi
+#
+# The fixture has three outcomes, not two, and this is where the third one is
+# kept from passing quietly. Exit 2 means it could not attribute a run to the
+# mechanism -- a wall-clock budget was exceeded -- so the invariant went
+# unmeasured. That is not a failure of the lease and is not reported as one, but
+# it is also not a pass: it is counted here and it stops the suite from printing
+# ALL TESTS PASSED at the end. See the fixture's header for the two budgets.
+set +e
+bash tests/parallel_claim_fixture.sh --mode lease
+rc=$?
+set -e
+case "$rc" in
+  0) ;;
+  2) unmeasured=$((unmeasured + 1))
+     echo "unattrib [parallel claim, lease mode]: the isolation invariants went unmeasured this run (above); not a pass, not a fail" ;;
+  *) fail=1 ;;
+esac
+set +e
+bash tests/parallel_claim_fixture.sh --mode legacy >/dev/null 2>&1
+rc=$?
+set -e
+case "$rc" in
+  0) echo "FAIL [legacy claimer must stay red]: presence-check-only admitted one claimer"; fail=1 ;;
+  2) unmeasured=$((unmeasured + 1))
+     echo "unattrib [legacy claimer]: the fixture could not attribute the legacy run, so its red was not re-observed" ;;
+  *) echo "ok [legacy claimer still red: presence-check-only admits every claimer]" ;;
+esac
+
+echo "== lease acquire window: the take is not atomic (vault ADR-054 D3) =="
+# One row, registered RED, re-observed on every run for the same reason the
+# legacy claimer above is: a defect described in a commit message and asserted
+# nowhere is a defect that can be silently reintroduced or silently "fixed".
+# scripts/slice_lease.py declares at :13-15 that its take is one syscall with one
+# winner; between the O_EXCL and the record write the lock is a zero-byte file
+# that the module itself classifies as stale, and a second claimer takes it from
+# a live holder. The fixture reconstructs that window with a held descriptor --
+# no race, no sleeps, no concurrency -- so its red does not depend on load.
+#
+# --expect-red inverts the verdict exactly as --expect-registered does for the
+# ADR-008 register above, and for the same reason. When the take is made atomic
+# the row goes GREEN, this line goes red, and the implementer flips the call to
+# the plain `bash tests/lease_window_fixture.sh` in the same commit.
+bash tests/lease_window_fixture.sh --expect-red || fail=1
 
 echo "== ADR-008 falsifier register: six rows in their registered state (harnesswright ADR-008:139) =="
 # Six rows of an Accepted ADR's falsifier register, asserted before any of the
@@ -681,5 +723,19 @@ fi
 echo "== compile check =="
 python3 -m py_compile scripts/*.py || fail=1
 
-[ "$fail" -eq 0 ] && echo "ALL TESTS PASSED" || echo "TESTS FAILED"
-exit "$fail"
+# Three verdicts, because the suite now has a fixture with three outcomes. A
+# violation outranks an unmeasured invariant. An unmeasured invariant does NOT
+# print ALL TESTS PASSED and does NOT exit 0: the whole point of the third state
+# is that it cannot be a quiet pass, and a caller that gates on the documented
+# string or on the exit code sees the difference either way. Exit 2 says nothing
+# was broken and something was not looked at; exit 1 says something was broken.
+if [ "$fail" -ne 0 ]; then
+  echo "TESTS FAILED"
+  exit 1
+fi
+if [ "$unmeasured" -ne 0 ]; then
+  echo "TESTS INCONCLUSIVE: nothing failed, $unmeasured invariant(s) went unmeasured (see the unattrib lines above); re-run on an unloaded machine"
+  exit 2
+fi
+echo "ALL TESTS PASSED"
+exit 0

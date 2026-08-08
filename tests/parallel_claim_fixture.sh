@@ -19,6 +19,33 @@
 #           measured fact that no code outside next.test.ts ever creates that file.
 #           A pure read, so every claimer wins. This mode exists to be seen red.
 #
+# THREE OUTCOMES, NOT TWO. This fixture decides by racing real processes, and a
+# race needs wall-clock budgets to be scored at all: claimers are given a fixed
+# time to report, and each holds a lease with a finite TTL. Both budgets are
+# absolute time, and under enough load either can be exceeded while the lease is
+# working perfectly -- claimers that have not reported yet get counted as
+# non-winners, and leases old enough to expire get legally reclaimed by later
+# claimers. Either way the count moves without the mechanism having moved, and a
+# FAIL derived from it would accuse the lease of something the fixture cannot
+# show it did.
+#
+# So a run that cannot be attributed to the mechanism is a third outcome,
+# distinct from both pass and fail:
+#
+#   ok        the invariant held, and the run is attributable to the mechanism.
+#   FAIL      the invariant was violated. Only ever printed for a count the
+#             fixture can attribute.
+#   UNATTRIB  the fixture could not attribute this run: a budget was exceeded,
+#             so no verdict about the lease is available. Never a pass.
+#
+# The danger of the third state is that it can hide a real fault by being quiet,
+# which would be a worse defect than the FAIL-under-load it replaces. It is
+# therefore loud in three ways at once: each occurrence prints an UNATTRIB line
+# naming which budget was exceeded and by how much, the occurrences are counted,
+# and a run with any of them ends UNATTRIBUTABLE with exit 2 -- never GREEN and
+# never exit 0. tests/run_tests.sh reads that exit code and refuses to report
+# the suite as passed while an invariant went unmeasured.
+#
 # Scratch trees live under $TMPDIR and are removed on exit. `mktemp -d` with no
 # template resolves to the system temp dir, which the default sandbox posture
 # refuses (see .verity/evidence/2026-08-01-adr008-testrun/adr008-tmpdir-probe.txt),
@@ -27,14 +54,33 @@ set -uo pipefail
 
 MODE="lease"
 CLAIMERS=8
+# The two absolute-time budgets, named because they are the only reason an
+# outcome can be unattributable, and settable because a third state that can
+# only be reasoned about is a third state nobody has ever seen. `--ttl 0` and
+# `--report-budget 0` exercise the two paths directly; the defaults are the
+# values this fixture has always used.
+TTL=120             # seconds of lease each claimer takes
+REPORT_BUDGET=20    # seconds a claimer is given to record its exit code
+HOLDER_BUDGET=10    # seconds I3's doomed holder is given to take its lease
+usage() {
+  echo "usage: parallel_claim_fixture.sh [--mode lease|legacy] [--claimers N]" >&2
+  echo "                                 [--ttl SECONDS] [--report-budget SECONDS]" >&2
+  exit 2
+}
 while [ $# -gt 0 ]; do
   case "$1" in
     --mode) MODE="${2:-}"; shift 2 ;;
     --claimers) CLAIMERS="${2:-}"; shift 2 ;;
-    *) echo "usage: parallel_claim_fixture.sh [--mode lease|legacy] [--claimers N]" >&2; exit 2 ;;
+    --ttl) TTL="${2:-}"; shift 2 ;;
+    --report-budget) REPORT_BUDGET="${2:-}"; shift 2 ;;
+    *) usage ;;
   esac
 done
 case "$MODE" in lease|legacy) ;; *) echo "unknown --mode: $MODE" >&2; exit 2 ;; esac
+for n in "$CLAIMERS" "$TTL" "$REPORT_BUDGET"; do
+  case "$n" in ''|*[!0-9]*) echo "not a non-negative integer: $n" >&2; exit 2 ;; esac
+done
+[ "$CLAIMERS" -ge 1 ] || { echo "--claimers must be at least 1" >&2; exit 2; }
 
 PACK="$(cd "$(dirname "$0")/.." && pwd)"
 LEASE="$PACK/scripts/slice_lease.py"
@@ -42,6 +88,7 @@ WORK="$(mktemp -d "${TMPDIR:-/tmp}/hp-claim.XXXXXX")" || exit 1
 trap 'rm -rf "$WORK"' EXIT
 
 fail=0
+unattrib=0
 note() { printf '  %s\n' "$*"; }
 
 # A scratch repo with a real index, so "the same git index" is a real object and
@@ -62,7 +109,7 @@ git -C "$REPO" config user.name fixture >/dev/null 2>&1
 # life of the run (`--pid $$`), and the claimer models exactly that.
 cat > "$WORK/claim.sh" <<'CLAIMER'
 #!/usr/bin/env bash
-MODE="$1"; REPO="$2"; KEY="$3"; RUNID="$4"; BARRIER="$5"; LEASE="$6"; RCFILE="$7"
+MODE="$1"; REPO="$2"; KEY="$3"; RUNID="$4"; BARRIER="$5"; LEASE="$6"; RCFILE="$7"; TTL="$8"
 # Start barrier: every claimer spins here, so the acquire attempts land inside the
 # same few milliseconds instead of being serialised by process startup.
 while [ ! -e "$BARRIER" ]; do :; done
@@ -71,8 +118,10 @@ if [ "$MODE" = "legacy" ]; then
   # Nothing in the stack writes the file, so the branch is never taken.
   [ -e "$REPO/.harness/locks/$KEY.lock" ] && rc=3 || rc=0
 else
+  # The TTL is passed in rather than written here: the scorer compares the race's
+  # own elapsed time against it, and two copies of the number could disagree.
   python3 "$LEASE" acquire --root "$REPO" --key "$KEY" --run-id "$RUNID" \
-    --ttl 120 --pid $$ >/dev/null 2>&1
+    --ttl "$TTL" --pid $$ >/dev/null 2>&1
   rc=$?
 fi
 echo "$rc" > "$RCFILE"
@@ -83,56 +132,94 @@ CLAIMER
 chmod +x "$WORK/claim.sh"
 
 race() {
-  # race <key> -> prints the number of claimers that exited 0
+  # race <key> -> prints the number of claimers that exited 0, or a line starting
+  #               with UNATTRIB when the run cannot be attributed to the lease.
+  #               An UNATTRIB result is not a count and is never scored as one.
   # Split: `local a=$1 b=$a` expands every word before any assignment lands.
-  local key="$1" i n f winners=0
+  local key="$1" i n=0 f winners=0 reported t0 elapsed
   local barrier="$WORK/barrier.$key"
   rm -f "$barrier" "$barrier.done" "$WORK"/rc.* 2>/dev/null
+  t0=$SECONDS
   for i in $(seq 1 "$CLAIMERS"); do
-    "$WORK/claim.sh" "$MODE" "$REPO" "$key" "run-$i" "$barrier" "$LEASE" "$WORK/rc.$i" &
+    "$WORK/claim.sh" "$MODE" "$REPO" "$key" "run-$i" "$barrier" "$LEASE" "$WORK/rc.$i" \
+      "$TTL" &
   done
   : > "$barrier"
   # Score once every claimer has decided; only then release the holders.
-  for _ in $(seq 1 400); do
+  for _ in $(seq 1 $((REPORT_BUDGET * 20))); do
     n=0
     for f in "$WORK"/rc.*; do [ -e "$f" ] && n=$((n + 1)); done
     [ "$n" -ge "$CLAIMERS" ] && break
     sleep 0.05
   done
+  reported="$n"
   : > "$barrier.done"
   wait
+  elapsed=$((SECONDS - t0))
   for i in $(seq 1 "$CLAIMERS"); do
     [ "$(cat "$WORK/rc.$i" 2>/dev/null || echo 99)" = "0" ] && winners=$((winners + 1))
   done
-  # Leave the tree clean for the next scenario.
+  # Leave the tree clean for the next scenario, whatever the outcome.
   python3 "$LEASE" release --root "$REPO" --key "$key" >/dev/null 2>&1
+
+  # Budget one: the holders are released when every claimer has decided, because
+  # a holder that lets go early leaves the key free for a claimer still trying,
+  # which then wins legitimately. Releasing on the budget instead breaks exactly
+  # that premise, so the count that follows describes a different race from the
+  # one the invariant is about -- whichever number it happens to be.
+  if [ "$reported" -lt "$CLAIMERS" ]; then
+    printf 'UNATTRIB only %s of %s claimers had reported after %ss, so the holders were released while the rest were still claiming; the count of %s describes that race, not this invariant' \
+      "$reported" "$CLAIMERS" "$REPORT_BUDGET" "$winners"
+    return 0
+  fi
+  # Budget two: a lease older than its own TTL may be reclaimed by a later
+  # claimer entirely legally, which manufactures extra winners out of elapsed
+  # time. That can only inflate the count, never deflate it -- but a run that
+  # overlapped a legal reclaim measured the clock as much as the take, so it is
+  # refused whatever number it produced rather than kept when the number happens
+  # to be the one we wanted. legacy claimers take no lease and have no TTL.
+  if [ "$MODE" = "lease" ] && [ "$elapsed" -ge "$TTL" ]; then
+    printf 'UNATTRIB the race took %ss against a %ss lease TTL; a lease taken at the start could have been reclaimed legally before scoring, so the count of %s measured the clock as much as the take' \
+      "$elapsed" "$TTL" "$winners"
+    return 0
+  fi
   printf '%s' "$winners"
+}
+
+# One scoring rule for both racing invariants, so the two cannot drift apart in
+# how they treat the third state.
+score() {  # score <label> <race-result> <what-a-fail-means>
+  local label="$1" result="$2" why="$3"
+  case "$result" in
+    "UNATTRIB "*)
+      echo "UNATTRIB [$label]: ${result#UNATTRIB }"
+      note "neither pass nor fail: nothing was measured about the claim, so nothing is claimed"
+      unattrib=$((unattrib + 1))
+      ;;
+    1)
+      echo "ok [$label: exactly one of $CLAIMERS claimers acquired]"
+      ;;
+    *)
+      echo "FAIL [$label]: $result of $CLAIMERS claimers acquired, expected exactly 1"
+      note "$why"
+      fail=1
+      ;;
+  esac
 }
 
 echo "== parallel claim fixture (mode=$MODE, claimers=$CLAIMERS) =="
 
 # ---- I1: one slice, N claimers, exactly one winner -------------------------
 W="$(race S-PARALLEL-001)"
-if [ "$W" = "1" ]; then
-  echo "ok [I1 same slice: exactly one of $CLAIMERS claimers acquired]"
-else
-  echo "FAIL [I1 same slice]: $W of $CLAIMERS claimers acquired, expected exactly 1"
-  note "two sessions can take the same task; the claim is not atomic"
-  fail=1
-fi
+score "I1 same slice" "$W" "two sessions can take the same task; the claim is not atomic"
 
 # ---- I2: one workspace (one git index), N claimers, exactly one winner -----
 # `_workspace` is the launcher's index-scoped key. A leading underscore cannot be
 # a slice id, so it can never collide with one, and it lives in the same locks
 # dir -- which is per-worktree, so two *different* worktrees never contend here.
 W="$(race _workspace)"
-if [ "$W" = "1" ]; then
-  echo "ok [I2 same workspace: exactly one of $CLAIMERS claimers acquired]"
-else
-  echo "FAIL [I2 same workspace]: $W of $CLAIMERS claimers acquired, expected exactly 1"
-  note "two sessions can write $(git -C "$REPO" rev-parse --git-path index 2>/dev/null)"
-  fail=1
-fi
+score "I2 same workspace" "$W" \
+  "two sessions can write $(git -C "$REPO" rev-parse --git-path index 2>/dev/null)"
 
 # ---- I3: SIGKILL must not strand a task forever ----------------------------
 if [ "$MODE" = "legacy" ]; then
@@ -156,13 +243,18 @@ time.sleep(3600)
 HOLDER
   HOLDER_PID=$!
   # Wait for the lease to appear rather than sleeping a guessed interval.
-  for _ in $(seq 1 200); do
+  for _ in $(seq 1 $((HOLDER_BUDGET * 20))); do
     [ -e "$REPO/.harness/locks/S-KILL-001.lock" ] && break
     sleep 0.05
   done
   if [ ! -e "$REPO/.harness/locks/S-KILL-001.lock" ]; then
-    echo "FAIL [I3 SIGKILL reclaim]: holder never acquired the lease"
-    fail=1
+    # The third state again, and for the same reason: a holder that has not
+    # taken its lease within a fixed budget has not been shown to be unable to.
+    # There is nothing to kill, so there is nothing to reclaim and nothing this
+    # scenario can say about reclaim.
+    echo "UNATTRIB [I3 SIGKILL reclaim]: the doomed holder had not taken its lease after ${HOLDER_BUDGET}s, so nothing was killed and reclaim was never exercised"
+    note "neither pass nor fail: nothing was measured about reclaim, so nothing is claimed"
+    unattrib=$((unattrib + 1))
   else
     kill -9 "$HOLDER_PID" 2>/dev/null
     wait "$HOLDER_PID" 2>/dev/null
@@ -179,8 +271,18 @@ HOLDER
   fi
 fi
 
+# A violation outranks an unmeasured invariant: if anything was attributably
+# broken, that is the verdict, and the unmeasured rows are reported alongside it.
 if [ "$fail" -ne 0 ]; then
-  echo "PARALLEL CLAIM FIXTURE: RED (mode=$MODE)"
+  echo "PARALLEL CLAIM FIXTURE: RED (mode=$MODE, $unattrib unmeasured)"
   exit 1
+fi
+# Not green. Nothing failed, but something was not measured, and a fixture that
+# reported that as a pass would be the quiet third state this change exists to
+# prevent. Exit 2 is distinct from both 0 and 1 so a caller can tell "nothing
+# was measured" from "nothing was broken".
+if [ "$unattrib" -ne 0 ]; then
+  echo "PARALLEL CLAIM FIXTURE: UNATTRIBUTABLE (mode=$MODE, $unattrib invariant(s) unmeasured, 0 violated)"
+  exit 2
 fi
 echo "PARALLEL CLAIM FIXTURE: GREEN (mode=$MODE)"
