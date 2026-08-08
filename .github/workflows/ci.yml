@@ -14,8 +14,27 @@ jobs:
         with: { python-version: "3.12" }
       - name: shellcheck
         run: |
-          sudo apt-get update -q && sudo apt-get install -y shellcheck
-          shellcheck scripts/*.sh tests/*.sh
+          # The version and the severity threshold come from the committed pin,
+          # never from whatever the runner image happens to ship: `apt-get
+          # install shellcheck` floats with the image, and the same source can
+          # pass one version and fail another. tests/run_tests.sh reads the
+          # same three fields and runs the same invocation.
+          VER="$(sed -n 's/^SHELLCHECK_VERSION=//p' .shellcheck-version)"
+          SEV="$(sed -n 's/^SHELLCHECK_SEVERITY=//p' .shellcheck-version)"
+          SHA="$(sed -n 's/^SHELLCHECK_SHA256_LINUX_X86_64=//p' .shellcheck-version)"
+          # Unpacked outside the checkout on purpose: the next step runs the
+          # suite, and fixtures that read the working tree must not see a
+          # downloaded tarball as a repo change.
+          DL="${RUNNER_TEMP:-/tmp}/shellcheck-pin"
+          mkdir -p "$DL"
+          TAR="$DL/shellcheck-v$VER.linux.x86_64.tar.xz"
+          curl -fsSL -o "$TAR" \
+            "https://github.com/koalaman/shellcheck/releases/download/v$VER/shellcheck-v$VER.linux.x86_64.tar.xz"
+          echo "$SHA  $TAR" | sha256sum -c -
+          tar -xJf "$TAR" -C "$DL"
+          SHELLCHECK="$DL/shellcheck-v$VER/shellcheck"
+          "$SHELLCHECK" --version
+          "$SHELLCHECK" --severity="$SEV" scripts/*.sh tests/*.sh
       - name: tests
         run: bash tests/run_tests.sh
 # Release hardening (wire at first tag, see docs/PUBLISHING.md):

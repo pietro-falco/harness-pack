@@ -513,8 +513,9 @@ if [ "$MODE" = "discriminate" ]; then
   run_launcher "$DA" "$WORK/verity-pass.js" working "$WORK/dis-a.spawned" "$WORK/dis-a.out"
   run_launcher "$DB" "$WORK/verity-pass.js" inert   "$WORK/dis-b.spawned" "$WORK/dis-b.out"
   DRA="$(receipt_of "$DA")"; DRB="$(receipt_of "$DB")"
-  [ -n "$DRA" ] && [ -n "$DRB" ] \
-    || broken "the discrimination twins wrote no receipt; there is nothing to fabricate from"
+  if [ -z "$DRA" ] || [ -z "$DRB" ]; then
+    broken "the discrimination twins wrote no receipt; there is nothing to fabricate from"
+  fi
 
   mkdir -p "$WORK/fab"
   python3 "$WORK/fabricate_contribution.py" "$DRA" "$WORK/fab/a-contributed.json" CONTRIBUTED \

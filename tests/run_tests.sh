@@ -774,11 +774,33 @@ echo "== session transcript renderer =="
 # as successful work.
 bash tests/render_session_fixture.sh || fail=1
 
-echo "== shellcheck (local, optional) =="
-if command -v shellcheck >/dev/null 2>&1; then
-  shellcheck scripts/*.sh tests/*.sh || fail=1
+echo "== shellcheck =="
+# Same gate as CI, not a local approximation of it: version and severity are
+# read from the committed pin, so the invocation below is character-for-
+# character the one .github/workflows/ci.yml runs. Point $SHELLCHECK at a
+# pinned binary to reproduce a CI verdict exactly.
+#
+# The tool being absent is no longer a quiet skip. A gate that steps aside
+# when its tool is missing and still lets the suite print ALL TESTS PASSED is
+# not a gate -- it certifies something it never looked at. Absent tool is
+# therefore unmeasured: nothing is accused, and nothing is claimed either.
+SC_PIN_VERSION="$(sed -n 's/^SHELLCHECK_VERSION=//p' .shellcheck-version)"
+SC_PIN_SEVERITY="$(sed -n 's/^SHELLCHECK_SEVERITY=//p' .shellcheck-version)"
+SC_BIN="${SHELLCHECK:-shellcheck}"
+if ! command -v "$SC_BIN" >/dev/null 2>&1; then
+  unmeasured=$((unmeasured + 1))
+  echo "unattrib [shellcheck]: '$SC_BIN' is not installed, so the shell sources went unchecked this run; not a pass, not a fail. The gate pins shellcheck $SC_PIN_VERSION -- install it, or set \$SHELLCHECK to a $SC_PIN_VERSION binary"
 else
-  echo "shellcheck not installed locally; CI enforces it"
+  SC_HAVE="$("$SC_BIN" --version | sed -n 's/^version: //p')"
+  if [ "$SC_HAVE" != "$SC_PIN_VERSION" ]; then
+    # Loud, but not blocking. Making a version mismatch fail would break the
+    # documented `run_tests.sh` -> ALL TESTS PASSED flow on every machine whose
+    # package manager ships a different shellcheck, and the check itself still
+    # ran. What it cannot do is predict CI: 0.9.0 and 0.11.0 disagree about
+    # SC2015 on identical source, so a green here is not a green there.
+    echo "WARNING [shellcheck]: running $SC_HAVE, the gate pins $SC_PIN_VERSION. This verdict does NOT predict CI's -- set \$SHELLCHECK to a $SC_PIN_VERSION binary before trusting it"
+  fi
+  "$SC_BIN" --severity="$SC_PIN_SEVERITY" scripts/*.sh tests/*.sh || fail=1
 fi
 
 echo "== compile check =="
