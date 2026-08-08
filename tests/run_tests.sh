@@ -684,6 +684,28 @@ echo "== lease acquire window: the take is atomic (vault ADR-054 D3) =="
 # there. Reopen the window and this line goes red again, which is its whole job.
 bash tests/lease_window_fixture.sh || fail=1
 
+echo "== lease expiry ordering: a lease is dated no earlier than the attempt that took it (vault ADR-054 D3) =="
+# The second defect of the same acquire path, and the reason the row above going
+# green did not close it: cmd_acquire reads the clock once, before the retry
+# loop, so a claimer that breaks a stale lock and retries publishes a lease
+# stamped from before the contention it won -- its TTL already being spent when
+# the lease is created. Registered RED here on the same terms as the legacy
+# claimer and the ADR-008 register: a defect preserved deliberately in one commit
+# and asserted nowhere is a defect that gets closed in a commit message instead
+# of in the source.
+#
+# The row is an ORDERING, not a duration. The fixture hands the predecessor's
+# record to the claimer at the claimer's own _read(), through a FIFO at the
+# lock's name, so the kernel enforces both orderings the verdict rests on: it
+# waits on no interval, sleeps for no duration, and has no third outcome to
+# count. Its verdict cannot move with load.
+#
+# --expect-red inverts the verdict, exactly as the window row above was wired
+# before its take was repaired. Move that clock read inside the loop and the row
+# goes green, this line goes red, and the implementer flips the call to the plain
+# `bash tests/lease_expiry_fixture.sh` in the same commit -- deliberately.
+bash tests/lease_expiry_fixture.sh --expect-red || fail=1
+
 echo "== ADR-008 falsifier register: six rows in their registered state (harnesswright ADR-008:139) =="
 # Six rows of an Accepted ADR's falsifier register, asserted before any of the
 # decisions they belong to is implemented. The register is normative -- "each row
