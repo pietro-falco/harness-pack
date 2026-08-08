@@ -729,6 +729,24 @@ echo "== ADR-008 falsifier register: six rows in their registered state (harness
 # it prints its reds in full below.
 bash tests/adr008_falsifier_fixture.sh --expect-registered || fail=1
 
+echo "== ADR-008 discrimination control: the D1 and D2 rows can move =="
+# The line above re-observes two reds. This one answers the question that makes
+# those reds worth anything: could either row ever say GREEN? A falsifier that
+# cannot is wired red rather than measuring, and its red is evidence of nothing.
+#
+# --discriminate hands each row the artifact it demands, fabricated under
+# $TMPDIR -- the contribution verdict the launcher does not write, and a run in
+# which the executor was never spawned -- and requires GREEN; then hands it an
+# artifact without that thing and requires RED. Both directions, because an
+# assertion that always says GREEN discriminates no better than one that always
+# says RED. It runs the same assertion code the register rows run, not a copy.
+#
+# It asserts on fabricated inputs, so it says nothing about the launcher and
+# does not become green when D1 or D2 lands -- unlike the line above, this one
+# is not flipped by the implementer. It stays exactly as it is through the
+# repair, which is when a silently-broken falsifier would do the most damage.
+bash tests/adr008_falsifier_fixture.sh --discriminate || fail=1
+
 echo "== session transcript renderer =="
 # Pins the two properties that make the renderer trustworthy to watch a live
 # run: it survives a ragged JSONL tail, and it never renders a blocked action

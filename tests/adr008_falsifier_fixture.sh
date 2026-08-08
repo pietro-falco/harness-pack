@@ -121,6 +121,22 @@
 #                      decision lands, its row goes GREEN, this mode goes red,
 #                      and the wiring is flipped to the default -- deliberately,
 #                      not silently.
+#   --discriminate     the discrimination control for the D1 and D2 FALSIFIER
+#                      rows. Exit 0 iff each of those two assertions can be made
+#                      to say GREEN, by fabricating under $TMPDIR the artifact
+#                      the row demands -- and still says RED when handed an
+#                      artifact that lacks it. It proves the ASSERTION
+#                      discriminates; it proves nothing about the launcher, and
+#                      no in-tree source is read for anything but execution.
+#                      A falsifier nobody has ever seen green is indistinguishable
+#                      from one wired red unconditionally, and a repair cannot
+#                      start from a gate that cannot move. That is what this mode
+#                      buys, and it is why it runs on every suite invocation
+#                      rather than being demonstrated once in a commit message.
+#                      It is not a register row: it asserts on fabricated inputs,
+#                      so it is neither a FALSIFIER, a CONTROL nor a PIN in the
+#                      sense ADR-009 D1 defines for register rows. It is a test
+#                      of this file.
 #
 # Scratch dirs are templated under $TMPDIR: BSD `mktemp -d` with no template
 # reaches for the Darwin per-user temp dir, which an agent session's sandbox
@@ -131,7 +147,8 @@ MODE="assert-green"
 while [ $# -gt 0 ]; do
   case "$1" in
     --expect-registered) MODE="expect-registered"; shift ;;
-    *) echo "usage: adr008_falsifier_fixture.sh [--expect-registered]" >&2; exit 2 ;;
+    --discriminate) MODE="discriminate"; shift ;;
+    *) echo "usage: adr008_falsifier_fixture.sh [--expect-registered|--discriminate]" >&2; exit 2 ;;
   esac
 done
 
@@ -168,6 +185,42 @@ if missing or bad_enum:
     sys.exit(1)
 print("ACCEPT")
 VALIDATOR
+
+# D1's assertion, in a file rather than inline, for one reason: --discriminate
+# has to run THIS program and not a restatement of it. A control that re-types
+# the assertion proves that the copy discriminates, which is worth nothing.
+# Prints GREEN / RED / PREMISE and exits 0 / 1 / 2.
+cat > "$WORK/assert_d1.py" <<'ASSERT_D1'
+import json, sys
+a = json.load(open(sys.argv[1]))
+b = json.load(open(sys.argv[2]))
+ga = (a.get("gate") or {}).get("verdict")
+gb = (b.get("gate") or {}).get("verdict")
+if ga != "PASS" or gb != "PASS":
+    print("PREMISE gate verdicts a=%s b=%s, expected PASS/PASS (criteria are "
+          "already PASS at baseline)" % (ga, gb))
+    sys.exit(2)
+va = (a.get("contribution") or {}).get("verdict")
+vb = (b.get("contribution") or {}).get("verdict")
+if va is not None and vb is not None and va != vb:
+    print("GREEN a=%s b=%s" % (va, vb))
+    sys.exit(0)
+print("RED contribution.verdict a=%s b=%s; the two artifacts are indistinguishable"
+      % (va if va is not None else "<absent>", vb if vb is not None else "<absent>"))
+sys.exit(1)
+ASSERT_D1
+
+# Fabrication, used only by --discriminate: copy a real launcher receipt and add
+# the one field the launcher does not yet write. Everything else is left exactly
+# as the launcher wrote it, so the fabricated artifact differs from the red run
+# in precisely the thing D1 is about.
+cat > "$WORK/fabricate_contribution.py" <<'FABRICATE'
+import json, sys
+src, dst, verdict = sys.argv[1], sys.argv[2], sys.argv[3]
+r = json.load(open(src))
+r["contribution"] = {"verdict": verdict, "delta": [] if verdict == "NO_OP" else ["README.md"]}
+json.dump(r, open(dst, "w"), indent=2)
+FABRICATE
 
 # ---- the collaborators the launcher shells out to ---------------------------
 # harnesswright and verity are node CLIs; `claude` is the executor. Stubbing
@@ -288,6 +341,136 @@ receipt_of() {  # $1 = repo; prints the receipt path, empty if none was written
   return 0
 }
 
+# D2's assertion, in a function for the same reason D1's is in a file: the
+# discrimination control has to run the predicate the row runs, not a retyping
+# of it. The absence of the spawn marker IS the assertion (ADR-008:66).
+d2_says_green() {  # $1 = spawn marker path
+  [ ! -e "$1" ]
+}
+
+# ---- --discriminate ---------------------------------------------------------
+# Not a register row. It asks one question of each of the two rows this repo is
+# about to repair: CAN this assertion say GREEN? A falsifier that cannot is
+# wired red rather than measuring, and the repair would be aimed at nothing.
+# Each row is handed a fabricated artifact under $TMPDIR -- the thing the row
+# demands and the launcher does not yet produce -- and must go GREEN; then it is
+# handed an artifact WITHOUT that thing and must stay RED. Both directions,
+# because an assertion that says GREEN unconditionally discriminates no better
+# than one that says RED unconditionally. No in-tree source is written, copied
+# or patched to build any of it.
+if [ "$MODE" = "discriminate" ]; then
+  echo "== ADR-008 discrimination control: can the D1 and D2 assertions move? =="
+  DIS_FAIL=0
+
+  # -- D1 (ADR-008:143) -------------------------------------------------------
+  # The twins are produced live, exactly as the row produces them, and the
+  # fabrication adds the single field the launcher does not write. Everything
+  # else in the receipt is left as the launcher wrote it, so what separates the
+  # fabricated artifact from the red run is precisely what D1 is about.
+  DSEED="$WORK/dis-seed"
+  seed_repo "$DSEED" || broken "could not seed the discrimination twin repo"
+  DA="$WORK/dis-a"; DB="$WORK/dis-b"
+  cp -a "$DSEED" "$DA" || broken "could not copy the discrimination tree for A"
+  cp -a "$DSEED" "$DB" || broken "could not copy the discrimination tree for B"
+  run_launcher "$DA" "$WORK/verity-pass.js" working "$WORK/dis-a.spawned" "$WORK/dis-a.out"
+  run_launcher "$DB" "$WORK/verity-pass.js" inert   "$WORK/dis-b.spawned" "$WORK/dis-b.out"
+  DRA="$(receipt_of "$DA")"; DRB="$(receipt_of "$DB")"
+  [ -n "$DRA" ] && [ -n "$DRB" ] \
+    || broken "the discrimination twins wrote no receipt; there is nothing to fabricate from"
+
+  mkdir -p "$WORK/fab"
+  python3 "$WORK/fabricate_contribution.py" "$DRA" "$WORK/fab/a-contributed.json" CONTRIBUTED \
+    || broken "could not fabricate the CONTRIBUTED receipt"
+  python3 "$WORK/fabricate_contribution.py" "$DRB" "$WORK/fab/b-no-op.json" NO_OP \
+    || broken "could not fabricate the NO_OP receipt"
+  python3 "$WORK/fabricate_contribution.py" "$DRB" "$WORK/fab/b-no-op-twin.json" NO_OP \
+    || broken "could not fabricate the second NO_OP receipt"
+
+  D1_MOVED="$(python3 "$WORK/assert_d1.py" "$WORK/fab/a-contributed.json" "$WORK/fab/b-no-op.json")"
+  D1_MOVED_RC=$?
+  # The other direction: the field is present in BOTH and identical. A row that
+  # called this GREEN would be asserting "the field exists", not "the artifacts
+  # differ", and its red today would be evidence of nothing.
+  D1_HELD="$(python3 "$WORK/assert_d1.py" "$WORK/fab/b-no-op.json" "$WORK/fab/b-no-op-twin.json")"
+  D1_HELD_RC=$?
+  if [ "$D1_MOVED_RC" -eq 0 ] && [ "$D1_HELD_RC" -eq 1 ]; then
+    echo "GREEN [D1 discrimination] the row moves on the field alone: ${D1_MOVED}"
+    note "and holds red when both artifacts carry it identically: ${D1_HELD#RED }"
+    note "fabricated from live receipts $(basename "$DRA") / $(basename "$DRB") under \$TMPDIR"
+  else
+    echo "RED [D1 discrimination] ADR-008:143 -- the row could not be made to move."
+    note "fabricated differing verdicts -> exit $D1_MOVED_RC: ${D1_MOVED}"
+    note "fabricated identical verdicts -> exit $D1_HELD_RC: ${D1_HELD}"
+    note "expected 0 then 1. The falsifier is vacuous: it is not measuring the"
+    note "difference D1 names, so implementing D1 could not turn it green."
+    DIS_FAIL=1
+  fi
+
+  # -- D2, row 1 (ADR-008:144) ------------------------------------------------
+  # The row asserts an ABSENCE, so the artifact to fabricate is a run in which
+  # the executor was genuinely never invoked. This stand-in is that run and
+  # nothing more: it consults the baseline runner first and spawns only on a
+  # verdict. It is not a launcher, does not pretend to be one, and
+  # scripts/launch_worker.sh is neither read into it nor patched to make it.
+  mkdir -p "$WORK/d2-standin-cwd"
+  cat > "$WORK/standin_baseline_first.sh" <<'STANDIN'
+#!/usr/bin/env bash
+# Consult the baseline, THEN decide whether to spawn. That ordering is the whole
+# content of ADR-008:64, and the whole content of this file.
+set -uo pipefail
+BASELINE="$(node "$VERITY_CLI" verify --json 2>/dev/null)"
+BASELINE_RC=$?
+if [ "$BASELINE_RC" -ne 0 ] || [ -z "$BASELINE" ]; then
+  echo "stand-in: baseline unknown (runner exit $BASELINE_RC); the executor is not spawned" >&2
+  exit 3
+fi
+printf 'fixture prompt\n' | claude -p >/dev/null 2>&1
+exit 0
+STANDIN
+  chmod +x "$WORK/standin_baseline_first.sh"
+
+  run_standin() {  # $1 = verity cli, $2 = spawn marker
+    rm -f "$2"
+    (
+      cd "$WORK/d2-standin-cwd" || exit 1
+      PATH="$WORK/bin:$PATH" \
+      VERITY_CLI="$1" \
+      ADR008_SPAWN_MARKER="$2" \
+      bash "$WORK/standin_baseline_first.sh"
+    ) >/dev/null 2>&1
+  }
+
+  run_standin "$WORK/verity-silent.js" "$WORK/dis-d2-unknown.spawned"
+  run_standin "$WORK/verity-pass.js"   "$WORK/dis-d2-known.spawned"
+
+  # Same predicate the row runs. Green on the unknown baseline, and -- the half
+  # that makes the other half mean something -- red on the known one. Without
+  # the second call, "no marker" would be indistinguishable from "nothing ran".
+  if d2_says_green "$WORK/dis-d2-unknown.spawned" \
+     && ! d2_says_green "$WORK/dis-d2-known.spawned"; then
+    echo "GREEN [D2 discrimination] the row moves on the spawn alone: marker absent under an"
+    note "unknown baseline, present under a known one, same predicate both times"
+    note "fabricated by \$TMPDIR/$(basename "$WORK")/standin_baseline_first.sh; scripts/launch_worker.sh untouched"
+  else
+    echo "RED [D2 discrimination] ADR-008:144 -- the row could not be made to move."
+    note "unknown baseline, marker absent: $(d2_says_green "$WORK/dis-d2-unknown.spawned" && echo yes || echo NO)"
+    note "known baseline, marker present: $(d2_says_green "$WORK/dis-d2-known.spawned" && echo NO || echo yes)"
+    note "expected yes then yes. Either the assertion cannot see a spawn it should"
+    note "see, or it cannot see the absence of one -- in both cases its red today"
+    note "is evidence of nothing and D2 cannot be implemented against it."
+    DIS_FAIL=1
+  fi
+
+  if [ "$DIS_FAIL" -eq 0 ]; then
+    echo "ADR-008 DISCRIMINATION CONTROL: D1 and D2 both reach GREEN on a fabricated artifact and both hold RED without one"
+    exit 0
+  fi
+  echo "ADR-008 DISCRIMINATION CONTROL: RED -- a falsifier above cannot move"
+  note "a row that cannot say GREEN is wired red rather than measuring, and the"
+  note "decision it gates cannot be implemented against it. Repair the row first."
+  exit 1
+fi
+
 echo "== ADR-008 falsifier register: D6, D1, D3, D2, D2, D4 =="
 
 # ---- D6 (FALSIFIER) --------------------------------------------------------
@@ -340,26 +523,7 @@ RECEIPT_B="$(receipt_of "$REPO_B")"
 [ -f "$REPO_A/README.md" ] || broken "twin A's working stub changed nothing"
 [ -f "$REPO_B/README.md" ] && broken "twin B's inert stub changed the tree"
 
-D1_OUT="$(python3 - "$RECEIPT_A" "$RECEIPT_B" <<'PY'
-import json, sys
-a = json.load(open(sys.argv[1]))
-b = json.load(open(sys.argv[2]))
-ga = (a.get("gate") or {}).get("verdict")
-gb = (b.get("gate") or {}).get("verdict")
-if ga != "PASS" or gb != "PASS":
-    print("PREMISE gate verdicts a=%s b=%s, expected PASS/PASS (criteria are "
-          "already PASS at baseline)" % (ga, gb))
-    sys.exit(2)
-va = (a.get("contribution") or {}).get("verdict")
-vb = (b.get("contribution") or {}).get("verdict")
-if va is not None and vb is not None and va != vb:
-    print("GREEN a=%s b=%s" % (va, vb))
-    sys.exit(0)
-print("RED contribution.verdict a=%s b=%s; the two artifacts are indistinguishable"
-      % (va if va is not None else "<absent>", vb if vb is not None else "<absent>"))
-sys.exit(1)
-PY
-)"
+D1_OUT="$(python3 "$WORK/assert_d1.py" "$RECEIPT_A" "$RECEIPT_B")"
 D1_RC=$?
 case "$D1_RC" in
   0) D1_STATE="GREEN"; echo "GREEN [D1 falsifier] twin artifacts differ in the contribution verdict (${D1_OUT#GREEN })" ;;
@@ -404,7 +568,7 @@ REPO_D2F="$WORK/d2-unknown-baseline"
 seed_repo "$REPO_D2F" || broken "could not seed the D2 falsifier repo"
 run_launcher "$REPO_D2F" "$WORK/verity-silent.js" inert "$WORK/d2f.spawned" "$WORK/d2f.out"
 RC_D2F=$?
-if [ ! -e "$WORK/d2f.spawned" ]; then
+if d2_says_green "$WORK/d2f.spawned"; then
   D2F_STATE="GREEN"
   echo "GREEN [D2 falsifier] executor never invoked under an unknown baseline (launcher exit $RC_D2F)"
 else
