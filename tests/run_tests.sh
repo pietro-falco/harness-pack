@@ -668,21 +668,21 @@ case "$rc" in
   *) echo "ok [legacy claimer still red: presence-check-only admits every claimer]" ;;
 esac
 
-echo "== lease acquire window: the take is not atomic (vault ADR-054 D3) =="
-# One row, registered RED, re-observed on every run for the same reason the
-# legacy claimer above is: a defect described in a commit message and asserted
-# nowhere is a defect that can be silently reintroduced or silently "fixed".
-# scripts/slice_lease.py declares at :13-15 that its take is one syscall with one
-# winner; between the O_EXCL and the record write the lock is a zero-byte file
-# that the module itself classifies as stale, and a second claimer takes it from
-# a live holder. The fixture reconstructs that window with a held descriptor --
-# no race, no sleeps, no concurrency -- so its red does not depend on load.
+echo "== lease acquire window: the take is atomic (vault ADR-054 D3) =="
+# One row, registered RED before the take was repaired and asserted GREEN since,
+# re-observed on every run for the same reason the legacy claimer above is: a
+# defect closed in a commit message and asserted nowhere is a defect that can be
+# silently reintroduced. scripts/slice_lease.py declares at :13-15 that its take
+# is one syscall with one winner, and now earns it: the record is written under a
+# staging name and published with a single link(), so the lock name never exists
+# as a zero-byte file that the module would classify as stale and take from a
+# live holder. The fixture reconstructs that window with a held descriptor --
+# no race, no sleeps, no concurrency -- so its verdict does not depend on load.
 #
-# --expect-red inverts the verdict exactly as --expect-registered does for the
-# ADR-008 register above, and for the same reason. When the take is made atomic
-# the row goes GREEN, this line goes red, and the implementer flips the call to
-# the plain `bash tests/lease_window_fixture.sh` in the same commit.
-bash tests/lease_window_fixture.sh --expect-red || fail=1
+# --expect-red is gone from this call, not from the fixture: the row now stands
+# green on the fixture's own criterion, and the plain call is what holds it
+# there. Reopen the window and this line goes red again, which is its whole job.
+bash tests/lease_window_fixture.sh || fail=1
 
 echo "== ADR-008 falsifier register: six rows in their registered state (harnesswright ADR-008:139) =="
 # Six rows of an Accepted ADR's falsifier register, asserted before any of the

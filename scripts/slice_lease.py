@@ -10,9 +10,13 @@ and taken by nobody: every concurrent launcher sees the slice unlocked. This mod
 is the missing writer, and the launcher calls it before it spawns.
 
   acquire --root R --key K   Take the lease named K under R/.harness/locks/.
-                             The take is a single O_CREAT|O_EXCL open -- one
-                             syscall, one winner. Never a read followed by a
-                             write, which is what leaves a race to lose.
+                             The record is written under a private staging
+                             name first; the take is the link() that publishes
+                             it -- one syscall, one winner -- so the lock name
+                             never exists without a complete record behind it.
+                             Never a read followed by a write, and never a
+                             create followed by a write: both leave a race to
+                             lose. tests/lease_window_fixture.sh measures it.
                              OK       -> stdout "ACQUIRED <key> <run_id> <expires_at>", exit 0
                              Held     -> stderr "HELD ...", exit 3
   release --root R --key K   Drop a lease this run_id holds. A lease already
@@ -31,12 +35,17 @@ in parallel. That is the whole of the parallelism this module enables: it makes
 concurrency legal exactly where the index is disjoint.
 
 DEATH. A lease must not outlive its holder's usefulness, and a SIGKILLed session
-runs no cleanup: no trap, no release, and possibly a lock file created but not yet
-written. All three are reclaimed, in falling order of speed:
+runs no cleanup: no trap and no release. What it does leave is a complete record,
+because the take publishes one or publishes nothing, so reclaim always has a
+holder to ask about. Two ways, in falling order of speed:
 
-  unparseable record  -> stale at once (killed between create and write)
   holder pid is gone  -> stale at once (same host; the common case)
   expires_at passed   -> stale (different host, or a recycled pid; TTL-bounded)
+
+A record that does not parse is NOT a third way. Nothing here can produce one, so
+it evidences no dead holder: it is left alone, and `release` or the operator
+clears it. Breaking it on sight is what tests/lease_window_fixture.sh caught --
+it takes the key from a claimer that is alive and merely mid-acquire.
 
 Reclaiming is itself a race between survivors, so the break is an os.rename of the
 lock aside to a unique name. rename is atomic and the source disappears with it, so
@@ -71,9 +80,10 @@ def _lock_path(root, key):
 def _read(path):
     """The lease record, or None if it cannot be trusted.
 
-    None is not an error: a lock file that exists but does not parse is what a
-    holder killed between O_EXCL and write leaves behind, and it means the lease
-    is stale, not that the caller did something wrong.
+    None is not an error, and no longer implies staleness: since the take
+    publishes a complete record under the lock name in one link, nothing this
+    module does can leave a lock with nothing readable behind it. So a record
+    that does not parse says only that we cannot describe the holder.
     """
     try:
         with open(path, encoding="utf-8") as fh:
@@ -109,7 +119,13 @@ def _alive(rec):
 def _staleness(rec, now):
     """Why this lease may be broken, or None if it may not."""
     if rec is None:
-        return "holder left an unwritable record (killed mid-acquire)"
+        # Was: stale at once, on the theory that a holder killed mid-acquire is
+        # the only thing that can leave a lock with nothing readable behind it.
+        # The take has no such window any more -- cmd_acquire publishes a
+        # complete record under the lock name in one link -- so an unreadable
+        # record evidences no dead holder, and breaking it would take the key
+        # from a claimer that is alive. Not ours to break.
+        return None
     exp = rec.get("expires_at")
     if not isinstance(exp, (int, float)):
         return "record carries no usable expires_at"
@@ -131,27 +147,6 @@ def cmd_acquire(args):
         return 1
 
     for attempt in range(args.retries + 1):
-        try:
-            fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
-        except FileExistsError:
-            rec = _read(path)
-            why = _staleness(rec, time.time())
-            if why is None:
-                print("HELD %s by run_id=%s pid=%s host=%s until=%s"
-                      % (args.key, rec.get("run_id"), rec.get("pid"), rec.get("host"),
-                         _iso(rec.get("expires_at"))), file=sys.stderr)
-                return HELD
-            # Break it aside, atomically. Whoever loses this rename finds the lock
-            # already gone or already retaken, and re-enters the loop either way.
-            try:
-                os.rename(path, "%s.stale-%d-%d" % (path, os.getpid(), attempt))
-            except OSError:
-                pass
-            continue
-        except OSError as e:
-            print("STOP: lock not creatable at %s: %s" % (path, e), file=sys.stderr)
-            return 1
-
         expires = now + args.ttl
         rec = {
             "key": args.key,
@@ -162,11 +157,60 @@ def cmd_acquire(args):
             "expires_at": expires,
             "ttl": args.ttl,
         }
-        with os.fdopen(fd, "w", encoding="utf-8") as fh:
-            json.dump(rec, fh, sort_keys=True)
-            fh.write("\n")
-            fh.flush()
-            os.fsync(fh.fileno())
+        # Staged under a name no other claimer can pick, in the locks directory
+        # itself so the link() below cannot cross a filesystem. O_EXCL here
+        # guards the staging name, not the lease: the lease is taken below.
+        staged = "%s.staging-%d-%d" % (path, os.getpid(), attempt)
+        try:
+            fd = os.open(staged, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
+        except OSError as e:
+            print("STOP: lease record not stageable at %s: %s" % (staged, e),
+                  file=sys.stderr)
+            return 1
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                json.dump(rec, fh, sort_keys=True)
+                fh.write("\n")
+                fh.flush()
+                os.fsync(fh.fileno())
+            # THE TAKE. link() creates `path` only if nothing is there, and what
+            # appears under it is this record, already complete and already
+            # fsynced. One syscall, one winner, and no instant in which the lock
+            # name exists with nothing readable behind it.
+            try:
+                os.link(staged, path)
+            except FileExistsError:
+                held = _read(path)
+                why = _staleness(held, time.time())
+                if why is None:
+                    if held is None:
+                        print("HELD %s by a record that does not parse; it names no"
+                              " holder to outlive, so it is not ours to break --"
+                              " release the key to clear it" % args.key,
+                              file=sys.stderr)
+                    else:
+                        print("HELD %s by run_id=%s pid=%s host=%s until=%s"
+                              % (args.key, held.get("run_id"), held.get("pid"),
+                                 held.get("host"), _iso(held.get("expires_at"))),
+                              file=sys.stderr)
+                    return HELD
+                # Break it aside, atomically. Whoever loses this rename finds the lock
+                # already gone or already retaken, and re-enters the loop either way.
+                try:
+                    os.rename(path, "%s.stale-%d-%d" % (path, os.getpid(), attempt))
+                except OSError:
+                    pass
+                continue
+            except OSError as e:
+                print("STOP: lock not creatable at %s: %s" % (path, e), file=sys.stderr)
+                return 1
+        finally:
+            # The staging name has served its purpose either way: the lease, if
+            # taken, is the link under `path` and outlives this unlink.
+            try:
+                os.unlink(staged)
+            except OSError:
+                pass
         print("ACQUIRED %s %s %s" % (args.key, args.run_id, _iso(expires)))
         return 0
 
