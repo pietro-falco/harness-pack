@@ -191,6 +191,22 @@
 #                      so it is neither a FALSIFIER, a CONTROL nor a PIN in the
 #                      sense ADR-009 D1 defines for register rows. It is a test
 #                      of this file.
+#   --shared-filter    the assertion harnesswright/ADR-010 D3(a) records as
+#                      outstanding, quoting 0008:59: "the implementation slice
+#                      ... **asserts** the shared filter path rather than
+#                      documenting it". Exit 0 iff t0 and t1 are COMMENSURABLE on
+#                      a run built so that two independently written filters
+#                      would diverge -- and iff the same assertion goes red
+#                      against a copy of the launcher, under $TMPDIR, whose t1
+#                      phase is routed through a second, drifted reduction.
+#                      It is NOT a register row either, and for a stronger reason
+#                      than --discriminate's: none of ADR-008's seven rows at
+#                      0008:143-150 names it. It carries no EXPECT_* literal and
+#                      it is neither a FALSIFIER, a CONTROL nor a PIN in the
+#                      sense ADR-009 D1 defines for register rows -- it is an
+#                      assertion of THIS repo, discharging an obligation ADR-010
+#                      D3(a) records against ADR-008. Adding it to the register
+#                      would be inventing a row in an Accepted ADR.
 #
 # Scratch dirs are templated under $TMPDIR: BSD `mktemp -d` with no template
 # reaches for the Darwin per-user temp dir, which an agent session's sandbox
@@ -202,7 +218,8 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --expect-registered) MODE="expect-registered"; shift ;;
     --discriminate) MODE="discriminate"; shift ;;
-    *) echo "usage: adr008_falsifier_fixture.sh [--expect-registered|--discriminate]" >&2; exit 2 ;;
+    --shared-filter) MODE="shared-filter"; shift ;;
+    *) echo "usage: adr008_falsifier_fixture.sh [--expect-registered|--discriminate|--shared-filter]" >&2; exit 2 ;;
   esac
 done
 
@@ -401,6 +418,25 @@ cat > "$WORK/verity-silent.js" <<'VERITY_SILENT'
 process.exit(3);
 VERITY_SILENT
 
+cat > "$WORK/verity-skew.js" <<'VERITY_SKEW'
+// The runner for --shared-filter. A CONSTANT report: it reads no tree, no clock
+// and no environment, so t0 and t1 receive byte-identical input and any
+// difference between the two tables is a difference between the reductions that
+// produced them, never a difference in what was measured.
+// It is skewed against spec.criteria (["readme-committed","checks-pass"]) on
+// purpose, so that all three reductions a filter must perform are exercised in
+// one report -- which is where two filters written independently drift apart:
+//   readme-committed  DECLARED, absent here      -> ABSENT must be synthesized
+//   checks-pass       DECLARED, reported non-PASS -> the verdict is passed through
+//   unrelated-claim   reported, NOT declared      -> it must be dropped
+process.stdout.write(JSON.stringify({
+  results: [
+    { id: "checks-pass", type: "command", verdict: "FAIL", evidence: "exit 1" },
+    { id: "unrelated-claim", type: "command", verdict: "PASS", evidence: "exit 0" }
+  ]
+}));
+VERITY_SKEW
+
 cat > "$WORK/manifest.json" <<'MANIFEST'
 {
   "manifest_version": 1,
@@ -570,6 +606,270 @@ STANDIN
   echo "ADR-008 DISCRIMINATION CONTROL: RED -- a falsifier above cannot move"
   note "a row that cannot say GREEN is wired red rather than measuring, and the"
   note "decision it gates cannot be implemented against it. Repair the row first."
+  exit 1
+fi
+
+# ---- --shared-filter --------------------------------------------------------
+# harnesswright/ADR-010 D3(a), quoting 0008:59 verbatim:
+#   "The implementation slice measures the current order, states the three
+#    anchoring lines in its receipt, and **asserts** the shared filter path
+#    rather than documenting it."
+# This block is that assertion. It is NOT a register row: none of ADR-008's seven
+# rows at 0008:143-150 names it, it carries no EXPECT_* literal, and it is
+# neither a FALSIFIER, a CONTROL nor a PIN in the sense ADR-009 D1 defines for
+# register rows. It is an assertion of THIS repo discharging an obligation
+# ADR-010 D3(a) records; adding it to the register would be inventing a row in an
+# Accepted ADR.
+#
+# WHY IT IS NOT A GREP. 0008:51 asks for "one function used by both phases" and
+# gives the reason in the same sentence: "t0 and t1 are commensurable by
+# construction or they are not commensurable at all." COMMENSURABILITY is the
+# property the decision is about, and a count of definitions does not measure it
+# -- a rewrite that duplicates the reduction under the same name passes a grep
+# unchanged. So the assertion is behavioural: it builds a run on which two
+# independently written filters WOULD diverge, and requires that t0 and t1 do
+# not.
+#
+# THE SCENARIO. verity is pinned to a constant report (verity-skew.js above) and
+# the executor is the inert stub, so both phases receive byte-identical input and
+# the tree between them does not move. Under one reduction the two tables are
+# therefore identical of necessity, not by luck. The report is skewed so that all
+# three reductions are exercised at once: a declared criterion absent from the
+# report (ABSENT must be synthesized), a declared criterion reported non-PASS
+# (the verdict is passed through), and a reported criterion nobody declared (it
+# must be dropped).
+# GREEN requires all three: the t0 table (contribution.baseline.claims) and the
+# t1 table (claims) identical item for item; an empty delta; verdict NO_OP. The
+# last two follow from the first under 0008:41 and are asserted anyway, because
+# together they are the coherence of the contribution object a reader reads.
+#
+# THE RED, in the same run, because a green half alone is evidence of nothing.
+# It is built from a COPY of scripts/ under $TMPDIR whose t1 CALL SITE -- and
+# only its t1 call site -- is routed through a second, drifted reduction: the
+# duplication 0008:51 forbids, carrying the drift a duplicate acquires. Two
+# variants, one per kind of divergence:
+#   absent-is-pass  the drifted t1 reads an unreported criterion as PASS. The
+#                   tables differ, the delta names a criterion nothing moved, and
+#                   an inert run reports CONTRIBUTED.
+#   no-reduction    the drifted t1 reports what verity reported instead of
+#                   reducing to spec.criteria. Its delta stays empty and its
+#                   verdict stays NO_OP -- which is why this variant is here: it
+#                   is the one that proves the assertion reads the TABLES and not
+#                   merely the verdict field.
+# scripts/ in tree is read and never written: cp reads it, the patcher writes
+# only the copy, and the patcher refuses unless its anchor occurs exactly once.
+# Unlike D1's red half this red is built from the working tree rather than from
+# history, so it needs no history at all and survives a --depth 1 clone.
+if [ "$MODE" = "shared-filter" ]; then
+  echo "== ADR-010 D3(a) / 0008:59: the shared filter path, asserted behaviourally =="
+  SF_FAIL=0
+
+  # The assertion, in a file for the reason assert_d1.py is in one: both halves
+  # must run THIS program and not a restatement of it.
+  # Prints GREEN / RED / PREMISE and exits 0 / 1 / 2.
+  cat > "$WORK/assert_shared_filter.py" <<'ASSERT_SF'
+import json, sys
+r = json.load(open(sys.argv[1]))
+contribution = r.get("contribution") or {}
+t0 = ((contribution.get("baseline") or {}).get("claims")) or []
+t1 = r.get("claims") or []
+gate = (r.get("gate") or {}).get("verdict")
+if not t0 or not t1:
+    print("PREMISE the receipt carries no t0 table (%d items) or no t1 table (%d items); nothing was compared" % (len(t0), len(t1)))
+    sys.exit(2)
+if gate not in ("PASS", "FAIL", "STOP"):
+    print("PREMISE gate.verdict=%r, so t1 never produced a table and there is no pair" % (gate,))
+    sys.exit(2)
+def shape(items):
+    return [(c.get("id"), c.get("verdict")) for c in items]
+faults = []
+if shape(t0) != shape(t1):
+    faults.append("the two tables are not the same reduction: t0 %s vs t1 %s" % (shape(t0), shape(t1)))
+elif t0 != t1:
+    faults.append("t0 and t1 agree on id and verdict but not item for item: %s vs %s" % (t0, t1))
+if contribution.get("delta"):
+    faults.append("delta %s is non-empty although nothing moved between t0 and t1" % (contribution.get("delta"),))
+if contribution.get("verdict") != "NO_OP":
+    faults.append("contribution.verdict=%r, and an empty delta is NO_OP (0008:89)" % (contribution.get("verdict"),))
+if faults:
+    print("RED " + "; ".join(faults))
+    sys.exit(1)
+print("GREEN t0 and t1 identical item for item %s, delta empty, verdict NO_OP" % (shape(t0),))
+sys.exit(0)
+ASSERT_SF
+
+  # The patcher. It writes only the copy it is handed, and it refuses rather than
+  # patch nothing: a silent no-match would produce a "red" that is just the green
+  # run under another name.
+  cat > "$WORK/patch_t1_filter.py" <<'PATCH_T1'
+import sys
+path, fn_path = sys.argv[1], sys.argv[2]
+ANCHOR = ('GATE_JSON="{}"\n'
+          'if [ "$CC_EXIT" -eq 0 ]; then\n'
+          '  measure_criteria\n'
+          '  GATE_JSON="$MEASURED_JSON"\n'
+          'fi\n')
+text = open(path).read()
+n = text.count(ANCHOR)
+if n != 1:
+    print("the t1 call site anchor occurs %d times, expected exactly 1" % n)
+    sys.exit(2)
+if text.count("\nmeasure_criteria\n") != 1:
+    print("the t0 call site is not a single bare call; refusing to patch")
+    sys.exit(2)
+drift = open(fn_path).read()
+text = text.replace(ANCHOR, drift + "\n" + ANCHOR.replace("  measure_criteria\n", "  measure_criteria_t1\n"))
+if text.count("\nmeasure_criteria\n") != 1 or text.count("measure_criteria_t1") < 2:
+    print("the patched copy does not carry one untouched t0 call beside one drifted t1 call")
+    sys.exit(2)
+open(path, "w").write(text)
+print("patched")
+PATCH_T1
+
+  # Drift 1: the reduction to spec.criteria is kept and ABSENT is read as PASS.
+  # Written the way a duplicate is written -- by somebody who had not read the
+  # first -- and one word apart from it. Never in tree.
+  cat > "$WORK/drift-absent-is-pass.sh" <<'DRIFT_ABSENT'
+measure_criteria_t1() {
+  local vout vexit
+  set +e
+  vout="$(cd "$HALT_ROOT" && node "$VERITY_CLI" verify --json 2>/dev/null)"
+  vexit=$?
+  set -e
+  MEASURED_JSON="$(
+    CRITERIA="$CRITERIA" VERITY_EXIT="$vexit" VERITY_OUT="$vout" python3 <<'DRIFT_ABSENT_PY'
+import json, os
+crit = [c for c in os.environ["CRITERIA"].split(",") if c]
+vexit = int(os.environ["VERITY_EXIT"])
+try:
+    results = {r["id"]: r for r in json.loads(os.environ["VERITY_OUT"]).get("results", [])}
+except Exception as e:
+    print(json.dumps({"verdict": "NO-VERDICT", "reason": str(e), "verity_exit": vexit, "claims": []}))
+else:
+    items, failed = [], []
+    for cid in crit:
+        r = results.get(cid)
+        if r is None:
+            items.append({"id": cid, "verdict": "PASS", "evidence": "criterion id not present in verity report"})
+        else:
+            items.append({"id": cid, "type": r.get("type"), "verdict": r.get("verdict"), "evidence": r.get("evidence")})
+            if r.get("verdict") != "PASS":
+                failed.append(cid)
+    verdict = "FAIL" if failed else "PASS"
+    reason = ("criteria failed: " + ",".join(failed)) if failed else "all declared criteria PASS"
+    print(json.dumps({"verdict": verdict, "reason": reason, "verity_exit": vexit, "claims": items}))
+DRIFT_ABSENT_PY
+  )"
+}
+DRIFT_ABSENT
+
+  # Drift 2: no reduction at all. It reports what verity reported, which is the
+  # other half of what the shared filter does and the half a duplicate is most
+  # likely to leave out.
+  cat > "$WORK/drift-no-reduction.sh" <<'DRIFT_NORED'
+measure_criteria_t1() {
+  local vout vexit
+  set +e
+  vout="$(cd "$HALT_ROOT" && node "$VERITY_CLI" verify --json 2>/dev/null)"
+  vexit=$?
+  set -e
+  MEASURED_JSON="$(
+    VERITY_EXIT="$vexit" VERITY_OUT="$vout" python3 <<'DRIFT_NORED_PY'
+import json, os
+vexit = int(os.environ["VERITY_EXIT"])
+try:
+    results = json.loads(os.environ["VERITY_OUT"]).get("results", [])
+except Exception as e:
+    print(json.dumps({"verdict": "NO-VERDICT", "reason": str(e), "verity_exit": vexit, "claims": []}))
+else:
+    items = [{"id": r.get("id"), "type": r.get("type"), "verdict": r.get("verdict"),
+              "evidence": r.get("evidence")} for r in results]
+    failed = [i["id"] for i in items if i["verdict"] != "PASS"]
+    verdict = "FAIL" if failed else "PASS"
+    reason = ("criteria failed: " + ",".join(failed)) if failed else "all declared criteria PASS"
+    print(json.dumps({"verdict": verdict, "reason": reason, "verity_exit": vexit, "claims": items}))
+DRIFT_NORED_PY
+  )"
+}
+DRIFT_NORED
+
+  SF_SEED="$WORK/sf-seed"
+  seed_repo "$SF_SEED" || broken "could not seed the shared-filter repo"
+
+  # A copy of scripts/ under $TMPDIR with ONE call site rerouted. Sets
+  # SF_DIV_LAUNCHER. The whole tree is copied, not the launcher alone, because
+  # the launcher resolves launch_checks.py and slice_lease.py beside itself.
+  sf_build_divergent() {  # $1 = variant tag
+    local tag="$1" root="$WORK/div-$1" patched
+    mkdir -p "$root" || broken "could not create the divergent root for $tag"
+    cp -a "$PACK/scripts" "$root/scripts" || broken "could not copy scripts/ for variant $tag"
+    patched="$(python3 "$WORK/patch_t1_filter.py" "$root/scripts/launch_worker.sh" "$WORK/drift-$tag.sh" 2>&1)" \
+      || broken "could not route variant $tag's t1 phase through a drifted reduction: $patched"
+    SF_DIV_LAUNCHER="$root/scripts/launch_worker.sh"
+  }
+
+  # One run against one launcher, leaving its measurement in SF_*. Same seed,
+  # same runner, same stub every time: the only thing that differs between calls
+  # is which launcher wrote the receipt.
+  sf_run() {  # $1 = tag, $2 = launcher path
+    local tag="$1" launcher="$2" repo="$WORK/sf-$1"
+    cp -a "$SF_SEED" "$repo" || broken "could not copy the shared-filter tree for $tag"
+    run_launcher "$repo" "$WORK/verity-skew.js" inert "$WORK/sf-$tag.spawned" "$WORK/sf-$tag.out" "$launcher"
+    SF_LAUNCH_RC=$?
+    SF_RECEIPT="$(receipt_of "$repo")"
+    [ -n "$SF_RECEIPT" ] || broken "the $tag run exited $SF_LAUNCH_RC and wrote no receipt; there is no pair to compare"
+    # The premise, checked and not assumed: the executor was inert, so nothing in
+    # the tree moved between t0 and t1.
+    ! git -C "$repo" show HEAD:README.md >/dev/null 2>&1 \
+      || broken "the $tag run's inert stub changed the tree; t0 and t1 no longer share an input"
+    SF_OUT="$(python3 "$WORK/assert_shared_filter.py" "$SF_RECEIPT")"
+    SF_RC=$?
+    [ "$SF_RC" -eq 2 ] && broken "shared-filter $tag: $SF_OUT"
+    return 0
+  }
+
+  # Half 1: the reds. Each divergent copy differs from the launcher in tree in
+  # exactly one thing -- whether both phases share a reduction.
+  for SF_VARIANT in absent-is-pass no-reduction; do
+    sf_build_divergent "$SF_VARIANT"
+    sf_run "red-$SF_VARIANT" "$SF_DIV_LAUNCHER"
+    if [ "$SF_RC" -eq 1 ]; then
+      echo "RED  [shared filter, t1 drifted: $SF_VARIANT] the copy's contribution is incoherent:"
+      note "${SF_OUT#RED }"
+      note "receipt $(basename "$SF_RECEIPT"), written by \$TMPDIR/$(basename "$WORK")/div-$SF_VARIANT/scripts/launch_worker.sh"
+      note "that copy differs from scripts/launch_worker.sh in $(diff "$PACK/scripts/launch_worker.sh" "$SF_DIV_LAUNCHER" | grep -c '^[<>]') lines:"
+      note "the injected reduction and the one call site that reaches it. t0 still calls the"
+      note "filter in tree, so the divergence is between the phases and nowhere else."
+    else
+      echo "RED  [shared filter, t1 drifted: $SF_VARIANT] NOT OBSERVED -- a launcher whose t1"
+      note "phase uses a different reduction was not seen to diverge: ${SF_OUT}"
+      note "the assertion is not measuring commensurability, so its green below would be"
+      note "evidence of nothing. 0008:51 is not asserted by this file."
+      SF_FAIL=1
+    fi
+  done
+
+  # Half 2: the green, against the launcher in tree, same seed and same runner.
+  sf_run green "$PACK/scripts/launch_worker.sh"
+  if [ "$SF_RC" -eq 0 ]; then
+    echo "GREEN [shared filter, launcher in tree] t0 and t1 are commensurable on the run the"
+    note "two drifted copies above are seen incoherent on: ${SF_OUT#GREEN }"
+    note "receipt $(basename "$SF_RECEIPT"), written by scripts/launch_worker.sh"
+  else
+    echo "GREEN [shared filter, launcher in tree] NOT OBSERVED -- 0008:51's construction does"
+    note "not hold: ${SF_OUT#RED }"
+    note "t0 and t1 are not commensurable, so the delta between them is not a delta."
+    SF_FAIL=1
+  fi
+
+  if [ "$SF_FAIL" -eq 0 ]; then
+    echo "ADR-010 D3(a): SHARED FILTER ASSERTED -- t0 and t1 diverge under a drifted t1 and do not diverge in tree"
+    exit 0
+  fi
+  echo "ADR-010 D3(a): SHARED FILTER NOT ASSERTED"
+  note "0008:59 asks for an assertion, not a document, and 0008:51 says what it must"
+  note "assert: t0 and t1 commensurable by construction. A half that did not appear"
+  note "above is the half that carries that meaning."
   exit 1
 fi
 

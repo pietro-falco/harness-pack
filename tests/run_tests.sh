@@ -746,6 +746,28 @@ echo "== ADR-008 discrimination control: the D1 and D2 rows can move =="
 # repair, which is when a silently-broken falsifier would do the most damage.
 bash tests/adr008_falsifier_fixture.sh --discriminate || fail=1
 
+echo "== ADR-010 D3(a): t0 and t1 share one filter (harnesswright ADR-008:51, :59) =="
+# Not a register row -- none of ADR-008's seven names it. It is this repo's
+# assertion discharging the obligation ADR-010 D3(a) records against 0008:59:
+# "the implementation slice ... **asserts** the shared filter path rather than
+# documenting it".
+#
+# What 0008:51 wants asserted is not a shape but a consequence: "t0 and t1 are
+# commensurable by construction or they are not commensurable at all". A grep
+# counting definitions cannot see that -- a rewrite duplicating the reduction
+# under the same name would pass it unchanged -- so the fixture builds a run on
+# which two independently written filters WOULD diverge (a declared criterion
+# absent from verity's report, a declared one reported non-PASS, a reported one
+# nobody declared) and requires that t0 and t1 do not.
+#
+# Both halves in one run, as D1's arm does. Red first, against copies of
+# scripts/ under $TMPDIR whose t1 phase alone is routed through a drifted
+# reduction -- one reading ABSENT as PASS, one skipping the reduction to
+# spec.criteria; then green against the launcher in tree. scripts/ is read and
+# never written. The red is built from the working tree rather than from history,
+# so this line needs no history and survives a --depth 1 clone.
+bash tests/adr008_falsifier_fixture.sh --shared-filter || fail=1
+
 echo "== session transcript renderer =="
 # Pins the two properties that make the renderer trustworthy to watch a live
 # run: it survives a ragged JSONL tail, and it never renders a blocked action
