@@ -38,47 +38,6 @@ PreToolUse hook. ARM 1 ran `wc -l notes.txt`, which the guard permits. ARM 2 ran
 confirmed to exit 2 on that exact payload, offline, before the session was spawned.
 
 Every field the launcher reads was identical across the two arms:
-cat > ~/Code/harness-pack/docs/adrs/ADR-010-refusals-are-invisible-in-the-receipt.md <<'ADREOF'
----
-type: adr
-status: proposed
-title: "A refused tool call leaves no trace in the receipt, and the launcher already receives the evidence it does not read"
-id: ADR-010
-date: 2026-08-09
-related-adrs: [harness-pack/ADR-008, harnesswright/ADR-0004, harnesswright/ADR-0008, vault/ADR-065]
----
-
-# ADR-010 — Refusals are invisible in the receipt
-
-## Status
-
-**Proposed** (2026-08-09; docs-only). No code, no fixture, no schema change and no
-constitution edit ships with this commit. Per the two-commit lifecycle, acceptance is
-a separate operator commit; the implementation lands after it and carries its red
-fixture in the same commit as the green.
-
-## Numbering note
-
-010 follows the filename maximum (`ADR-009`) in `docs/adrs/`. `ADR-007` was never
-allocated; `vault/ADR-080` records the gap as informational and renumbers nothing.
-
-## Basis
-
-| Repository | HEAD |
-|---|---|
-| `~/Code/harness-pack` | `676425e66524935733172c5f5c56b8f44cfe35d9` |
-| `~/Code/harnesswright` | `edb12a499615bf12aa80e5db1c67a268cb247114` |
-| `~/Code/verity` | `4dc016b354f3a6eb953590167b46bc29eacf3fcb` |
-| `~/Code/lanewright` | `ab77a81da6eecc4f7942c1e508b319c844049da8` |
-| `~/Obsidian-Vault` | `fb06e2abddd6d709875886e69dce934b4aae4237` |
-
-**The measurement.** Two `claude -p` sessions, operator shell, 2026-08-09, identical
-invocation and identical settings mounting `scripts/guard_pretooluse.py` as the sole
-PreToolUse hook. ARM 1 ran `wc -l notes.txt`, which the guard permits. ARM 2 ran
-`grep -c filter-branch notes.txt`, which the guard denies — the guard was first
-confirmed to exit 2 on that exact payload, offline, before the session was spawned.
-
-Every field the launcher reads was identical across the two arms:
                 ARM 1 (permitted)   ARM 2 (refused)
 
 child exit code 0 0
