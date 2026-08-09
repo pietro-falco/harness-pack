@@ -200,7 +200,7 @@
 #                      against a copy of the launcher, under $TMPDIR, whose t1
 #                      phase is routed through a second, drifted reduction.
 #                      It is NOT a register row either, and for a stronger reason
-#                      than --discriminate's: none of ADR-008's seven rows at
+#                      than --discriminate's: none of ADR-008's eight rows at
 #                      0008:143-150 names it. It carries no EXPECT_* literal and
 #                      it is neither a FALSIFIER, a CONTROL nor a PIN in the
 #                      sense ADR-009 D1 defines for register rows -- it is an
@@ -615,7 +615,7 @@ fi
 #   "The implementation slice measures the current order, states the three
 #    anchoring lines in its receipt, and **asserts** the shared filter path
 #    rather than documenting it."
-# This block is that assertion. It is NOT a register row: none of ADR-008's seven
+# This block is that assertion. It is NOT a register row: none of ADR-008's eight
 # rows at 0008:143-150 names it, it carries no EXPECT_* literal, and it is
 # neither a FALSIFIER, a CONTROL nor a PIN in the sense ADR-009 D1 defines for
 # register rows. It is an assertion of THIS repo discharging an obligation
