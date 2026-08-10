@@ -27,6 +27,15 @@
     "session_id": { "type": "string" },
     "stop_reason": { "type": "string" },
     "violation_code": { "type": "string" },
+    "refusals": {
+      "type": "object",
+      "$comment": "ADR-010 D1/D4. Derived from the child's permission_denials; declared in properties and deliberately NOT in required, because this schema is already divergent from its writer (it requires tier_requested, which the launcher stopped writing, and declares nothing about contribution, which the launcher writes) and repairing that divergence is a separate commit against a separate decision. D2: records THAT calls were refused, never by what -- no guard attribution, no violation_code.",
+      "properties": {
+        "count": { "type": "integer", "$comment": "length of the child's permission_denials array; 0 is written, never omitted" },
+        "tools": { "type": "array", "items": { "type": "string" }, "$comment": "deduplicated tool_name values, sorted lexicographically -- the receipt is hash-chained, so the order is a rule and not an accident" },
+        "denials": { "type": "array", "$comment": "the child's array as received, unmodified" }
+      }
+    },
     "claims": { "type": "array" }
   }
 }

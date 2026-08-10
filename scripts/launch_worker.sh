@@ -359,89 +359,37 @@ fi
 
 # Receipt: reflects the gate, not just CC exit. claims[] carries item-level verdicts for
 # the slice's criteria (D6); stop_reason names what actually stopped the run (D7).
-GATE_JSON="$GATE_JSON" BASELINE_JSON="$BASELINE_JSON" python3 - "$OUT" "$RECEIPTS_DIR/$RUN_ID.receipt.json" <<PYEOF
-import json, os, sys
-try:
-    cc = json.load(open(sys.argv[1]))
-except Exception:
-    cc = {"subtype": "error_no_output"}
-gate = json.loads(os.environ.get("GATE_JSON") or "{}") or {}
-baseline = json.loads(os.environ.get("BASELINE_JSON") or "{}") or {}
-cc_exit = int("$CC_EXIT")
-if cc_exit != 0:
-    stop_reason = "cc_exit=%d" % cc_exit
-    claims = []
-    gate_summary = {"verdict": "not-run", "reason": "CC did not exit 0; gate skipped"}
-else:
-    v = gate.get("verdict", "NO-VERDICT")
-    label = {"PASS": "gate-pass", "FAIL": "gate-fail", "STOP": "gate-stop", "NO-VERDICT": "gate-no-verdict"}.get(v, "gate-" + str(v).lower())
-    stop_reason = label if v == "PASS" else label + ": " + gate.get("reason", "")
-    claims = gate.get("claims", [])
-    gate_summary = {"verdict": v, "reason": gate.get("reason", ""), "verity_exit": gate.get("verity_exit")}
+#
+# The composition itself lives in scripts/write_receipt.py (ADR-010), extracted from
+# the inline heredoc that used to sit here for the reason ADR-002 extracted the two
+# launch gates: a writer reachable only by driving the whole launcher cannot be fed a
+# constructed cc.json, and ADR-010's two fixtures have to feed it one. There is no
+# logic fork -- the launcher and the fixtures run that file. Resolved beside THIS
+# script, like the other units, and fail-closed if absent.
+WRITER="$SELF_DIR/write_receipt.py"
+[ -f "$WRITER" ] || { echo "STOP: write_receipt.py not resolvable at $WRITER" >&2; exit 1; }
+# Resolved before the call, not inside its argument list: $RUN_ID also appears in
+# the assignment prefix below, and an expansion of it in the same command's
+# arguments is the SC2097/SC2098 pair -- which shellcheck reports and which the
+# pinned gate treats as an error.
+RECEIPT="$RECEIPTS_DIR/$RUN_ID.receipt.json"
+CC_EXIT="$CC_EXIT" GATE_JSON="$GATE_JSON" BASELINE_JSON="$BASELINE_JSON" \
+  RUN_ID="$RUN_ID" SPEC_ID="$RESOLVED_ID" MODEL_STRING="$MODEL_STRING" \
+  TIER_RESOLVED="$TIER_RESOLVED" MODEL_USED="$MODEL" MANIFEST_VERSION="$MVER" \
+  CONSTITUTION_HASH="$CHASH" TOOL_VERSION="$TOOLVER" \
+  STARTED_AT="$STARTED" ENDED_AT="$ENDED" \
+  python3 "$WRITER" "$OUT" "$RECEIPT"
 
-# contribution (ADR-008 D3, 0008:72-84). The delta between t0 and t1: 0008:41,
-# "the set of declared criteria whose verdict moved from FAIL or ABSENT at the
-# earlier point to PASS at the later one".
-#   phase        always working-tree-advisory in a launcher-written receipt
-#                (0008:86) -- the t0-to-t1 pair, never inferred by the reader.
-#   baseline     the item-level verdict table at t0, persisted here because it
-#                is not regenerable (0008:87). Its roll-up verdict follows the
-#                shape 0008:74-80 illustrates -- FAIL beside a claims table
-#                holding an ABSENT -- so it is all-PASS or FAIL, not the
-#                acquiring filter's gate-acceptance word.
-#   regressions  diagnostic only (0008:88); it never becomes a second
-#                acceptance authority.
-#   verdict      the total function of 0008:89: CONTRIBUTED when delta is
-#                non-empty, NO_OP when it is empty, NOT_EVALUATED when and only
-#                when the run stopped before the gate produced any verdict --
-#                the cross-field invariant being that NOT_EVALUATED holds if and
-#                only if the gate has no verdict. With no t1 there is no later
-#                point, so delta and regressions are empty rather than guessed.
-# This heredoc is unquoted -- it interpolates $CC_EXIT and friends below -- so a
-# backtick pair in these comments is a live command substitution, not a
-# quotation mark. Quote decisions here in plain words.
-b_claims = baseline.get("claims", []) or []
-b_verdict = "PASS" if b_claims and all(c.get("verdict") == "PASS" for c in b_claims) else "FAIL"
-gate_has_verdict = gate_summary.get("verdict") in ("PASS", "FAIL", "STOP")
-t1 = {c.get("id"): c.get("verdict") for c in claims}
-if gate_has_verdict:
-    delta = [c["id"] for c in b_claims
-             if c.get("verdict") in ("FAIL", "ABSENT") and t1.get(c.get("id")) == "PASS"]
-    regressions = [c["id"] for c in b_claims
-                   if c.get("verdict") == "PASS" and t1.get(c.get("id")) != "PASS"]
-    contribution_verdict = "CONTRIBUTED" if delta else "NO_OP"
-else:
-    delta, regressions, contribution_verdict = [], [], "NOT_EVALUATED"
-contribution = {
-  "phase": "working-tree-advisory",
-  "baseline": {"verdict": b_verdict, "claims": b_claims},
-  "delta": delta,
-  "regressions": regressions,
-  "verdict": contribution_verdict
-}
-receipt = {
-  "run_id": "$RUN_ID", "spec_id": "$RESOLVED_ID", "mode": "B",
-  "model_string": "$MODEL_STRING", "tier_resolved": "$TIER_RESOLVED",
-  "model_used": "$MODEL", "manifest_version": int("$MVER"),
-  "constitution_hash": "$CHASH", "tool_version": "$TOOLVER",
-  "started_at": "$STARTED", "ended_at": "$ENDED",
-  "subtype": cc.get("subtype","unknown"),
-  "num_turns": cc.get("num_turns", -1),
-  "total_cost_usd": cc.get("total_cost_usd"),
-  "duration_ms": cc.get("duration_ms"),
-  "session_id": cc.get("session_id",""),
-  "gate": gate_summary,
-  "contribution": contribution,
-  "retries": 0,
-  "stop_reason": stop_reason,
-  "claims": claims
-}
-json.dump(receipt, open(sys.argv[2], "w"), indent=1)
-print("receipt:", sys.argv[2])
-PYEOF
-
-RECEIPT_STOP_REASON="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("stop_reason",""))' "$RECEIPTS_DIR/$RUN_ID.receipt.json")"
- notify_telegram "run_id=$RUN_ID spec_id=$RESOLVED_ID stop_reason=$RECEIPT_STOP_REASON"
+RECEIPT_STOP_REASON="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("stop_reason",""))' "$RECEIPT")"
+# ADR-010 D3 extends the notification contract to carry refusals.count: "A refused
+# run is loud to the operator and silent to $?." Only refusals.count is added.
+# D3's sentence also says the contract was "already extended by ADR-0008 D4 to carry
+# contribution.verdict" -- measured against this line at the ADR's own basis, it was
+# not: the notification carried run_id, spec_id and stop_reason and nothing else.
+# That gap belongs to harnesswright/ADR-0008 D4, not to this decision, so it is
+# recorded and left where it is rather than repaired in passing here.
+RECEIPT_REFUSALS="$(python3 -c 'import json,sys; r=json.load(open(sys.argv[1])).get("refusals") or {}; print(r.get("count",""))' "$RECEIPT")"
+notify_telegram "run_id=$RUN_ID spec_id=$RESOLVED_ID stop_reason=$RECEIPT_STOP_REASON refusals=$RECEIPT_REFUSALS"
 
 # Final outcome (ADR-004 D3/D7): CC failure dominates and is returned as-is. Otherwise the
 # gate decides: only an all-criteria-PASS verdict is a success; FAIL, STOP (absent criterion),

@@ -768,6 +768,34 @@ echo "== ADR-010 D3(a): t0 and t1 share one filter (harnesswright ADR-008:51, :5
 # so this line needs no history and survives a --depth 1 clone.
 bash tests/adr008_falsifier_fixture.sh --shared-filter || fail=1
 
+echo "== harness-pack ADR-010: a refusal is visible in the receipt (two rows) =="
+# Not the ADR-010 named directly above -- that line discharges an obligation of
+# harnesswright's ADR-010 against 0008:59. This one is THIS repo's
+# docs/adrs/ADR-010-refusals-are-invisible-in-the-receipt.md, and it runs the two
+# rows that ADR's Verification table declares.
+#
+# A plain call, not --expect-red: both rows stand green on the writer in tree as
+# of the commit that added them. Their red is not recounted here because it was
+# observed and committed literally, under
+# .verity/evidence/2026-08-10-adr010-first-red/ -- including the arm that measures
+# the defect against the UNCHANGED inline writer at the pre-repair basis, so the
+# red cannot be read as an artifact of the extraction that made the writer
+# invocable.
+#
+# The fixture has three outcomes and exits 2 on the third, which is the control
+# row's pre-change posture (ADR-010:181-184 declares that row cannot be red
+# before the change). Reaching that state again would mean the refusals object
+# had disappeared from the writer's output entirely; it is routed to `unmeasured`
+# rather than to `fail` so the suite says nothing was measured instead of
+# accusing the writer of a defect it would not have described.
+bash tests/adr010_refusal_fixture.sh
+adr010_rc=$?
+if [ "$adr010_rc" -eq 2 ]; then
+  unmeasured=$((unmeasured + 1))
+elif [ "$adr010_rc" -ne 0 ]; then
+  fail=1
+fi
+
 echo "== session transcript renderer =="
 # Pins the two properties that make the renderer trustworthy to watch a live
 # run: it survives a ragged JSONL tail, and it never renders a blocked action

@@ -1,0 +1,138 @@
+basis: 7e9dc63073652825076573fd645f2a84160ce407
+branch: main
+
+The first red of ADR-010's Verification table, observed before the repair and
+in the same commit as the green.
+
+Path normalisation, declared: the three probe scripts of blocks 1 and 2 were
+written under $TMPDIR and are throwaway, so the `command:` lines below name
+them as $TMPDIR/probe/<name> rather than by their absolute path. Only the
+command lines are normalised. Every line inside a `---` block is the literal
+stdout+stderr of the run as it happened, unmodified -- and none of it carries a
+path, because the probes and the fixture print none by construction.
+
+Block 3 is the fixture; blocks 1 and 2 are what license it. Block 1 measures
+the defect against the launcher AT THIS BASIS, unedited, so the red of block 3
+cannot be an artifact of the extraction that made the writer invocable. Block 2
+measures that the extraction changed nothing.
+
+===
+BLOCK 1 -- the defect, measured against the UNCHANGED inline writer at basis.
+
+The receipt writer at this basis is an inline unquoted heredoc at
+scripts/launch_worker.sh:362-441 and cannot be invoked on its own. The probe
+therefore takes lines 363-440 out of `git show HEAD:scripts/launch_worker.sh`
+and runs them between the same unquoted <<PYEOF the launcher uses, so the shell
+interpolation of $RUN_ID and friends happens exactly as it does in a real run.
+Not one byte of the writer is edited.
+
+Both arms are fed the two inputs ADR-010's Verification table declares: a
+cc.json carrying the verbatim denial entry of ADR-010:54-56, and the same run
+with permission_denials: [].
+
+command: bash $TMPDIR/probe/run_probe.sh
+---
+-- arm=denied  cc.json permission_denials: [{"tool_name": "Bash", "tool_use_id": "toolu_01B9gCQL8ejB5BWxUkRpga1H", "tool_input": {"command": "grep -c filter-branch notes.txt", "description": "Count occurrences of filter-branch in notes.txt"}}]
+   receipt top-level keys: run_id,spec_id,mode,model_string,tier_resolved,model_used,manifest_version,constitution_hash,tool_version,started_at,ended_at,subtype,num_turns,total_cost_usd,duration_ms,session_id,gate,contribution,retries,stop_reason,claims
+   'refusals' in receipt: False
+   refusals.count       : <no refusals object>
+   stop_reason          : gate-fail: criteria failed: C-1
+   contribution.verdict : NO_OP
+-- arm=clean  cc.json permission_denials: []
+   receipt top-level keys: run_id,spec_id,mode,model_string,tier_resolved,model_used,manifest_version,constitution_hash,tool_version,started_at,ended_at,subtype,num_turns,total_cost_usd,duration_ms,session_id,gate,contribution,retries,stop_reason,claims
+   'refusals' in receipt: False
+   refusals.count       : <no refusals object>
+   stop_reason          : gate-fail: criteria failed: C-1
+   contribution.verdict : NO_OP
+---
+
+The two receipts, diffed against each other. ADR-010:86-88 states the
+consequence and derives it from reading :422-438; this is the observation.
+
+command: diff out_denied.receipt.json out_clean.receipt.json
+---
+17c17
+<  "session_id": "sess-denied",
+---
+>  "session_id": "sess-clean",
+diff_rc=1
+---
+
+One line differs, and it is the session_id the probe itself injected to keep
+the two arms distinguishable to the probe. Everything the operator would read
+-- stop_reason, gate, contribution.verdict -- is identical. A run the guard
+obstructed and a run that worked freely and missed its criteria are the same
+receipt.
+
+===
+BLOCK 2 -- the extraction is pure.
+
+ADR-010's Verification says both fixtures feed a constructed cc.json "to the
+receipt writer". At basis there is nothing to feed, so the heredoc is extracted
+into scripts/write_receipt.py -- the move ADR-002 D1/D2 made for the two launch
+gates, for the same reason and in the same form: same branches, same messages,
+same key order, one live implementation shared by the launcher and the tests.
+Only the I/O contract changes; shell interpolation into a Python string literal
+becomes an environment read.
+
+Purity is asserted by output equivalence rather than by inspection: the
+extracted unit and HEAD's heredoc are run over every branch the writer has --
+cc_exit non-zero, all four gate verdicts, an empty gate object, a delta that is
+non-empty and one that is empty, and an unreadable cc.json -- and their composed
+receipts are compared byte for byte.
+
+command: bash $TMPDIR/probe/purity.sh <repo>
+---
+same   [gate FAIL, denials present]
+same   [gate FAIL, denials empty]
+same   [gate PASS, delta non-empty]
+same   [gate PASS, delta empty (NO_OP)]
+same   [gate STOP (absent criterion)]
+same   [gate NO-VERDICT]
+same   [empty gate object]
+same   [cc_exit=124 (gate skipped)]
+same   [unreadable cc.json]
+-- extraction purity: cases=9 differing=0
+---
+
+===
+BLOCK 3 -- the fixture, red, against the extracted but UNREPAIRED writer.
+
+scripts/write_receipt.py at this point is the extraction and nothing else: it
+composes exactly what block 1's heredoc composed. Block 2 is what makes that a
+measured statement rather than a claim.
+
+fx-refusal-control is UNMEASURED here, not red, and that is the row's declared
+posture: ADR-010:181-184 says the control "cannot be red before the change, and
+that is the point". With no refusals object in the writer's output at all,
+there is no field whose discrimination could be measured. The fixture reports
+the suite's third state rather than a pass or a fail, and exits 2 on it -- the
+same convention tests/run_tests.sh:5-9 defines.
+
+command: bash tests/adr010_refusal_fixture.sh
+---
+== ADR-010 refusals in the receipt: two rows (ADR-010 Verification) ==
+RED [fx-refusal-invisible] a refused run leaves no trace in the receipt
+     cc.json carried permission_denials with 1 entry (tool_name Bash), the entry
+     ADR-010:54-56 records verbatim from the measured session's refused arm.
+     the composed receipt says:
+       refusals present : False
+       refusals.count   : None
+       refusals.tools   : null
+       entry verbatim   : False
+       tools order over 5 fresh interpreters: distinct=1 first=null
+     the writer reads five keys off the child's JSON and permission_denials is
+     not among them, so the array it already receives is discarded (ADR-010:73-77)
+     green when the receipt carries refusals.count=1 and the entry unmodified
+UNMEASURED [fx-refusal-control] the writer emits no refusals object at all, so
+     the question this control asks -- does the field discriminate, or does it fire
+     on every run -- cannot be posed against this output. Not a red: ADR-010:181-184
+     declares this row cannot be red before the change. Not a pass either: nothing
+     was measured about a field that does not exist.
+     it becomes GREEN when a run with permission_denials: [] carries refusals.count=0
+-- fx-refusal-invisible=RED fx-refusal-control=UNMEASURED
+ADR-010 REFUSAL FIXTURE: RED
+exit: 1
+---
+
+green when the writer reads the sixth key it already receives.
