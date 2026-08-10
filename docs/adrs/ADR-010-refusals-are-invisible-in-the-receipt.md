@@ -1,6 +1,6 @@
 ---
 type: adr
-status: proposed
+status: accepted
 title: "A refused tool call leaves no trace in the receipt, and the launcher already receives the evidence it does not read"
 id: ADR-010
 date: 2026-08-09
@@ -11,7 +11,7 @@ related-adrs: [harness-pack/ADR-008, harnesswright/ADR-0004, harnesswright/ADR-0
 
 ## Status
 
-**Proposed** (2026-08-09; docs-only). No code, no fixture, no schema change and no
+**Accepted** (2026-08-10; docs-only). No code, no fixture, no schema change and no
 constitution edit ships with this commit. Per the two-commit lifecycle, acceptance is
 a separate operator commit; the implementation lands after it and carries its red
 fixture in the same commit as the green.
