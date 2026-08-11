@@ -1,6 +1,6 @@
 ---
 type: adr
-status: proposed
+status: accepted
 title: "The allowlist closes the tool plane and bounds nothing inside it: Bash substitutes for every tool withheld, and the only content-inspecting layer reads one plane"
 id: ADR-011
 date: 2026-08-11
@@ -11,11 +11,18 @@ related-adrs: [harness-pack/ADR-001, harness-pack/ADR-008, harness-pack/ADR-009,
 
 ## Status
 
-**Proposed** (2026-08-11; docs-only). No code, no fixture, no schema change and no
+**Accepted** (2026-08-11; docs-only). No code, no fixture, no schema change and no
 constitution edit ships with this commit. Per the two-commit lifecycle stated in
 `docs/STACK.md` § Agent contract, acceptance is a separate operator commit; the
 implementation lands after that flip and carries its red fixtures in the same
 commit as the green.
+
+At acceptance the three fixtures were re-read from disk and carry the digests they
+carried when they were measured red; the launcher lines this document cites are
+unchanged at the line numbers cited; and the guard and settings blobs carry the
+digests recorded in the Basis, in the pack source and at the enforced path alike.
+The measurement this document rests on describes the tree at acceptance and not
+only at authoring.
 
 ## Numbering note
 
