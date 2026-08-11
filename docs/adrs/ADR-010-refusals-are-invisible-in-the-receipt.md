@@ -253,3 +253,85 @@ neither half stands alone.
 - **Whether `permission_denials` is stable across Claude Code versions.** Measured at
   the version installed on 2026-08-09; the launcher's own header already names the CLI
   contract as a drift seam.
+
+## Amendment 1 — 2026-08-11 — two premises corrected, both "Not measured" bullets moved, OR-3 closed, OR-4 opened
+
+Six facts measured between this document's acceptance and the landing of its
+implementation (`4e3e8ea`) change the record. None reopens a decision. Two correct a
+premise the body states as settled, two move a "Not measured" bullet, one closes an
+open requirement and one opens a new one. Nothing above this line is edited.
+
+**D3's notification premise was false at the basis.** The paragraph at `:148-149`
+reads the notification contract of `ADR-0004` D7 as "already extended by `ADR-0008`
+D4 to carry `contribution.verdict`". Measured at `scripts/launch_worker.sh:444`, the
+notify carried `run_id`, `spec_id` and `stop_reason` and nothing else. The extension
+that sentence extends *once more* did not exist: `ADR-0008` D4 decided a field the
+launcher never came to send. The divergence therefore belongs to
+`harnesswright/ADR-0008` D4 and is not this document's to repair. What D3 actually
+prescribes is unaffected, and the implementation did exactly that and no more — it
+added `refusals.count` to the notification and nothing besides.
+
+**OR-1's fail-closed clause was vacuous when it was written and is true now.** OR-1
+argues that a constitution edit lands as one coordinated commit because it changes a
+hash "which is pinned in the manifest and checked fail-closed at `:189`". At this
+document's basis the operator manifest carried no `constitution_hash_expected` key,
+and `launch_checks.py:62-64` treats an absent key as no expectation and exits 0
+against any bytes whatever. The pin was a no-op, so the clause named a check that
+could not fire. The key has been armed since 2026-08-10 (vault `a9f0e75`). The clause
+is true today; it was not true when this document was accepted, and at its basis OR-1
+rested on the unsatisfiable wording alone.
+
+**The first "Not measured" bullet is closed by observation.** A launcher-written
+receipt for a refused run now exists: `run-20260810T160808Z-85322`, produced by the
+enforced launcher at `2bf3c15b` with writer `5ba78655`. It carries `refusals.count`
+1, `refusals.tools` `["Write"]`, and a denial entry byte-equal to the one in the
+child's JSON; the run exited 0 with `stop_reason: gate-pass`. That is the composed
+receipt the bullet said had never been observed, and it matches what `:422-438` was
+read to imply. Landed at `047fbca`, evidence under
+`.verity/evidence/2026-08-10-adr010-first-green-real/`.
+
+**The second "Not measured" bullet narrows and does not close.** That run's denial did
+not come from the PreToolUse hook. The DENY leg of `scripts/guard_pretooluse.py:30-46`
+is sixteen patterns matched against Bash command strings, with no rule keyed on a tool
+name and none on a path, and HALT was not engaged; a `Write` call is outside its reach
+entirely. The denial came from the `--allowedTools` layer — a **third** producer,
+beside the hook and the settings deny rule that D2 names — and the entry it produced
+is identical in shape to the hook's. D2 is strengthened by this rather than qualified:
+a parent that could not distinguish two layers now cannot distinguish three. The
+settings deny rule remains unexercised, so the bullet narrows to that arm and stays
+open.
+
+**OR-3 is closed by the falsifier this document declares for itself.** OR-3 is
+falsified by "any receipt attributed to the enforced copy carrying a `contribution`
+object", and two receipts dated 2026-08-10 from the enforced copy carry one. The
+necessary reading is that OR-3 was anchored to this document's basis, when the
+enforced copy was the deploy of 16 July. Redeployment satisfied the precondition OR-3
+demanded rather than refuting the state it described: the requirement is **historical,
+not falsified**, and the distinction matters because a falsifier that fires on the
+remedy it asked for would otherwise read as a defect in the requirement.
+
+**The ordering rule on `refusals.tools` keeps its rule and loses its reason.** The
+implementation sorts the deduplicated tool names, and the justification recorded beside
+the code is that the receipt is hashed into an append-only chain, where a set rendered
+in arbitrary order would make byte-identical runs hash differently. That reason is
+cited outside the scope anything here has measured: the enforced launcher names no
+`receipt_chain`, and the worker repository contains no receipt-chain file at all. The
+rule stands — deterministic ordering of a set is correct and costs nothing, and it
+needs no chain to justify it — but the stated motivation is a claim about a mechanism
+this stack has not been shown to run.
+
+- **OR-4 — the append-only receipt chain is cited as a constraint and has not been
+  located.** `ADR-005` decides a hash-chained receipt log; the ordering rationale above
+  relies on it. Neither the enforced launcher nor the worker repository names it.
+  Either the chain exists somewhere neither was read, or a decided mechanism is
+  unimplemented and every argument resting on it is resting on nothing. Falsified by a
+  chain file, or by a writer that links a receipt to its predecessor's hash, found in
+  the executing topology.
+
+Ledger. Corrects the premise of D3's third paragraph and the fail-closed clause of
+OR-1; neither correction changes what D3 or OR-1 decides. Closes the first "Not
+measured" bullet by observation. Narrows the second to the settings-deny arm and
+records a third denial producer, strengthening D2. Closes OR-3 as historical rather
+than falsified. Adds OR-4. Adds no decision, no fixture and no schema change. This
+amendment is docs-only; the document's status remains **Accepted** and its frontmatter
+is unchanged, as in `ADR-008`'s two amendments and in `vault/ADR-067`'s four.
