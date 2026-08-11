@@ -1,29 +1,55 @@
 #!/usr/bin/env bash
-# F-b -- `budget` is declared REQUIRED with a stated shape, and the launcher
-# holds nobody to either half of that declaration.
+# F-b -- `budget` is declared REQUIRED with a stated shape, and both halves of
+# that declaration are held before spawn.
 #
 # THE SUBJECT is templates/spec.mode-b.template.md:14 composed with
-# scripts/launch_worker.sh:139-147. The template says of `budget`:
+# scripts/launch_worker.sh:150-162. Both are AMENDMENTS, and what each one
+# replaced is what this fixture is here to record.
+#
+# WHAT THE TEMPLATE SAID. It named three dimensions and called any one of them
+# sufficient:
 #
 #     budget:   # REQUIRED: a map with at least one of tokens / turns / wall_clock
 #
-# That is TWO obligations, not one -- the map must be PRESENT, and it must carry
-# a dimension the launcher can SPEND -- and :139 holds neither:
+# `tokens` was sufficient there and is spent by nobody -- the word does not occur
+# in the launcher at all, which is why control 2 counts the occurrences and the
+# rows print the count. That third of the declaration was WITHDRAWN by the
+# operator, not repaired: :14 now offers only turns / wall_clock and marks tokens
+# advisory. Nothing came to enforce it; it stopped being claimed.
+#
+# The withdrawal did not pass silently, and that is the point. Control 1 greps
+# the declaration these rows measure, so the moment :14 changed this fixture
+# exited 2 FIXTURE BROKEN, and kept exiting 2 until it was realigned BY HAND.
+# That is the whole difference between an obligation a gate closed and an
+# obligation its author retired: the first shows up here as a row going green,
+# the second as a fixture that refuses to run at all until a human restates what
+# it is measuring. A withdrawal that a test absorbed quietly would be
+# indistinguishable from enforcement, and it is not the same thing.
+#
+# WHAT THE LAUNCHER SAID. The budget arrived through one line:
 #
 #     budget = spec.get("budget") or {}
 #
-# `or {}` is the whole of it. A spec carrying no budget at all and a spec
-# declaring `budget: {tokens: 200000}` reach :140 and :142 as the same empty
-# map, and both leave with maxturns="0" and wallsec="0". The declaration is
-# defective in its own right: `tokens` is offered as a sufficient dimension and
-# is spent by nobody -- the word does not occur in the launcher at all.
+# and `or {}` was the whole of it. A spec carrying no budget at all and a spec
+# declaring `budget: {tokens: 200000}` reached the reads below as the same empty
+# map, and both left with maxturns="0" and wallsec="0" -- two different
+# violations, one indistinguishable result.
 #
-# WHAT THE SENTINEL BUYS. 0 is the documented no-flag value (:337-338: "an
+# :150-162 is the amendment, and it is TWO obligations answered on two lines.
+# The map must be PRESENT: :151-152 STOPs when it is not. It must carry a
+# dimension this launcher can SPEND: :161-162 STOPs when :153 and :155 both
+# leave the sentinel standing. A spec violating one is named for that one.
+# Neither path normalizes -- no turn or wall-clock default is reinstated, which
+# is why a budget declaring nothing spendable has to be a refusal rather than a
+# fill-in.
+#
+# WHAT THE SENTINEL BOUGHT. 0 is the documented no-flag value (:352-353: "an
 # undeclared dimension (sentinel 0) produces NO flag ... The old silent 15/20
-# defaults are gone"), so :346 emits no --max-turns and :348-352 wraps the spawn
-# in no gtimeout/timeout. :224-225 takes the same sentinel a third way -- with
-# wallsec 0 the slice lease TTL stays at the hardcoded 3600. The run that starts
-# is bounded by nothing the spec declared and nothing the launcher supplies.
+# defaults are gone"), so :361 emits no --max-turns and :363-367 wraps the spawn
+# in no gtimeout/timeout. :239-240 takes the same sentinel a third way -- with
+# wallsec 0 the slice lease TTL stays at the hardcoded 3600. A run that reached
+# spawn on either violating spec was bounded by nothing the spec declared and
+# nothing the launcher supplied. Both now stop before the decision line.
 #
 # THE DECISION IS PER-OBLIGATION, one verdict each, and GREEN requires both. A
 # launcher that STOPped on a missing budget while still accepting a tokens-only
@@ -47,7 +73,7 @@
 #   control 1  the template really does declare what these rows measure. Its
 #              absence is exit 2, never a pass.
 #   control 2  0 really is the no-flag sentinel, read literally off the two
-#              guard lines. LAUNCH_DRYRUN exits at :193-196, before CMD is
+#              guard lines. LAUNCH_DRYRUN exits at :208-211, before CMD is
 #              built, so the sentinel-to-absent-flag link cannot be observed
 #              behaviourally here and is asserted against the source instead.
 #   control 3  a DECLARED budget travels end to end. LAUNCH_DRYRUN prints
@@ -188,7 +214,7 @@ dry() {
   DRY_RC=$?
   return 0
 }
-# field <key> -- pull one key=value out of the DRYRUN decision line (:194).
+# field <key> -- pull one key=value out of the DRYRUN decision line (:209).
 field() { tr ' ' '\n' < "$DRY_OUT" | grep -m1 "^$1=" | cut -d= -f2-; }
 
 # next-json <budget-fragment> -- one slice, one model, one tool list, one
@@ -269,12 +295,12 @@ decide() {
   if [ "$held" -eq 0 ]; then
     note "the control above is the same driver and the same launcher, so the pairs"
     note "of zeros are the budget path answering, not an unresolved instrument"
-    note "0 is the documented no-flag sentinel (:337-338), so such a run spawns"
-    note "with no --max-turns (:346) and inside no gtimeout/timeout (:348-352);"
-    note ":224-225 takes it a third way and leaves the slice lease TTL at 3600"
-    note "the dimension the template calls sufficient is spent by nobody:"
-    note "'tokens' occurs ${TOKENS_IN_LAUNCHER}x in the launcher, and next's budget map is read"
-    note "at :140 and :143 only -- :139 turns both violations into the same {}"
+    note "0 is the documented no-flag sentinel (:352-353), so such a run spawns"
+    note "with no --max-turns (:361) and inside no gtimeout/timeout (:363-367);"
+    note ":239-240 takes it a third way and leaves the slice lease TTL at 3600"
+    note "and the launcher spends no third dimension of its own: 'tokens' occurs"
+    note "${TOKENS_IN_LAUNCHER}x in it, and next's budget map is read at :153 and :155 only, so"
+    note "a pair of zeros here means the two STOPs at :151-152 and :161-162 are gone"
   else
     note "each obligation is measured on its own, so closing one and leaving the"
     note "other open is recorded as $uncovered still uncovered, not as a repair"
@@ -292,14 +318,14 @@ decide() {
   return 1
 }
 
-echo "== F-b budget is REQUIRED with a stated shape and neither half is held =="
+echo "== F-b budget is REQUIRED with a stated shape and both halves are held =="
 
 # ---- control 1: the template really does declare both halves ----------------
-grep -Fq 'REQUIRED: a map with at least one of tokens / turns / wall_clock' "$TEMPLATE" \
-  || broken "templates/spec.mode-b.template.md no longer declares budget REQUIRED with at least one of tokens / turns / wall_clock; the obligations these rows measure have moved"
+grep -Fq 'REQUIRED: a map with at least one of turns / wall_clock (tokens is advisory: nothing spends it)' "$TEMPLATE" \
+  || broken "templates/spec.mode-b.template.md no longer declares budget REQUIRED with at least one of turns / wall_clock (tokens advisory); the obligations these rows measure have moved"
 
 # ---- control 2: sentinel 0 means no flag, asserted on the guard lines --------
-# DRYRUN exits at :193-196, before CMD exists, so the sentinel-to-flag link
+# DRYRUN exits at :208-211, before CMD exists, so the sentinel-to-flag link
 # cannot be observed behaviourally here and is read literally off the two guards
 # instead. The `$` in the two searched-for lines is assembled rather than
 # written inside single quotes: the pinned shellcheck runs at severity=style,
@@ -307,12 +333,12 @@ grep -Fq 'REQUIRED: a map with at least one of tokens / turns / wall_clock' "$TE
 # disable directives.
 D='$'
 grep -Fq "if [ \"${D}MAXTURNS\" != \"0\" ]; then CMD+=(--max-turns \"${D}MAXTURNS\"); fi" "$LAUNCHER" \
-  || broken "launch_worker.sh:346 no longer guards --max-turns on the 0 sentinel; this fixture is reading the wrong shape"
+  || broken "launch_worker.sh:361 no longer guards --max-turns on the 0 sentinel; this fixture is reading the wrong shape"
 grep -Fq "if [ \"${D}WALLSEC\" != \"0\" ]; then" "$LAUNCHER" \
-  || broken "launch_worker.sh:348 no longer guards the timeout wrapper on the 0 sentinel; this fixture is reading the wrong shape"
+  || broken "launch_worker.sh:363 no longer guards the timeout wrapper on the 0 sentinel; this fixture is reading the wrong shape"
 TOKENS_IN_LAUNCHER="$(grep -cE -- '\btokens\b' "$LAUNCHER")"
-note "control 1: the template declares budget REQUIRED, tokens among the dimensions it calls sufficient"
-note "control 2: the no-flag sentinel is guarded at :346 and :348; 'tokens' occurs ${TOKENS_IN_LAUNCHER}x in the launcher"
+note "control 1: the template declares budget REQUIRED with at least one of turns / wall_clock; tokens is advisory there, withdrawn as sufficient"
+note "control 2: the no-flag sentinel is guarded at :361 and :363; 'tokens' occurs ${TOKENS_IN_LAUNCHER}x in the launcher"
 
 # ---- control 3: a DECLARED budget travels end to end, for both rows ---------
 # Without this, a row of zeros below would only show that a dryrun prints zeros.
