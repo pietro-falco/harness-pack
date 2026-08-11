@@ -11,7 +11,7 @@ tools:                 # REQUIRED: non-empty YAML list; launcher STOPs if next e
   - Bash
   - Grep
   - Glob
-budget:                # REQUIRED: a map with at least one of tokens / turns / wall_clock
+budget:                # REQUIRED: a map with at least one of turns / wall_clock (tokens is advisory: nothing spends it)
   turns: 10
   wall_clock: "15m"    # must match ^\d+(m|h)$
 stop_conditions:

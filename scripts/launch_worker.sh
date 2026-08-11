@@ -136,7 +136,20 @@ if not isinstance(spec, dict):
 model = spec.get("model")
 if not isinstance(model, str) or model == "":
     print(f"STOP spec.model missing or empty for {rid}"); sys.exit()
-budget = spec.get("budget") or {}
+# spec.budget = the bounds this slice buys. templates/spec.mode-b.template.md:14 declares it
+# REQUIRED in mode B with at least one of turns / wall_clock, which is two obligations -- the map
+# must be PRESENT, and it must declare a dimension this launcher can SPEND -- each refused on its
+# own line so a spec that violates one is named for that one. The third dimension the template
+# names is advisory there and is read by nothing here: a budget declaring only it leaves both
+# bounds on the 0 sentinel, which is no bound at all, and that is the second STOP.
+# (No apostrophe anywhere in this block: it is inside `DECISION="$( ... <<PYEOF )"`, and a lone
+# single quote there ends the command substitution early -- bash reports it as an EOF at :117.)
+# Refused, never defaulted: reinstating a turn or wall-clock default would hand the run a bound the
+# operator never declared, which is not the declaration being enforced. The old silent 15/20
+# defaults are gone for exactly that reason and they stay gone (D6 STOPs, never defaults).
+budget = spec.get("budget")
+if not isinstance(budget, dict):
+    print(f"STOP spec.budget missing for {rid} (REQUIRED in mode B: a map declaring turns and/or wall_clock)"); sys.exit()
 turns = budget.get("turns")
 maxturns = str(turns) if isinstance(turns, int) and turns > 0 else "0"
 wc = budget.get("wall_clock")
@@ -145,6 +158,8 @@ if isinstance(wc, str):
     m = re.match(r"^(\d+)(m|h)$", wc)
     if m:
         wallsec = str(int(m.group(1)) * (60 if m.group(2) == "m" else 3600))
+if maxturns == "0" and wallsec == "0":
+    print(f"STOP spec.budget for {rid} declares no dimension this launcher can spend (REQUIRED in mode B: turns as a positive integer, and/or wall_clock as Nm or Nh)"); sys.exit()
 tools = spec.get("tools")
 if not isinstance(tools, list) or not tools or any((not isinstance(t, str) or t == "") for t in tools):
     print(f"STOP spec.tools missing/empty for {rid} (expected a non-empty list from next)"); sys.exit()
