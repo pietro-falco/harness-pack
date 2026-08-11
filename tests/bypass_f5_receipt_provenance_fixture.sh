@@ -156,11 +156,14 @@ else
     || broken "could not seed the throwaway repo"
   cat > "$WORK/hw.js" <<'JS'
 // Stub of `harnesswright next --json`: the planner is on slice S-042.
+// scope is REQUIRED of a mode B spec by templates/spec.mode-b.template.md:21 and
+// the launcher gates on it; the value is legal, repo-relative, and irrelevant to
+// the identity question this fixture asks, which is decided from the filename.
 if (process.argv[2] === "next") {
   process.stdout.write(JSON.stringify({
     kind: "unlocked", id: "S-042", eligible_mode_b: true,
     spec: { model: "executor", tools: ["Bash"], criteria: ["C-1"],
-            budget: { turns: 3, wall_clock: "5m" } }
+            budget: { turns: 3, wall_clock: "5m" }, scope: ["src/"] }
   }));
   process.exit(0);
 }

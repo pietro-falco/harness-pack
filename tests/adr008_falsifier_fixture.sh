@@ -355,7 +355,16 @@ process.stdout.write(JSON.stringify({
   spec: {
     model: "worker",
     tools: ["Read", "Bash"],
-    criteria: ["readme-committed", "checks-pass"]
+    criteria: ["readme-committed", "checks-pass"],
+    // budget and scope are REQUIRED of a mode B spec by
+    // templates/spec.mode-b.template.md:14 and :21. A spec omitting them is not
+    // a spec this fixture is entitled to fabricate, and the launcher gates on
+    // both, so a stub that omits them measures the gate rather than D1/D2/D3/D6.
+    // The budget is deliberately loose: the executor stub above exits at once,
+    // and neither the turn cap nor the gtimeout wrapper may ever be what ends a
+    // run whose contribution this fixture is reading.
+    budget: { turns: 20, wall_clock: "30m" },
+    scope: ["README.md"]
   }
 }));
 HW_STUB
