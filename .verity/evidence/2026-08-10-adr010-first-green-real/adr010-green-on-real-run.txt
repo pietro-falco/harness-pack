@@ -1,0 +1,127 @@
+basis: 4e3e8eae693ba65f90050008f2b0480c6501f2cc
+branch: main
+command: bash <PACK>/scripts/launch_worker.sh .harness/specs/S2.md
+         operator shell, worker repo, enforced topology reached via .harness/pack
+---
+
+WHAT THIS CLOSES
+
+ADR-010 "Not measured", first bullet (:245-248), read verbatim from the blob:
+
+  "The composed receipt of a refused run. The child's behaviour was measured;
+   the launcher's output under it was derived from :422-438 read literally,
+   not observed. No launcher-written receipt exists at this basis for a
+   refused run, because the two CLIs the launcher resolves fail-closed are
+   not installed."
+
+It is now observed. The CLIs were exported, a Mode B run was launched against
+the enforced launcher, a tool call was refused, and the receipt carries it.
+
+REDACTION AND ANCHORING
+
+Tracked in a public repository, so machine paths, operator identity, worker-repo
+names and concrete model ids are replaced below. The digests are of the
+UNREDACTED artifacts, which live in the worker repo and are tracked nowhere:
+
+  run-20260810T160808Z-85322.receipt.json
+    sha256 61733668c8e16518ae7fb38502af10664cdc60646c779ece9aba84f5623ccb20
+  run-20260810T160808Z-85322.cc.json
+    sha256 d96bf35f52c1a8f6c4b19676d7a1c165732c5b7d3ddbbc56aaa89e2400b0195e
+
+  <PACK>              the enforced pack root, root:wheel, outside the worker
+  <WORKER>            the worker repository root, <WORKER-REPO> its name, <WORKER-REPO> its name
+  HAIKU_CLASS_MODEL   the model id the manifest's T3 chain[0] resolves to
+
+The composing executor, both sides measured in the same turn and equal:
+  <PACK>/scripts/write_receipt.py
+    sha256 5ba786556013c8f6e924edac1979647b81b709b0ab5285b508406a24b07e3118
+  <PACK>/scripts/launch_worker.sh
+    sha256 2bf3c15b21fe3251826eb5474fc04609ad5f4079de689c49202033807314c2d9
+Neither digest is what the enforced copy carried before this commit's deploy
+(1252cf09...), so the artifact below was composed by the code under test and
+not by its predecessor. DETECT-OK is not that evidence; these digests are.
+
+THE RECEIPT, REDACTED
+
+  run_id            run-20260810T160808Z-85322
+  spec_id           S2          mode B
+  model_string      worker      tier_resolved T3
+  model_used        HAIKU_CLASS_MODEL
+  tool_version      2.1.226 (Claude Code)
+  subtype           success     num_turns 6
+  gate              verdict PASS, reason "all declared criteria PASS", verity_exit 1
+  contribution      baseline FAIL -> delta ["smoke2-file-exists"] -> CONTRIBUTED
+  refusals          count 1, tools ["Write"]
+  retries           0
+  stop_reason       gate-pass
+  launcher exit     0
+
+  refusals.denials[0], as written:
+    tool_name     Write
+    tool_use_id   toolu_01Sdo5xt17ayrhPbMd2KnuGe
+    tool_input    file_path <WORKER>/SMOKE-S2.md
+                  content "<WORKER-REPO> S2 smoke artifact, mechanics over content.\n"
+
+THE CHILD'S JSON, SAME RUN
+
+  permission_denials  one entry, tool_name Write,
+                      tool_use_id toolu_01Sdo5xt17ayrhPbMd2KnuGe
+  is_error false   subtype success   num_turns 6   stop_reason end_turn
+  terminal_reason completed
+
+MEASURED, one reader over both files:
+
+  refusals present in receipt                    True
+  refusals.count                                 1
+  refusals.tools                                 ["Write"]
+  receipt.refusals.denials == cc.permission_denials
+                                                 True
+  same, compared canonically (sort_keys)         True
+  no violation_code anywhere in the receipt      True
+  no "G3-BLOCKED" substring in the receipt       True
+  refusals.count > 0 AND contribution CONTRIBUTED
+                                                 True
+
+WHAT EACH DECISION GETS FROM THIS
+
+  D1  observed, not constructed. The fixtures assert the writer's reading of a
+      shape; this asserts the whole path -- child, launcher, extracted writer,
+      disk -- and the entry is byte-equal to the child's, not a reconstruction.
+  D2  strengthened. The denial did NOT come from the PreToolUse hook: the
+      guard's DENY list is sixteen Bash-command patterns and carries no
+      tool-name and no path rule, so its only reach over Write is the HALT
+      check, which was not engaged. This entry was produced by the allowlist
+      layer -- a THIRD producer, beside the hook and the settings deny rule
+      D2 names -- and its shape is the shape D2 assumed. The claim that the
+      parent cannot attribute a denial to a layer holds a fortiori and now
+      also with the shapes measured equal.
+  D3  held under load. The refusal moved neither the exit code (0) nor
+      stop_reason (gate-pass). The state :144-146 called strange -- a run
+      obstructed whose criteria passed anyway -- is this artifact.
+
+WHAT THIS DOES NOT PROVE
+
+  - The ordering rule for refusals.tools is NOT exercised: one element cannot
+    have a wrong order. It stays verified only by the fixture, over five fresh
+    interpreters.
+  - The justification written beside that rule -- that the receipt is hashed
+    into the append-only chain -- is cited outside its measurement scope.
+    Measured this turn: the enforced launcher does not name receipt_chain, and
+    the worker repo holds no receipt-chain file. The rule is kept because
+    sorting is correct and free; the justification is carried as an open item.
+  - The third-layer finding is n=1 and rests on one tool (Write). A settings
+    deny rule was not exercised at all; ADR-010's second "Not measured" bullet
+    is narrowed, not closed.
+  - Nothing here bears on OR-2: no arm of this run had the model self-decline.
+
+ONE FINDING OUTSIDE ADR-010's SCOPE, RECORDED AND NOT ACTED ON
+
+The spec declares tools [Read, Bash, Grep, Glob]. Write is absent, and the
+allowlist refused it. The artifact was created anyway, by Bash, with the exact
+declared content: the DENY list carries no output-redirection pattern, so a
+spec that withholds Write while granting Bash withholds a shortcut and not a
+capability. Two runs of this slice, 2026-08-10, both show it.
+
+ADR-010 makes that legible for the first time -- refusals.count > 0 beside
+contribution CONTRIBUTED is its signature -- and nothing rejects it. A signature
+is not a gate. That is a separate decision and is not taken here.
