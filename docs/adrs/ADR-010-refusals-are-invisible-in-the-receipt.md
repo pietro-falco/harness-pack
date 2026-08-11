@@ -335,3 +335,79 @@ records a third denial producer, strengthening D2. Closes OR-3 as historical rat
 than falsified. Adds OR-4. Adds no decision, no fixture and no schema change. This
 amendment is docs-only; the document's status remains **Accepted** and its frontmatter
 is unchanged, as in `ADR-008`'s two amendments and in `vault/ADR-067`'s four.
+
+## Amendment 2 — 2026-08-11 — OR-4 withdrawn as written and reissued; a method note on the measurement ceiling
+
+Amendment 1 opened OR-4, and its falsifier was already satisfied on the day it
+was written. That is what this amendment repairs, and the repair is not an edit:
+Amendment 1 stands as it stands, and what follows supersedes its final bullet.
+`vault/ADR-067`'s third and fourth amendments correct their predecessors the same
+way and for the same reason — an amendment that is edited leaves no record of
+having been wrong.
+
+**OR-4 was green at birth.** It states that the chain "has not been located", and
+it declares itself falsified by "a chain file, or a writer that links a receipt to
+its predecessor's hash, found in the executing topology". `scripts/receipt_chain.py`
+is precisely that writer — `seq`, `prev_sha256`, `GENESIS`, `verify`, `selftest` —
+and it was in the executing topology as the sentence was being written:
+root-owned at `/opt/harness/scripts/receipt_chain.py`, entry 50 of
+`MANIFEST.sha256`, deployed alongside the implementation commit. A requirement
+whose falsifier holds on the day it opens is not an open requirement. It is a
+defect in the reading that produced it.
+
+The two sentences preceding that bullet are untouched by this and are re-measured
+true: the enforced launcher contains no occurrence of `receipt_chain`, and the
+worker repository holds no chain file.
+
+**The launcher was never the chain's writer.** `ADR-005` D3 makes the RS-001
+rollup the single writer, and `scripts/rollup_due.sh:8` fires it at twenty-five
+loose receipts. The worker repository holds seven. The rollup has never run there,
+and the receipts this ADR governs have therefore never entered a chain — not for
+want of a mechanism, but because the path that would carry them into one has not
+been reached.
+
+**The cited property is not one the chain uses.** A chain line carries the sha256
+of the source file's raw bytes, taken once at rollup, and links each line to the
+text of the line before it (`ADR-005:15`). The chain never compares two runs to
+each other, so the scenario the implementation comment describes — two otherwise
+identical runs hashing differently — is not something it could observe. Nor could
+that scenario arise: a launcher receipt carries `run_id`, `started_at`, `ended_at`
+and `session_id`, so two runs are never byte-identical to begin with.
+
+**The rule outlives its reason.** Sorting the deduplicated tool names stays, and
+gains a ground that holds without any consumer at all: a Python set's iteration
+order over strings is seed-randomised per process, so an unsorted `tools` would
+make the writer itself non-deterministic across invocations on identical input.
+That is a defect on the writer's own terms. What is withdrawn is the claim that
+the chain is the consumer for whom it matters.
+
+- **OR-4 (reissued) — no launcher-written receipt has ever entered a chain.** The
+  chain, the rollup that writes it and the gate that verifies it are all
+  implemented, deployed and under test, and no receipt composed by
+  `scripts/write_receipt.py` has passed through any of them. A mechanism that is
+  present, exercised only by its own fixtures, and never reached by the artifacts
+  it exists to protect is worse than an absent one: its presence on disk reads as
+  implementation. Falsified by a `receipt-chain.jsonl` anywhere in the executing
+  topology carrying a `source_filename` that names a launcher-written
+  `*.receipt.json`. Measured 2026-08-11: the one live chain in the stack holds
+  eight lines and not one of them is a `.receipt.json`; its first line names
+  `run-20260714T145635Z-63621.json`, which `ADR-005:85` identifies as a verity
+  report id and distinguishes from the receipt of that same run.
+
+**Method note.** The session that wrote OR-4 was given a measurement ceiling
+forbidding it to read `/opt/harness`, and the same directive invited an assertion
+about what the executing topology contains. Its assumption ledger recorded the gap
+and named that bullet as its weakest claim; the ceiling, not the session, is where
+the defect lies. A ceiling that excludes the topology an assertion is about
+produces an assertion that could not have been measured. This is the class `L-033`
+names, and it is recorded here for the reason `ADR-008`'s second amendment records
+its own: a measurement discipline applied only to other people's claims is worth
+nothing.
+
+Ledger. Withdraws OR-4 as written, on the ground that its falsifier was satisfied
+when it was opened. Reissues it against the defect the measurement actually shows,
+with a falsifier measured red on the date of this amendment. Restates the ordering
+rule's justification on grounds independent of any consumer. Corrects nothing in
+the body or in Amendment 1, both of which stand as written. Adds no decision, no
+fixture and no schema change. This amendment is docs-only; the document's status
+remains **Accepted** and its frontmatter is unchanged.
