@@ -153,6 +153,19 @@ if not isinstance(tools, list) or not tools or any((not isinstance(t, str) or t 
 criteria = spec.get("criteria")
 if not isinstance(criteria, list) or not criteria or any((not isinstance(c, str) or c == "") for c in criteria):
     print(f"STOP spec.criteria missing/empty for {rid} (expected a non-empty list of claim IDs)"); sys.exit()
+# spec.scope = where this slice may write. templates/spec.mode-b.template.md:21-22 declares it
+# REQUIRED in mode B with a stated shape, which is three obligations -- present, non-empty, and
+# repo-relative -- each refused on its own line so a spec that violates one is named for that one.
+# Refused, never normalized: stripping a leading / or resolving a .. would hand the run a perimeter
+# the operator did not declare, which is not the declaration being enforced (D6 STOPs, never defaults).
+scope = spec.get("scope")
+if not isinstance(scope, list):
+    print(f"STOP spec.scope missing for {rid} (REQUIRED in mode B: a list of repo-relative prefixes)"); sys.exit()
+if not scope or any((not isinstance(p, str) or p == "") for p in scope):
+    print(f"STOP spec.scope empty for {rid} (REQUIRED in mode B: a non-empty list of repo-relative prefixes)"); sys.exit()
+outside = [p for p in scope if p.startswith("/") or ".." in p.split("/")]
+if outside:
+    print(f"STOP spec.scope not repo-relative for {rid}: {' '.join(outside)} (no leading / and no '..' component)"); sys.exit()
 print("OK", rid, model, maxturns, wallsec, ",".join(tools), ",".join(criteria))
 PYEOF
 )"
