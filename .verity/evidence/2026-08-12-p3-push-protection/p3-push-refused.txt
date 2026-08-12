@@ -1,0 +1,72 @@
+P3 -- the push did not happen. GitHub's push protection refused refs/heads/main, naming the
+canary at tests/bypass_fe_secret_in_context_fixture.sh:126 as a Slack API Token. No CI run of
+this tree exists, so every line of P2 remains unobserved -- neither confirmed nor falsified --
+and this file records why, before anything is done about it.
+
+basis:      harness-pack main @ 4087f05, nine commits ahead of origin/main, working tree clean
+            but for the untracked .probe-repo/. origin/main is d75b72f, which predates the
+            register wiring: the newest run on the remote is 31618456931 against that sha, and
+            it is not a run of this tree. Reading it as evidence for P2 would be reading a
+            different program.
+
+observed:   `git push` refused, literally:
+
+              remote: error: GH013: Repository rule violations found for refs/heads/main.
+              remote: - GITHUB PUSH PROTECTION
+              remote:     - Push cannot contain secrets
+              remote:       -- Slack API Token --
+              remote:        locations:
+              remote:          - commit: 9d64e33d71f024782258142b53127a695f38224d
+              remote:            path: tests/bypass_fe_secret_in_context_fixture.sh:126
+              ! [remote rejected] main -> main (push declined due to repository rule violations)
+
+            9d64e33 is the commit that introduced the fixture. It has never been on the remote,
+            which is why the detection fires now and not earlier.
+
+WHAT THIS IS, AND IT IS NOT A DEFECT IN THE FIXTURE. Control 2 of bypass_fe exists because the
+fixture refuses to assert on its own authority that a string is a secret; it hands the canary to
+gitleaks and requires a finding. GitHub's secret scanner is a SECOND external judgment, from a
+vendor nobody consulted, reached independently -- and it agrees so firmly that it will not carry
+the bytes. The control's premise is corroborated by an instrument that was never part of the
+experiment. The canary is manifestly fictitious to a reader, every variable component zeroed,
+and it is a finding to two scanners. That is the property the row needs.
+
+The `# gitleaks:allow` directive on that line binds gitleaks and nothing else. It was written as
+"a named, in-place exception, not an entry in a config file that would outlive it". GitHub's
+scanner does not read it, and there is no in-place directive that it does read.
+
+THE DECISION: allowlist the detection at the URL GitHub returned, declaring it as used in tests.
+Three alternatives were considered and rejected, and the reasons are the point:
+
+  Assemble the canary from parts at runtime so no literal sits in the blob. This would work --
+  control 2 writes $CANARY to a file and scans THAT, so gitleaks would still see the whole
+  string while the scanner saw none of it. It is rejected because it is a deliberate evasion of
+  a secret scanner, written into a repository whose entire purpose is to make claims checkable.
+  A tree that learns to obfuscate when a scanner objects has acquired the habit this stack
+  exists to prevent, one floor up. If it were ever right, it would need an ADR arguing for it,
+  and that is not an ADR anyone should want to write.
+
+  Weaken the canary until neither scanner flags it. This kills control 2 by construction: the
+  row would then prove that arbitrary text reaches the worker system prompt, which is a thing
+  nobody disputes and B116 does not assert.
+
+  Rewrite 9d64e33 out of history. The commit is the falsifier's own provenance, and P1's basis
+  pins the blob it was captured against. Removing it to satisfy a scanner would cost the
+  evidence chain more than the detection costs.
+
+WHAT THE ALLOWLIST BUYS AND WHAT IT DOES NOT. It is per-secret, auditable and revocable, and it
+is honest: the string is used in a test. What it does NOT do is live in this repository. It is a
+state of the remote that no artifact here records and no gate here can see -- exactly the shape
+of undeclared control this tree is written against. This file is the record. A gate over it is
+not written and is named as absent rather than implied.
+
+NOT DECIDED HERE. ADR-009 OR-B, the secret gate over harness-pack's own tree, remains open and
+is untouched. The gitleaks step added by c689554 brings a SCANNER for one fixture's control; it
+does not scan this repository and it is not that gate.
+
+WHAT P2 DID NOT PREDICT, AND THIS IS THE FINDING. P2 enumerates F1-F10 over the CI log, and F9
+covers a job that fails before `bash tests/run_tests.sh` is reached. It has no branch for the
+push never happening: it assumed the tree would arrive at the runner and predicted only what the
+runner would do with it. The gap is recorded and P2 is NOT edited -- it is pinned by the
+tracker's GATE-4 at the digest it had before any of this was known, which is the whole reason
+that pin exists. A prediction improved after the event is a description.
