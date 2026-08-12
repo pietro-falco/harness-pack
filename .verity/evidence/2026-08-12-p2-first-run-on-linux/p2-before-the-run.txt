@@ -1,0 +1,228 @@
+P2 -- the prediction, written BEFORE the run that could falsify it exists: twelve falsifiers
+authored and only ever executed on darwin hold their DECLARED state on a Linux runner, the
+shellcheck gate MEASURES under the linux half of the pin, and the suite prints ALL TESTS PASSED
+with exit 0. Nothing below was observed. This tree has never left this machine, so there is no CI
+run of it to read, and that is the whole point of writing it now: a prediction recorded after the
+run is a description, and a description cannot be wrong.
+
+basis:      harness-pack main @ c689554, working tree clean but for the untracked .probe-repo/.
+            `git rev-list --count origin/main..main` = 8. None of the eight is pushed.
+            .github/workflows/ci.yml   blob 3deefb28438461d90da18a22733b0b142651065a
+            tests/run_tests.sh         blob 6b82117b86de56582e09e3c350cb0f218e6856c9
+            .shellcheck-version        blob 9d000bb53f76e83106d8059cde969920fe9bdb55
+            .gitleaks-version          blob d846da8058aaca616aeee258774768d139f1a683
+            tests/run_tests.sh is byte-identical to the blob P1 was captured against; ci.yml is
+            not, and the difference is the whole of C3 -- the gitleaks step P1 asked for. Every
+            line number below is a line number in THESE blobs. Stamps are UTC.
+authoring
+host:       darwin 25.3.0, arm64, GNU bash 3.2.57. The local shellcheck is the DARWIN_X86_64
+            artifact of the same 0.9.0 release, executed under translation. The runner is
+            x86_64 linux with a native binary and bash 5.x. Same release, two builds, two
+            architectures, two shells -- and until this run, one host's word for all of it.
+predicted
+run:        .github/workflows/ci.yml on ubuntu-latest: full-depth checkout, python 3.12 from
+            actions/setup-python, shellcheck 0.9.0 and gitleaks 8.30.1 fetched by digest inside
+            the job, then `bash tests/run_tests.sh` (ci.yml:87-88).
+
+--------------------------------------------------------------------------------------------
+THE TWELVE, AS DECLARED. Read off the register at tests/run_tests.sh:853-874 -- the literals the
+file carries, never a run. That is D6's rule for the register and it is this document's rule too:
+if the states below were seeded from a local execution, the prediction would agree with whatever
+this machine does, which is the question and not the answer.
+
+  line  falsifier                                        declared  exit-2 policy
+  853   tests/bypass_f1_lease_worktree_fixture.sh          RED      BROKEN
+  854   tests/bypass_f2_guard_nonbash_fixture.sh           RED      BROKEN
+  855   tests/bypass_f3_oracle_writable_fixture.sh         RED      BROKEN
+  856   tests/bypass_f4_deny_literal_fixture.sh            RED      BROKEN
+  857   tests/bypass_f5_receipt_provenance_fixture.sh      RED      BROKEN
+  858   tests/bypass_f6_permission_layers_write_fixture.sh RED      BROKEN
+  859   tests/bypass_f7_const_pin_absent_fixture.sh        RED      BROKEN
+  870   tests/bypass_f8_tamper_gate_unwired_fixture.sh     RED      UNMEASURED-2
+  871   tests/bypass_f9_ci_verity_unwired_fixture.sh       RED      BROKEN
+  872   tests/bypass_fb_budget_tokens_unbounded_fixture.sh GREEN    BROKEN
+  873   tests/bypass_fc_scope_unread_fixture.sh            GREEN    BROKEN
+  874   tests/bypass_fe_secret_in_context_fixture.sh       RED      BROKEN
+
+Ten declared RED, two declared GREEN. Eleven rows route exit 2 to `fail`; f8 alone spends
+`unmeasured`, and only because its own header declares its exit 2 to be an attribution failure
+rather than a broken control. The loop that observes them is :919-956, and it maps exit 0 to
+GREEN, exit 1 to RED, anything else to EXIT<rc> (:945-947) -- so a fixture that dies of a
+portability defect does not report as the state it declares, in either direction.
+
+--------------------------------------------------------------------------------------------
+EXPECTED, THE SUITE, AFTER C3. ALL TESTS PASSED and exit 0. Stated as separately falsifiable
+lines rather than as a verdict, because a verdict that can only be wrong all at once teaches
+nothing when it is wrong:
+
+  E1  `grep -c '^FAIL'` over the tests step = 0.
+  E2  no `unattrib ` line anywhere in the tests step. The suite exits 2 on the first one
+      (:1010-1012), so E2 and E6 stand or fall together.
+  E3  the F-e row prints `ok [bypass tests/bypass_fe_secret_in_context_fixture.sh]: declared
+      RED, observed RED`. This is the single line C3 exists to move. P1 predicted, and then
+      observed on this host, `FAIL ... FIXTURE BROKEN (exit 2)` for that row on a runner with no
+      gitleaks; ci.yml:47-80 now brings the scanner and puts it on $GITHUB_PATH, which is what
+      lets control 2 reach its question at all (the fixture gates on `command -v gitleaks` at
+      :146 and will not assert on its own authority that a string is a secret).
+  E4  `ok [bypass register completeness]: registered set == tracked set (12 falsifiers)`.
+  E5  the other eleven rows each print `ok ... declared X, observed X` with X as the table above.
+  E6  final line `ALL TESTS PASSED`, exit 0. Not `TESTS INCONCLUSIVE` (exit 2), not
+      `TESTS FAILED` (exit 1).
+
+EXPECTED, THE SHELLCHECK STEP, UNDER THE 0.9.0 LINUX PIN (ci.yml:15-46):
+
+  E7  the fetch resolves shellcheck-v0.9.0.linux.x86_64.tar.xz and `sha256sum -c -` prints OK
+      against 700324c6dd0ebea0117591c6cc9d7350d9c7c5c287acbad7630fa17b1d4d9e2f (the
+      SHELLCHECK_SHA256_LINUX_X86_64 line of the pin).
+  E8  `"$SHELLCHECK" --version` reports `version: 0.9.0`.
+  E9  `"$SHELLCHECK" --severity=style scripts/*.sh tests/*.sh` exits 0 and prints no findings.
+  E10 the tests step's own shellcheck block MEASURES rather than standing aside: $SHELLCHECK
+      arrives through $GITHUB_ENV (ci.yml:45), :984 finds it installed and :989 finds its
+      version equal to the pin, so :994 runs the lint and no `unattrib [shellcheck]` line is
+      printed. This is the difference between exit 0 and exit 2 for the entire suite, and it is
+      why the gitleaks step hands its binary through $GITHUB_PATH instead: there is no
+      $GITLEAKS seam to point at a path.
+
+  What E9 actually claims, narrowly. Not that shellcheck is deterministic -- that the SAME
+  release, built for two platforms and run on two architectures, reaches the same verdict on the
+  same bytes. The pin exists because 0.9.0 and 0.11.0 reach OPPOSITE verdicts on SC2015 for
+  identical source, which is a statement about versions and says nothing about builds. Nothing
+  in this tree has ever tested the cross-build half of it. E9 is where it gets tested for the
+  first time, and a finding there is a finding about the pin's premise, not about the sources.
+
+--------------------------------------------------------------------------------------------
+NODE: A DELIBERATE UNKNOWN, AND IT IS NOT PREDICTED HERE.
+
+ci.yml:81-86 ends the gitleaks step with `node --version || echo "note: this runner image
+carries no node on PATH"`. That line is a PROBE and it cannot fail the job. This document does
+not say whether ubuntu-latest ships node: I do not know, this machine cannot answer it, and the
+probe is the instrument that will. Recording it as a prediction would be inventing the reading.
+
+What is predicted is only that the log will be legible either way, because bypass_fe checks node
+at :142 -- BEFORE shasum at :145 and gitleaks at :146 -- and `broken` exits 2:
+
+  node present  the version prints, the F-e row is free to reach :146, and E3 stands or falls
+                on the scanner alone, which is what C3 was written to test.
+  node absent   the note line prints, F-e exits 2 at :142 naming node, the row reports EXIT2 and
+                the BROKEN policy routes it to `fail`. E1, E3 and E6 then fail together for a
+                reason that has nothing to do with C3, and the row's own line says which tool.
+
+The step deliberately does not add setup-node. Adding the dependency would erase the measurement
+instead of taking it, and the decision of whether to pin node belongs to the log rather than to a
+guess made before it.
+
+--------------------------------------------------------------------------------------------
+WHAT WOULD FALSIFY THIS DOCUMENT. Line by line, and each of these is an observation available in
+the CI log of the first run:
+
+  F1  any `^FAIL` line in the tests step falsifies E1, and names which row.
+  F2  any `unattrib ` line falsifies E2 -- including `unattrib [shellcheck]`, which would
+      additionally falsify E10, and `unattrib [parallel claim, lease mode]`, which would not
+      touch E10 at all. The prefix says which.
+  F3  `FAIL [bypass tests/bypass_fe_secret_in_context_fixture.sh]: declared RED, observed
+      EXIT2` falsifies E3 and says C3 did not do its job -- the scanner did not arrive, or
+      arrived somewhere `command -v gitleaks` does not look.
+  F4  `ok [bypass tests/bypass_fe_...]: declared RED, observed GREEN` also falsifies E3, and is
+      a different finding: the scanner arrived and returned no finding on the canary.
+  F5  `FAIL [bypass register completeness]: tracked and NOT registered -- <paths>` or
+      `... registered and NOT tracked -- <paths>` falsifies E4. On a case-sensitive filesystem
+      one drifted character produces BOTH lines for the same file, which is the signature to
+      look for.
+  F6  any row printing `declared X, observed Y` with Y != X falsifies E5 for that row. Ten of
+      those rows would be reporting that a falsifier stopped falsifying on Linux; two (fb, fc)
+      would be reporting the reverse.
+  F7  a non-zero exit from the shellcheck STEP before the tests step runs falsifies E7, E8 or
+      E9 -- and the step's three commands separate them: a `sha256sum: WARNING` line is E7, a
+      version line that is not 0.9.0 is E8, an `SC####` finding is E9.
+  F8  `TESTS INCONCLUSIVE` falsifies E6 with exit 2; `TESTS FAILED` falsifies E6 with exit 1.
+  F9  the job failing before `bash tests/run_tests.sh` is reached falsifies nothing in E1-E6 and
+      everything in E7-E10: the suite did not run, and no row's declared state was tested.
+  F10 the absence of any `node` line in the gitleaks step falsifies neither branch of the node
+      section but does falsify its premise -- that the probe is reached at all -- and would mean
+      the step failed above :86.
+
+Not falsified by anything in the CI log: the twelve DECLARED states themselves. They are read off
+the register's literals, and a run disagreeing with one of them is D3's divergence, to be
+investigated and then amended in a commit that says what changed. Editing the register to match
+the first Linux run would be the failure mode the register exists to make expensive.
+
+--------------------------------------------------------------------------------------------
+THE QUESTION ONLY CI CAN ANSWER, AND THIS MACHINE CANNOT: DO TWELVE FIXTURES WRITTEN ON DARWIN
+HOLD THEIR DECLARED STATE ON LINUX?
+
+Every state in the table above was observed on one host, of one architecture, with one shell, one
+libc, one filesystem, and one set of userland tools -- and the two userlands differ where these
+fixtures live. This is not a general anxiety about portability; below are the lines that carry
+the exposure, and the ones that do not.
+
+  AT RISK -- shasum is not coreutils. tests/bypass_fe:145 gates on `command -v shasum` and calls
+  it at :176 and :413-414; tests/bypass_f8 calls it at :161 and :181; scripts/detect_tamper.sh
+  calls it at :19 as the whole of its verdict. shasum is a perl script, not a GNU coreutils
+  binary, and nothing in this tree asserts that the runner carries perl -- unlike shellcheck and
+  gitleaks, which are fetched by digest, and unlike node, which at least has a probe. If the
+  image ever drops perl, f8 and fe both exit 2 at once: fe routes to `fail` and f8 to
+  `unmeasured`, so the same missing tool produces one FAIL and one unattrib, and the run exits 1
+  with a line that says shasum only for fe. E1/E2/E3 all fail together.
+
+  AT RISK -- the wall clock on a shared runner, and it is exactly two files, not the four I would
+  have guessed. tests/parallel_claim_fixture.sh:63-64 sets REPORT_BUDGET=20 and HOLDER_BUDGET=10,
+  polled in 0.05s steps at :149-153 and :246-248: it spawns concurrent claimers and gives each 20
+  seconds to record an exit code. On a loaded two-core runner that budget is the tightest thing
+  in the suite. Its failure is honest -- UNATTRIB, exit 2, counted as `unmeasured` at
+  run_tests.sh:657-658 -- so it costs TESTS INCONCLUSIVE and exit 2, never a false accusation.
+  tests/render_session_fixture.sh:339-343 is the dangerous one: 60 iterations of `sleep 0.1` is a
+  six-second ceiling on `--follow` rendering appended events, and its call site (run_tests.sh:803)
+  is a bare `|| fail=1`. A slow runner therefore produces `FAIL [--follow must render events
+  appended after start]` -- an ACCUSATION against the renderer, produced by a budget, with
+  nothing in the line to say the clock is what moved. Of everything in this document that is the
+  observation most likely to be misread.
+
+  NOT AT RISK, AND MEASURED HERE -- adr010 is not a wall-clock fixture. tests/adr010_refusal_
+  fixture.sh contains no sleep, no budget and no clock read; its exit 2 is a setup failure. Nor
+  are the two lease fixtures: run_tests.sh:679-680 records that lease_window reconstructs its
+  window with a held descriptor, and :700-703 that lease_expiry hands the predecessor's record
+  through a FIFO -- both say in their own text that their verdict cannot move with load, and the
+  sources agree. adr010 has a different Linux exposure and it is a small one: :157 runs
+  `sort -u` with no LC_ALL, and under a UTF-8 locale `sort -u` can treat lines differing only in
+  ignorable characters as duplicates. The five lines it deduplicates are identical ASCII JSON, so
+  the collapse it could cause would be a MASKED non-determinism rather than a false red: DISTINCT
+  would read 1 without having earned it. Lowest weight of anything here, and named because a
+  locale that hides a defect is worth more attention than one that invents it.
+
+  NOT AT RISK, AND ANTICIPATED IN THE SOURCE -- mktemp. Every scratch dir is templated:
+  run_tests.sh:11 and :59 onward, and each fixture's own WORK= line, all
+  `mktemp -d "${TMPDIR:-/tmp}/hp-*.XXXXXX"`. BSD mktemp -d with no template and GNU mktemp -d
+  with no template disagree, which is why no call site has one. TMPDIR being unset on the runner
+  is handled by the default in the same expansion.
+
+  NOT AT RISK -- sed and stat. The only sed in tests/ and scripts/ is `sed -n 's/^KEY=//p'`
+  against the two pin files (ci.yml:22-24, run_tests.sh:981-982): POSIX BRE, identical under BSD
+  and GNU. There is no `sed -i`, no `-E`, no `-r` anywhere in either tree, and `stat` is not
+  called at all -- so the two most reliable BSD/GNU tripwires are simply not present.
+
+  AT RISK, JOINTLY -- comm, git ls-files, and a case-sensitive filesystem. run_tests.sh:898-899
+  compares the register against `git ls-files -- 'tests/bypass_*'` with `LC_ALL=C comm -13/-23`
+  over two `LC_ALL=C sort`ed sides, which is the correct shape: the collation is pinned and both
+  directions are accused separately. Measured on this host at this basis, with the same
+  invocation: the registered set and the tracked set are byte-for-byte equal, twelve and twelve.
+  What that measurement CANNOT settle is the filesystem underneath it. APFS here is
+  case-insensitive; ext4 there is not, and a fresh Linux clone has core.ignorecase false. A path
+  literal at :853-874 differing from the tracked name in case alone is invisible on this host and
+  is two accusations on that one. Nothing says it does -- the comm above found nothing -- but
+  this host structurally cannot look, and F5 is the shape the answer takes.
+
+  AT RISK, WEAKLY -- the shell itself. Every fixture runs under GNU bash 3.2.57 here and bash 5.x
+  there, and the direction is the safe one: a construct that runs under 3.2 runs under 5.x, so
+  the exposure is behavioural rather than syntactic. What remains is not the syntax but the
+  machine: two cores instead of many, x86_64 instead of arm64, a cold page cache, and every
+  process in the suite sharing them. That is the same exposure as the wall-clock section above,
+  arriving by a different road, and it is the reason parallel_claim was given three outcomes
+  instead of two.
+
+WHAT THIS DOCUMENT IS FOR. Not to be right. If E1-E10 all hold, this file is worth very little --
+it says a suite that passed on one host passed on another. Its value is entirely in the branches
+where it does not hold: because the states were read off the register rather than off a run,
+because the falsifiers are enumerated before the log exists, and because the node line is
+recorded as an unknown rather than as a guess, a red in CI can be attributed to a named line here
+rather than absorbed as "the first Linux run needed some fixing". That attribution is the only
+thing this file buys, and it is only purchasable in advance.
