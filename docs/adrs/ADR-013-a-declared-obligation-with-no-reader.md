@@ -1,6 +1,6 @@
 ---
 type: adr
-status: proposed
+status: accepted
 title: "Two REQUIRED spec fields, one now enforced and one still spent by nobody: a template obligation the pack cannot hold anyone to is a claim about the run that the run does not have to honour"
 id: ADR-013
 date: 2026-08-11
@@ -11,12 +11,71 @@ related-adrs: [harness-pack/ADR-004, harness-pack/ADR-005, harness-pack/ADR-006,
 
 ## Status
 
-**Proposed** (2026-08-11; docs-only). No code, no fixture, no schema change and no
+**Accepted** (2026-08-11; docs-only). No code, no fixture, no schema change and no
 constitution edit ships with this commit. Per the two-commit lifecycle in
 `docs/STACK.md` § Agent contract, acceptance is a separate operator commit and
 implementation follows the flip.
 
-One half of this document's subject is already in `HEAD`. See Provenance.
+Both halves of this document's subject are in `HEAD`, and both landed before the
+document existed. See Provenance and the acceptance note below.
+
+### At acceptance — 2026-08-11T23:50Z
+
+The tree moved between authoring and acceptance, and the movement is declared here
+rather than discovered later.
+
+- The `harness-pack` HEAD in the Basis table reads `ed9d5ad`; at acceptance it is
+  `1bd620e`. Five commits separate them.
+- The template digest in the Basis table is the one this document was authored
+  against. `109fefa` amended two of its lines, and the digest at acceptance is
+  `4679d5fccd78cc2e70010c0f42774850ef7e427dd4f204475aaa5ec39e5d7e7e`.
+- D3 is written prospectively — the launcher *gains* a refusal. It had already
+  gained it, in `109fefa`, before this document was committed. Read D3 as the
+  record of that commit, on the same footing as D2 and covered by the same
+  Provenance note. The decision is unchanged; only its tense was wrong.
+- `bypass_fb` was rewritten twice in this window, in `e0b0297` and `1bd620e`, and
+  the RED this document cites at 20:20Z was taken against neither of the resulting
+  blobs. Re-measured at 23:50Z against `1bd620e` the fixture is GREEN, with its
+  control intact: a declared, spendable budget still reaches the decision line.
+  The red that anchors D3 is therefore historical rather than current, which is what
+  a closed falsifier is; what is *not* established is that the historical red and
+  the current green were taken against one fixture.
+- `bypass_fc` re-measured at 23:50Z: GREEN. `bypass_f2`, `bypass_f4` and
+  `bypass_f6`, the falsifiers of `ADR-011`, re-measured at the same basis: RED,
+  which is their correct state until that document is implemented.
+
+The operator review this flip records was taken over the code as it stands at
+`1bd620e`, not over the code as this document described it when written.
+
+### At the flip — 2026-08-12
+
+The note above was written on 2026-08-11 and the flip did not happen that day.
+The tree moved again in the interval, so the same declaration is made a second
+time rather than left standing as though it were current.
+
+- `1bd620e` is four commits behind: `dc23a79`, `fcba5e7`, `d75b72f`, `9d64e33`.
+  Six files differ across that range — `.github/workflows/ci.yml`,
+  `tests/run_tests.sh`, and the fixtures `bypass_f1`, `bypass_f4`, `bypass_f7`,
+  `bypass_fe`.
+- `dc23a79` rewrote the control guards of `bypass_f1`, `bypass_f4` and
+  `bypass_f7` from `A && B || broken` into the De Morgan negation of the same
+  condition, asserting on its own evidence that normalized stdout of all eleven
+  bypass fixtures is byte-identical across the change. The 23:50Z reading of
+  `bypass_f4` in the note above was therefore taken against a blob that is no
+  longer at `HEAD`. `bypass_f2` and `bypass_f6` are unchanged and their reading
+  carries; `bypass_f4`'s rests on `dc23a79`'s equivalence claim and was not
+  re-observed. Recorded, not repaired.
+- The two falsifiers this document's decisions rest on were re-measured directly
+  at `9d64e33`: `bypass_fb` exit 0 GREEN, `bypass_fc` exit 0 GREEN. The template
+  digest the note above cites is unchanged at that basis,
+  `4679d5fccd78cc2e70010c0f42774850ef7e427dd4f204475aaa5ec39e5d7e7e`.
+- The operator review this flip records was taken over the code at `9d64e33`.
+  That supersedes the sentence closing the note above.
+- This commit is path-scoped to this file. When it was prepared the index
+  carried staged work from a concurrent session on the same worktree, belonging
+  to a different decision. The flip is therefore not guaranteed to be a child of
+  `9d64e33`, and `9d64e33` is named here as the basis the measurements were
+  taken at, not as this commit's parent.
 
 ## Numbering note
 
@@ -240,7 +299,8 @@ Under `ADR-008` D6 these are tier B.
 ## Provenance
 
 The `scope` enforcement in D2 landed in `c846887`, with its test-side prerequisite in
-`efa22ef`, before this document existed in any state. `docs/STACK.md` § Agent
+`efa22ef`, and the `budget` enforcement in D3 landed in `109fefa` together with the
+template amendment it rests on, all before this document existed in any state. `docs/STACK.md` § Agent
 contract requires implementation to follow an ADR whose status reads Accepted. It
 did not.
 
