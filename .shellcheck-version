@@ -11,7 +11,17 @@
 # newer shellcheck changes what the gate accepts and is a separate decision,
 # not a side effect of a repair.
 #
-# Bump the version and the digest together. Never one alone.
+# Two platforms, one version. The linux artifact is what CI runs; the darwin
+# artifact of the same release is what the author can execute. Without the
+# second, the gate on a darwin host is not unfavourable but UNREACHABLE: the
+# suite can never print ALL TESTS PASSED there, and a verdict nobody can reach
+# is not a gate anyone can be held to. Equivalence is not taken from the
+# version string. The darwin build flags the SC2015 that dc23a79 closed, read
+# off the pre-dc23a79 blob of bypass_f1, where 0.11.0 is silent -- the exact
+# behavioural signature the note above describes.
+#
+# Bump the version and EVERY digest together. Never one alone.
 SHELLCHECK_VERSION=0.9.0
 SHELLCHECK_SEVERITY=style
 SHELLCHECK_SHA256_LINUX_X86_64=700324c6dd0ebea0117591c6cc9d7350d9c7c5c287acbad7630fa17b1d4d9e2f
+SHELLCHECK_SHA256_DARWIN_X86_64=7d3730694707605d6e60cec4efcb79a0632d61babc035aa16cda1b897536acf5
