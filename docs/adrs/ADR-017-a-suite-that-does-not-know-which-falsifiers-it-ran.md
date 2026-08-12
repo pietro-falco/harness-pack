@@ -1,6 +1,6 @@
 ---
 type: adr
-status: proposed
+status: accepted
 title: "Twelve tracked bypass falsifiers, zero invoked by the suite: a register of declared states, and what ALL TESTS PASSED is made to assert"
 id: ADR-017
 date: 2026-08-12
@@ -11,7 +11,7 @@ related-adrs: [harness-pack/ADR-008, harness-pack/ADR-011, harness-pack/ADR-013]
 
 ## Status
 
-Proposed
+Accepted
 
 ## Numbering note
 

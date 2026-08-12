@@ -1,0 +1,287 @@
+W-2b -- declared RED, observed GREEN fails (ADR-017 D3).
+
+basis:      as W-0.
+command:    SHELLCHECK=<pinned 0.9.0 binary> bash tests/run_tests.sh
+induced:    the bypass_fb register row flipped GREEN -> RED. This is the direction that caught bypass_fc
+            at t0 -- see fc-divergence-at-t0.txt -- reproduced here on a different row, deliberately, so
+            that this row and the fc finding are independent observations.
+expected:   FAIL naming declared RED / observed GREEN for bypass_fb. TESTS FAILED, exit 1.
+restored:   tests/run_tests.sh restored from the pristine copy; `cmp` reports the files identical.
+
+observed exit: 1
+
+--- literal stdout+stderr of `bash tests/run_tests.sh` ---
+== guard fixtures ==
+ok [allow]: ls -la
+ok [allow]: git add -- path/to/file.md
+ok [allow]: npm install
+ok [allow]: echo firmware-update
+ok [allow]: git commit -m 'chore: rollup'
+ok [block]: rm -rf /tmp/x
+ok [block]: sudo rm file
+ok [block]: xargs rm < list.txt
+ok [block]: find . -name '*.tmp' -delete
+ok [block]: git push --force origin main
+ok [block]: git push --force-with-lease origin main
+ok [block]: git push origin +main
+ok [block]: git commit --no-verify -m x
+ok [block]: git add -A
+ok [block]: git add --all
+ok [block]: git reset --hard HEAD~1
+ok [block]: git clean -fd
+ok [block]: git filter-branch --all
+ok [block]: bash -c "rm x"
+ok [block]: grep -r 'rm -rf' docs/
+== single-hop tier resolution unit (D8b, ADR-002) ==
+ok [single-hop T0->T3 refused]: rc=1
+ok [single-hop T0->T1 resolves]: OK T1 OPUS_CLASS_MODEL 1
+== constitution hash pinning unit (ADR-002) ==
+ok [constitution hash mismatch refused]: rc=1
+ok [constitution hash match passes]: rc=0
+== HALT kill-switch in target repo refuses launch ==
+ok [HALT in target repo refused launch, RECEIPTS_DIR overridden]: rc=1
+== HALT kill-switch neutralises a run in flight (guard, all tools) ==
+ok [HALT blocks Edit]: rc=2
+ok [HALT blocks benign Bash]: rc=2
+ok [HALT blocks from a deep subdir (no bypass by cd)]: rc=2
+ok [HALT found via CLAUDE_PROJECT_DIR when payload cwd is clean]: rc=2
+ok [HALT lifted: benign Bash allowed]: rc=0
+== D1: canonical receipts dir resolution (ADR-005) ==
+ok [rollup_due.sh resolves canonical ./.harness/receipts]
+ok [harness_stats.py resolves canonical ./.harness/receipts]
+ok [launch_worker.sh default is canonical ./.harness/receipts (source-level)]
+== D4: reader tolerates both receipt schema forms (ADR-005) ==
+ok [reader parsed both schema forms]
+ok [D4 fallback: new->tier_resolved T2, old->tier_requested T1]
+== D6: union index+loose (dedup + tail ordering, ADR-005 D2/D6) ==
+PASS
+ok [D6: union dedups by source_filename, seq order, tail dash, drift note on sha mismatch]
+== D6: chain status (advisory working-tree + HEAD-anchored, ADR-005 D6) ==
+ok [chain_status: working-tree VALID, no-HEAD-anchor renders neutral outside a repo]
+ok [chain_status: missing chain file degrades to unavailable, not an error]
+== D6: co-index gate signal (receipts_index.py gate, read-only) ==
+ok [co_index_status: VALID on a freshly co-indexed pair]
+ok [co_index_status: DRIFT signal on sha mismatch, non-fatal]
+ok [renderer exit 0 despite co-index drift (collector unwired, degradation-only)]
+ok [co_index_status: missing index+chain degrades to unavailable]
+== D6: repo state (HALT banner + git log, ADR-005 D6) ==
+ok [repo state: HALT engaged with mtime, git log returns commits]
+ok [repo state: HALT lifted renders clear]
+ok [repo state: outside a git repo, HALT and git log both degrade to unavailable]
+== D6: external tools (next --json defensive, detect_tamper states, ADR-005 D6) ==
+ok [next_slice: unresolvable harnesswright CLI degrades to unavailable]
+ok [tamper: absent enforced root renders not-deployed (neutral), not diverges]
+ok [tamper: missing manifest under an existing enforced root also renders not-deployed]
+== D7: mission-control render (ADR-005 D6/D7) ==
+ok [D7: full-board render exits 0]
+ok [D7: tier column stays a bare td under the full render]
+ok [D7: five-cell status rail present]
+ok [D7: source-only row rendered as non-run source, unflagged]
+ok [D7: null fields render as a dash, never None]
+ok [D7: no absolute fixture path leaks into the dashboard]
+ok [D7: stats.md keeps its header line and gains detail sections]
+ok [D7: HALT engaged renders the banner]
+ok [D7: HALT lifted removes the banner]
+== receipt_chain selftest ==
+appended seq=1 a.json
+appended seq=2 b.json
+VALID: chain intact
+INVALID: chain broken at line 2
+INVALID: chain broken at line 1
+SELFTEST OK: mutation and removal detected
+== receipts-index co-indexing selftest ==
+appended seq=1 run-2026A.receipt.json
+appended seq=2 run-2026B.receipt.json
+appended seq=3 run-2026C.receipt.json
+indexed seq=1 run-2026A.receipt.json
+indexed seq=2 run-2026B.receipt.json
+indexed seq=3 run-2026C.receipt.json
+VALID: index co-indexed to chain (3 lines)
+INVALID: source_sha256 mismatch at line 1 (seq=1)
+INVALID: length delta index=2 chain=3
+INVALID: seq mismatch at line 1: index=2 chain=1
+backfilled seq=1 run-2026A.receipt.json
+backfilled seq=2 run-2026B.receipt.json
+backfilled seq=3 run-2026C.receipt.json
+VALID: index co-indexed to chain (3 lines)
+STOP: sha mismatch (tamper?) seq=1 run-2026A.receipt.json
+SELFTEST OK: co-indexing holds; gate fails on sha/drop/reorder; corrupt receipt stays co-indexed; backfill reconstructs and fails closed on tamper
+== spec lint ==
+lint: OK
+== parallel claim isolation (vault ADR-054 D3) ==
+== parallel claim fixture (mode=lease, claimers=8) ==
+ok [I1 same slice: exactly one of 8 claimers acquired]
+ok [I2 same workspace: exactly one of 8 claimers acquired]
+ok [I3 SIGKILL reclaim: successor acquired a lease held by a killed process]
+PARALLEL CLAIM FIXTURE: GREEN (mode=lease)
+ok [legacy claimer still red: presence-check-only admits every claimer]
+== lease acquire window: the take is atomic (vault ADR-054 D3) ==
+== lease acquire window: one row (vault ADR-054 D3) ==
+GREEN [lease acquire window] a second claimer meeting the window did not acquire (exit 3, HELD S-WINDOW-001 by a record that does not parse; it names no holder to outlive, so it is not ours to break -- release the key to clear it)
+-- lease acquire window: take-is-atomic=GREEN
+LEASE WINDOW FIXTURE: GREEN
+== lease expiry ordering: a lease is dated no earlier than the attempt that took it (vault ADR-054 D3) ==
+== lease expiry ordering: one row (vault ADR-054 D3) ==
+GREEN [lease expiry ordering] the lease published after the break is dated at or after the expiry that justified it (acquired_at=1786557012.2873092 >= 1786557012.286538)
+-- lease expiry ordering: lease-dated-after-its-contention=GREEN
+LEASE EXPIRY FIXTURE: GREEN
+== ADR-008 falsifier register: six rows in their declared state (harnesswright ADR-008:139) ==
+== ADR-008 falsifier register: D6, D1, D3, D2, D2, D4 ==
+RED [D6 falsifier] ADR-008:149 register / ADR-008:127 -- a receipt produced by the
+     current launcher must validate against templates/receipt.schema.json.
+     receipt: run-20260812T175013Z-65925.receipt.json (written by scripts/launch_worker.sh, launcher exit 0)
+     REJECT missing=tier_requested enum=-
+     green when the schema and the launcher agree on tier_requested (ADR-008:123)
+RED  [D1 half 1/2, before the field] ADR-008:143 register / harnesswright/ADR-010 D3(c) --
+     against scripts/launch_worker.sh as it stood at c53a02a, materialized under $TMPDIR:
+     contribution.verdict a=<absent> b=<absent>; the two artifacts are indistinguishable
+     twin A worked (exit 0, run-20260812T175015Z-66017.receipt.json), twin B was inert (exit 1, run-20260812T175017Z-66073.receipt.json)
+     criteria movable at t0: readme-committed,checks-pass. The premise holds and the artifacts still do
+     not differ, because that launcher writes no contribution field at all.
+GREEN [D1 half 2/2, after the field] against scripts/launch_worker.sh in tree, the same
+     twins over the same seed differ: a=CONTRIBUTED b=NO_OP
+     arm A delta: readme-committed,checks-pass (exit 0, run-20260812T175018Z-66134.receipt.json)
+     arm B (inert): empty delta (exit 1, run-20260812T175020Z-66211.receipt.json)
+GREEN [D1 falsifier] the row was seen red and then cleared in THIS run, on the premise
+     harnesswright/ADR-010 D1 amends 0008:47 and 0008:143 to. Both halves are asserted
+     every run: a commit carrying only the green half leaves the gate in the state
+     0008:139 refuses to count.
+RED [D3 falsifier] ADR-008:146 register / ADR-008:93 -- three malformed contribution
+     receipts must be rejected by the receipt contract. Accepted: malformed-contributed-empty-delta malformed-no-op-with-delta malformed-not-evaluated-beside-gate-verdict
+     templates/receipt.schema.json declares 1 rules about contribution,
+     so every value of contribution.verdict is legal and none of the three can be refused.
+     green when the contract expresses D3's total function (ADR-008:89, ADR-008:123)
+GREEN [D2 falsifier] executor never invoked under an unknown baseline (launcher exit 1)
+GREEN [D2 control] all-FAIL baseline ran to completion: executor invoked, receipt run-20260812T175024Z-66353.receipt.json written (launcher exit 1)
+GREEN [D4 pin] NO_OP run exits 0 with stop_reason=gate-pass (run-20260812T175013Z-65925.receipt.json)
+-- ADR-008 register: falsifiers D6=RED D1=GREEN D3=RED D2/unknown-baseline=GREEN | control D2/all-FAIL-baseline=GREEN | pin D4/no-op-exit-0=GREEN
+-- declared:            D6=RED D1=GREEN D3=RED D2/unknown-baseline=GREEN | D2/all-FAIL-baseline=GREEN | D4/no-op-exit-0=GREEN
+ADR-008 FALSIFIER FIXTURE: all six rows in the state declared for them
+== ADR-008 discrimination control: the D1 and D2 rows can move ==
+== ADR-008 discrimination control: can the D1 and D2 assertions move? ==
+GREEN [D1 discrimination] the row moves on the field alone: GREEN a=CONTRIBUTED b=NO_OP
+     and holds red when both artifacts carry it identically: contribution.verdict a=NO_OP b=NO_OP; the two artifacts are indistinguishable
+     fabricated from live receipts run-20260812T175026Z-66436.receipt.json / run-20260812T175028Z-66489.receipt.json under $TMPDIR
+GREEN [D2 discrimination] the row moves on the spawn alone: marker absent under an
+     unknown baseline, present under a known one, same predicate both times
+     fabricated by $TMPDIR/hp-adr008.VnB35b/standin_baseline_first.sh; scripts/launch_worker.sh untouched
+ADR-008 DISCRIMINATION CONTROL: D1 and D2 both reach GREEN on a fabricated artifact and both hold RED without one
+== ADR-010 D3(a): t0 and t1 share one filter (harnesswright ADR-008:51, :59) ==
+== ADR-010 D3(a) / 0008:59: the shared filter path, asserted behaviourally ==
+RED  [shared filter, t1 drifted: absent-is-pass] the copy's contribution is incoherent:
+     the two tables are not the same reduction: t0 [('readme-committed', 'ABSENT'), ('checks-pass', 'FAIL')] vs t1 [('readme-committed', 'PASS'), ('checks-pass', 'FAIL')]; delta ['readme-committed'] is non-empty although nothing moved between t0 and t1; contribution.verdict='CONTRIBUTED', and an empty delta is NO_OP (0008:89)
+     receipt run-20260812T175030Z-66599.receipt.json, written by $TMPDIR/hp-adr008.mrIeIC/div-absent-is-pass/scripts/launch_worker.sh
+     that copy differs from scripts/launch_worker.sh in 34 lines:
+     the injected reduction and the one call site that reaches it. t0 still calls the
+     filter in tree, so the divergence is between the phases and nowhere else.
+RED  [shared filter, t1 drifted: no-reduction] the copy's contribution is incoherent:
+     the two tables are not the same reduction: t0 [('readme-committed', 'ABSENT'), ('checks-pass', 'FAIL')] vs t1 [('checks-pass', 'FAIL'), ('unrelated-claim', 'PASS')]
+     receipt run-20260812T175032Z-66660.receipt.json, written by $TMPDIR/hp-adr008.mrIeIC/div-no-reduction/scripts/launch_worker.sh
+     that copy differs from scripts/launch_worker.sh in 27 lines:
+     the injected reduction and the one call site that reaches it. t0 still calls the
+     filter in tree, so the divergence is between the phases and nowhere else.
+GREEN [shared filter, launcher in tree] t0 and t1 are commensurable on the run the
+     two drifted copies above are seen incoherent on: t0 and t1 identical item for item [('readme-committed', 'ABSENT'), ('checks-pass', 'FAIL')], delta empty, verdict NO_OP
+     receipt run-20260812T175034Z-66717.receipt.json, written by scripts/launch_worker.sh
+ADR-010 D3(a): SHARED FILTER ASSERTED -- t0 and t1 diverge under a drifted t1 and do not diverge in tree
+== harness-pack ADR-010: a refusal is visible in the receipt (two rows) ==
+== ADR-010 refusals in the receipt: two rows (ADR-010 Verification) ==
+GREEN [fx-refusal-invisible] the receipt of a refused run carries refusals.count=1,
+     tools=["Bash"] and the child's entry verbatim; five fresh interpreters
+     agreed on the member order, and it is the sorted one
+     D3 holds across the pair: stop_reason=gate-fail: criteria failed: C-1 on both arms,
+     contribution.verdict=NO_OP on both -- the refusal moved neither
+     D2 holds: no violation_code=True, no G3-BLOCKED=True
+GREEN [fx-refusal-control] a run with permission_denials: [] carries refusals.count=0
+     -- present, not absent, and not non-zero. The field discriminates: the same
+     writer wrote count=1 for the refused arm and count=0 for this one,
+     off inputs that differ in permission_denials and nothing else
+-- fx-refusal-invisible=GREEN fx-refusal-control=GREEN
+ADR-010 REFUSAL FIXTURE: GREEN
+== session transcript renderer ==
+== render_session: English is what you get with no flag ==
+ok [en: malformed line marked UNREADABLE]
+ok [en: events after the malformed line still render]
+ok [en: refusals marked REFUSED]
+ok [en: failed tool marked ERROR]
+ok [en: end of turn marked STOP]
+ok [en: a refusal does not render as successful work]
+ok [en: denial reason surfaced in prose]
+ok [en: slash command rendered as a command]
+ok [en: no TUI command markup in the rendered view]
+ok [en: outcome lines carry no stray activity glyph]
+ok [en: no raw field names or tool uuids in the rendered view]
+== render_session: Italian is reachable by explicit selection ==
+ok [it: malformed line marked ILLEGGIBILE]
+ok [it: events after the malformed line still render]
+ok [it: refusals marked RIFIUTO]
+ok [it: failed tool marked ERRORE]
+ok [it: end of turn marked STOP]
+ok [it: a refusal does not render as successful work]
+ok [it: denial reason surfaced in prose]
+ok [it: slash command rendered as a command]
+ok [it: no TUI command markup in the rendered view]
+ok [it: outcome lines carry no stray activity glyph]
+ok [it: no raw field names or tool uuids in the rendered view]
+== render_session: language never changes classification ==
+ok [refusal classified identically in both languages: 2]
+ok [error classified identically in both languages: 1]
+ok [stop classified identically in both languages: 1]
+ok [both languages render the same number of events:       12]
+== render_session: every catalog carries every key ==
+ok [2 catalogs, 43 keys each, default en]
+== render_session: multiple sessions, each line names its session ==
+ok [every line names its session]
+== render_session: growing file, unterminated tail ==
+ok [unterminated tail flagged, not crashed on]
+== render_session: --follow picks up appended events ==
+ok [--follow renders events appended after start]
+RENDER SESSION FIXTURE: PASSED
+== bypass falsifier register: every tracked falsifier, in its declared state (ADR-017 D1) ==
+ok [bypass register completeness]: registered set == tracked set (12 falsifiers)
+ok [bypass tests/bypass_f1_lease_worktree_fixture.sh]: declared RED, observed RED
+ok [bypass tests/bypass_f2_guard_nonbash_fixture.sh]: declared RED, observed RED
+ok [bypass tests/bypass_f3_oracle_writable_fixture.sh]: declared RED, observed RED
+ok [bypass tests/bypass_f4_deny_literal_fixture.sh]: declared RED, observed RED
+ok [bypass tests/bypass_f5_receipt_provenance_fixture.sh]: declared RED, observed RED
+ok [bypass tests/bypass_f6_permission_layers_write_fixture.sh]: declared RED, observed RED
+ok [bypass tests/bypass_f7_const_pin_absent_fixture.sh]: declared RED, observed RED
+ok [bypass tests/bypass_f8_tamper_gate_unwired_fixture.sh]: declared RED, observed RED
+ok [bypass tests/bypass_f9_ci_verity_unwired_fixture.sh]: declared RED, observed RED
+FAIL [bypass tests/bypass_fb_budget_tokens_unbounded_fixture.sh]: declared RED, observed GREEN (exit 0). D3: investigate, then amend this row's literal in the commit that says what changed -- editing it to match this run is the failure mode the register exists to make expensive
+      | == F-b budget is REQUIRED with a stated shape and both halves are held ==
+      |      control 1: the template declares budget REQUIRED with at least one of turns / wall_clock; tokens is advisory there, withdrawn as sufficient
+      |      control 2: the no-flag sentinel is guarded at :361 and :363; 'tokens' occurs 0x in the launcher
+      |      control 3: budget{turns:10, wall_clock:"15m"} -> max_turns=10 wall_sec=900 (rc=0)
+      |      control 4: against a fabricated half-enforcing launcher, one held obligation
+      |                 and one open one degrade to PARTIAL, naming the open one (exit=1)
+      |      control 4 > RED [F-b] PARTIAL enforcement: 1 of 2 obligations held, still uncovered: spendable
+      |      control 4 >      budget absent entirely       : REFUSED  (rc=1) -- STOP spec.budget missing (stand-in holds PRESENT and nothing else)
+      |      control 4 >      budget {tokens: 200000}      : accepted (rc=0), UNBOUNDED: max_turns=0 wall_sec=0
+      |      control 4 >      budget {turns:10, wall_clock}: accepted (rc=0), closed by BOTH bounds: max_turns=10 wall_sec=900
+      |      control 4 >                                     (control 3: the same driver, the real launcher)
+      |      control 4 >      each obligation is measured on its own, so closing one and leaving the
+      |      control 4 >      other open is recorded as spendable still uncovered, not as a repair
+      |      control 4 >      green when BOTH violating specs stop being able to reach the decision
+      |      control 4 >      line with both bounds at 0 -- and each row reads three things, so there
+      |      control 4 >      are exactly three ways per row: the launcher STOPs on a budget it cannot
+      |      control 4 >      spend, or it resolves a turn bound, or it resolves a wall-clock bound;
+      |      control 4 >      each row names which one closed it, because a wall-clock default with
+      |      control 4 >      turns still unlimited is not the result a refusal is
+      |      control 4 >      withdrawing the declaration at templates/spec.mode-b.template.md:14 is
+      |      control 4 >      not a further way: control 1 reads that declaration, and its absence is
+      |      control 4 >      recorded as FIXTURE BROKEN (exit 2), which is intended -- an obligation
+      |      control 4 >      withdrawn is an operator decision, not a repair
+      | GREEN [F-b] both obligations at :14 are held before spawn
+      |      budget absent entirely       : REFUSED  (rc=1) -- STOP spec.budget missing for S-fb (REQUIRED in mode B: a map declaring turns and/or wall_clock)
+      |      budget {tokens: 200000}      : REFUSED  (rc=1) -- STOP spec.budget for S-fb declares no dimension this launcher can spend (REQUIRED in mode B: turns as a positive integer, and/or wall_clock as Nm or Nh)
+      |      budget {turns:10, wall_clock}: accepted (rc=0), closed by BOTH bounds: max_turns=10 wall_sec=900
+      |                                     (control 3: the same driver, the real launcher)
+      |      a declared, spendable budget still reaches the decision line, so this is
+      |      enforcement and not a launcher that refuses every budget
+      | F-b BYPASS FIXTURE: GREEN
+ok [bypass tests/bypass_fc_scope_unread_fixture.sh]: declared GREEN, observed GREEN
+ok [bypass tests/bypass_fe_secret_in_context_fixture.sh]: declared RED, observed RED
+== shellcheck ==
+== compile check ==
+TESTS FAILED

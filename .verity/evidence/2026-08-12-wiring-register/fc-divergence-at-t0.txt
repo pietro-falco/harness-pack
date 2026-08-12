@@ -1,0 +1,35 @@
+bypass_fc -- the divergence this register found at t0, and what was done about it.
+
+THE OBSERVATION. At the register's FIRST execution, on 2026-08-12 against harness-pack main @ 9d64e33
+with the ADR-017 register block wired into the working tree, the row read:
+
+    FAIL [bypass tests/bypass_fc_scope_unread_fixture.sh]: declared RED, observed GREEN (exit 0)
+
+DECLARED RED, by the fixture's own header, which is where ADR-017 D6 says the declared state must be
+read from. OBSERVED GREEN: the fixture exited 0, its own code for "invariant holds".
+
+HOW IT WAS FOUND. By the register, at its first run, by EXECUTING the fixture -- not by anybody
+comparing the header against the code it describes, and not by review. Nothing in this repo had been
+in a position to notice: the twelve bypass falsifiers were linted by the shellcheck gate and executed
+by nothing, so a falsifier that had gone green on its own left no trace in any verdict. This is the
+first defect the register named, and it named it on the first run.
+
+WHAT IT WAS. Not a defect in the code. c846887 -- "feat(launcher): STOP on a Mode B spec whose scope
+violates the declared shape", 2026-08-11 -- put the scope gate in the launcher's decision block beside
+the spec.tools and spec.criteria STOPs; scripts/launch_worker.sh:176-183 refuses all three declared
+obligations, each on its own line, refused and never normalized. That commit's own message says
+"F-c green." The fixture's header was never amended to match, so the header went stale on 2026-08-11
+and stayed stale for a day, and the divergence at t0 is between an amended launcher and an unamended
+header. It is a documentation defect, and the register is what surfaced it.
+
+WHAT WAS DONE. Under D3 the response to a divergence is to investigate and then amend the declared
+state in a commit that says what changed -- never to edit the register to match a run. The header of
+tests/bypass_fc_scope_unread_fixture.sh now records the passage to green in the form the lease_window
+and lease_expiry call-sites use for the same event: the row was red, what closed it, which commit, and
+what would reopen it. The register row moved RED -> GREEN in that same commit, downstream of the
+header, which is the direction D6 fixes.
+
+WHAT REMAINS OPEN. Nothing checks that a copied declared state still matches the header it was copied
+from. This divergence was caught by running the fixture, not by comparing the two declarations, and a
+header that changes without its register line changing would go unnoticed until the fixture's own
+behaviour moved. ADR-017 names this under "Not measured" and does not close it.
