@@ -34,6 +34,15 @@ jobs:
           tar -xJf "$TAR" -C "$DL"
           SHELLCHECK="$DL/shellcheck-v$VER/shellcheck"
           "$SHELLCHECK" --version
+          # Hand the pinned binary to the next step. The suite reads
+          # $SHELLCHECK and runs the shell sources only when the binary is the
+          # pinned version; a runner whose image ships a different shellcheck,
+          # or none, leaves that half of the gate unmeasured and the suite
+          # exits 2. The handoff goes through $GITHUB_ENV, not through the
+          # next step's `run:` line, because a bypass fixture asserts that
+          # line byte-for-byte: editing it there would break the fixture
+          # rather than wire the gate.
+          echo "SHELLCHECK=$SHELLCHECK" >> "$GITHUB_ENV"
           "$SHELLCHECK" --severity="$SEV" scripts/*.sh tests/*.sh
       - name: tests
         run: bash tests/run_tests.sh
