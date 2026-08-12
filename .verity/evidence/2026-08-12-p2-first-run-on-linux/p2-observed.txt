@@ -1,0 +1,250 @@
+P2 -- observed. The run P2 was written before now exists, and this file scores P2 against it line
+by line. Everything below is a description: it was written after the log, it cannot be wrong in
+the way P2 could be wrong, and it is worth only what P2's advance commitment makes it worth. That
+is the whole reason it is a separate document. P2 is pinned by the tracker's GATE-4 at the digest
+it had before any of this was known, and an emendation would have spent the pin to buy a better
+prediction after the fact.
+
+basis:      run 31648004754, workflow `ci`, run number 23, attempt 1, event push, conclusion
+            success.
+            https://github.com/pietro-falco/harness-pack/actions/runs/31648004754
+            headSha 3c2680daf6e9d0243fdb804c391fbb8b6f2659b1 (= 3c2680d), branch main.
+            created 2026-08-12T22:41:39Z. Job `verify`, ubuntu-24.04 image 20260810.271.1,
+            runner 2.336.0, Ubuntu 24.04.4 LTS (log:11-19). Stamps below are the log's own, UTC.
+
+the run vs P2's basis:
+            P2 was authored at c689554 and this run is at 3c2680d, two commits later. The four
+            blobs P2 pinned are byte-identical at both shas -- verified, not assumed:
+              .github/workflows/ci.yml   3deefb28438461d90da18a22733b0b142651065a  same
+              tests/run_tests.sh         6b82117b86de56582e09e3c350cb0f218e6856c9  same
+              .shellcheck-version        9d000bb53f76e83106d8059cde969920fe9bdb55  same
+              .gitleaks-version          d846da8058aaca616aeee258774768d139f1a683  same
+            `git diff --stat c689554 3c2680d` is two files, both under .verity/evidence/: P2
+            itself and P3. So this run executed the program P2 predicted against, and the
+            two-commit gap carries no code. No run exists against c689554 or 4087f05: the push
+            carried ten commits (d75b72f..3c2680d) and CI ran on the head only. The previous run
+            on the remote, 31618456931, is against d75b72f and predates the wiring -- exactly as
+            P3:6-10 said, and it remains not a run of this tree.
+
+citations:  every `log:N` below is the 1-based line N of `0_verify.txt`, the flat job log inside
+            the run's log archive, fetched from
+            GET /repos/pietro-falco/harness-pack/actions/runs/31648004754/logs.
+            `gh run view 31648004754 -R pietro-falco/harness-pack --log` was the directed reader
+            and it did not run in this session: it failed at TLS with `x509: OSStatus -26276`
+            before reaching the API. curl against the same API returned 200, so the bytes are
+            the run's own -- but they were fetched by a different client, and `gh --log` prints
+            a different layout. Anyone re-deriving these citations must number the archive file,
+            not gh's output.
+
+--------------------------------------------------------------------------------------------
+E1-E10, EACH AGAINST THE LINE THAT SETTLES IT.
+
+  E1  CONFIRMED. `^FAIL` over the tests step = 0. Measured by stripping the leading timestamp
+      and counting: zero over the tests step file, zero over the whole job log.
+
+  E2  CONFIRMED. `unattrib ` appears nowhere. `grep -c 'unattrib'` over the entire job log = 0,
+      so `unmeasured` never left zero and run_tests.sh:1010-1012 was never reached.
+
+  E3  CONFIRMED, and this is the line C3 existed to move. log:478 --
+        `ok [bypass tests/bypass_fe_secret_in_context_fixture.sh]: declared RED, observed RED`
+      P1 observed `FAIL ... FIXTURE BROKEN (exit 2)` for this row on a host with no gitleaks.
+      The scanner arrived: log:224 `gitleaks_8.30.1_linux_x64.tar.gz: OK`, log:225 `8.30.1`,
+      and the $GITHUB_PATH handoff at log:207 put it where `command -v gitleaks` looks
+      (bypass_fe:146). Neither F3 nor F4 appeared.
+
+  E4  CONFIRMED. log:466 --
+        `ok [bypass register completeness]: registered set == tracked set (12 falsifiers)`
+      Neither F5 line was printed; `NOT registered` and `NOT tracked` are both absent.
+
+  E5  CONFIRMED, eleven for eleven, log:467-477, each `declared X, observed X` with X as the
+      register declares it:
+        467 f1 RED/RED    468 f2 RED/RED    469 f3 RED/RED    470 f4 RED/RED
+        471 f5 RED/RED    472 f6 RED/RED    473 f7 RED/RED    474 f8 RED/RED
+        475 f9 RED/RED    476 fb GREEN/GREEN   477 fc GREEN/GREEN
+      With log:478 that is twelve rows and twelve agreements. `EXIT` appears nowhere in the log,
+      so run_tests.sh:945-947 never mapped a fixture to a third state and F6 did not arrive.
+
+  E6  CONFIRMED. log:481 `ALL TESTS PASSED`. `TESTS INCONCLUSIVE` and `TESTS FAILED` are both
+      absent. Exit 0 is NOT printed anywhere in the log: what is observed is the final line, the
+      step running under `/usr/bin/bash -e {0}` (log:229), and the API reporting the job's
+      conclusion as success. The exit code is inferred from those three, not read.
+
+  E7  CONFIRMED. log:170 --
+        `/home/runner/work/_temp/shellcheck-pin/shellcheck-v0.9.0.linux.x86_64.tar.xz: OK`
+      The filename shows VER resolved to 0.9.0 and the linux.x86_64 artifact was the one
+      fetched. The digest literal is not echoed by `sha256sum -c -`; it reached the check from
+      .shellcheck-version:26 through the sed at log:138. What the log carries is the verdict.
+      No `sha256sum: WARNING` line appears.
+
+  E8  CONFIRMED. log:171-174, `version: 0.9.0` at log:172, under the ShellCheck banner.
+
+  E9  CONFIRMED. Between log:174 (the last banner line) and log:175 (the next step's group) the
+      step prints nothing: `"$SHELLCHECK" --severity=style scripts/*.sh tests/*.sh` produced no
+      findings. No `SC####` string appears anywhere in the log. The step's exit 0 is evidenced
+      by the gitleaks step starting at all under `bash -e`.
+
+  E10 CONFIRMED, and it is the difference between exit 0 and exit 2 for the whole suite. The
+      handoff arrived: log:222 and log:237 show `SHELLCHECK: /home/runner/work/_temp/
+      shellcheck-pin/shellcheck-v0.9.0/shellcheck` in the env of the gitleaks and tests steps,
+      which is $GITHUB_ENV doing its job. The suite then MEASURED rather than standing aside:
+      run_tests.sh:984 found it installed, :989 found `0.9.0` equal to the pin, :994 ran the
+      lint -- log:479 `== shellcheck ==` at 22:42:05.6823629 and log:480 `== compile check ==`
+      at 22:42:08.6812050, 2.9988s of work with no output between them. No `unattrib
+      [shellcheck]` line exists to falsify it.
+
+Ten for ten. F1 through F8 and F10 did not arrive; F9 is moot, the suite ran. Per P2's own
+closing paragraph this makes the document worth very little on its face -- a suite that passed on
+one host passed on another. The sections below are where the run said something the authoring
+host could not have said.
+
+--------------------------------------------------------------------------------------------
+NODE: A MEASURE OBTAINED. NOT A PREDICTION CONFIRMED.
+
+log:226 -- `v22.23.2`.
+
+P2:94-99 recorded node as a deliberate unknown and refused to predict either branch, in those
+words: "This document does not say whether ubuntu-latest ships node: I do not know, this machine
+cannot answer it, and the probe is the instrument that will." So there is no prediction here to
+have been right. What was obtained is a reading: the ubuntu-24.04 image at version 20260810.271.1
+carries node v22.23.2 on PATH, and ci.yml:81-86's probe is what took it.
+
+P2 did predict one thing around it, and that held: that the log would be legible either way
+(P2:101-108). The node-present branch is the one that happened -- the version printed, bypass_fe
+passed its :142 gate, reached :146, and E3 stood or fell on the scanner alone, which is what C3
+was written to test. Had the note line printed instead, F-e would have exited 2 at :142 naming
+node and E1/E3/E6 would have failed together for a reason with nothing to do with C3.
+
+What the reading does not establish is that the next image carries node. The decision P2 said
+belonged to the log rather than to a guess -- whether to pin node -- is now available to be made,
+and it is not made here.
+
+--------------------------------------------------------------------------------------------
+THE PORTABILITY SECTION OF P2, LINE BY LINE: WHICH NAMED EXPOSURES MATERIALIZED.
+
+  shasum / perl -- DID NOT MATERIALIZE, and it is read off rows rather than off a version line.
+  Neither `shasum` nor `perl` is named anywhere in the log. The evidence is indirect and its
+  chain is exact: bypass_fe:145 gates on `command -v shasum` and routes absence to `broken`,
+  which exits 2; the F-e row observed RED, i.e. exit 1, at log:478, so shasum resolved.
+  bypass_f8 has no such gate -- it calls `shasum -a 256` at :161 and :181 with `|| broken` on
+  each -- and its row observed RED at log:474, so both calls succeeded. P2's compound failure
+  (one FAIL and one unattrib from the same missing tool) did not occur because the tool was
+  there. Nothing in this run pins perl for a future image; the exposure P2 named is intact and
+  unmeasured against any image but this one.
+
+  parallel_claim, the wall clock -- DID NOT MATERIALIZE, with a wide margin. REPORT_BUDGET=20
+  seconds (parallel_claim_fixture.sh:63). Observed: log:337 header at 22:41:51.7532753, log:338
+  `ok [I1 same slice: exactly one of 8 claimers acquired]` at 22:41:51.9853588 -- 0.2321s -- and
+  log:341 `PARALLEL CLAIM FIXTURE: GREEN (mode=lease)` at 22:41:52.3583132, 0.6050s for the
+  whole fixture against a per-claimer budget of 20. All three isolation rows GREEN (log:338-340)
+  and the legacy control still red at log:342. Roughly 33x under budget on the whole fixture.
+
+  render_session --follow, the wall clock -- DID NOT MATERIALIZE, and this was P2's "most likely
+  to be misread" observation. The ceiling is 60 iterations of `sleep 0.1`, six seconds
+  (render_session_fixture.sh:339-343), and the call site is a bare `|| fail=1`, so a slow runner
+  would have produced an accusation against the renderer with nothing in the line to say the
+  clock is what moved. Observed: log:462 header at 22:42:00.7199242, log:463 `ok [--follow
+  renders events appended after start]` at 22:42:00.8305361 -- 0.1106s, about 54x under the
+  ceiling. The FAIL line P2 warned would be misread does not exist; `^FAIL` count is 0.
+
+  comm, git ls-files, and a case-sensitive filesystem -- MEASURED, and this is the one thing the
+  authoring host structurally could not settle. log:466 `registered set == tracked set (12
+  falsifiers)`, from the LC_ALL=C comm pair at run_tests.sh:898-899. Neither direction accused:
+  `tracked and NOT registered` and `registered and NOT tracked` are both absent, so the
+  double-accusation signature P2 named as F5's shape did not appear. What is settled is the
+  comparison's outcome on a Linux checkout. What is NOT settled by the log is the ground under
+  it: the log names no filesystem and prints no `core.ignorecase`. The case-drift question is
+  answered for this tree at this sha by the outcome, not by an observation of the filesystem.
+
+  the shell -- NOT SETTLED BY THIS LOG, and P2's "bash 5.x there" is not confirmed here. The log
+  names the shell only as `/usr/bin/bash -e {0}` (log:161, :214, :229) and the image as Ubuntu
+  24.04.4 LTS / ubuntu-24.04 20260810.271.1 (log:11-19). No `bash --version` is anywhere in it.
+  The behavioural answer is the one that arrived -- twelve fixtures written under bash 3.2.57
+  reached their declared state under that interpreter -- but the version string is an inference
+  from the image name and is recorded as one. The machine half of the same paragraph is equally
+  unreadable: the log states no core count and no load, so "two cores" is neither confirmed nor
+  denied by anything here.
+
+  adr010 and `sort -u` under a UTF-8 locale -- DID NOT MATERIALIZE AS A RED, AND IS NOT SETTLED,
+  which is exactly the shape P2 gave it: a masked non-determinism rather than a false red.
+  log:414-419 is GREEN. The fixture's green requires DISTINCT=1 and FIRST_ORDER equal to the
+  ASCII-sorted literal (adr010_refusal_fixture.sh:157-159, asserted at :169), and the line that
+  would print the count -- :186, `distinct=$DISTINCT first=$FIRST_ORDER` -- sits in the branch a
+  green row does not take. Neither DISTINCT nor the locale appears in the log, so from the log
+  alone a genuinely single order and a locale-collapsed one look identical. Reading the source
+  rather than the log narrows it -- a collapse would still have to yield the sorted order to
+  pass the second conjunct -- but that is a source reading, not an observation of this run, and
+  it is offered as one.
+
+  mktemp -- DID NOT MATERIALIZE, and here the log is positive rather than silent. log:392 names
+  `$TMPDIR/hp-adr008.wIDZJg/standin_baseline_first.sh` and log:398 names
+  `$TMPDIR/hp-adr008.sXjU87/div-absent-is-pass/scripts/launch_worker.sh`: two distinct
+  six-character expansions of the same `XXXXXX` template under GNU mktemp. P2 said every call
+  site carries a template because BSD and GNU disagree without one; the log shows the template
+  expanding.
+
+  sed and stat -- DID NOT MATERIALIZE. `sed -n 's/^KEY=//p'` ran under GNU sed on both pins:
+  log:136-138 for shellcheck and log:186-187 for gitleaks are the commands, and the resolutions
+  are visible downstream -- log:170 names shellcheck-v0.9.0.linux.x86_64.tar.xz, log:172 prints
+  `version: 0.9.0`, log:224 names gitleaks_8.30.1_linux_x64.tar.gz, log:225 prints `8.30.1`.
+  POSIX BRE reached the same result on both userlands. `stat` appears nowhere in the log,
+  because it appears nowhere in the tree.
+
+--------------------------------------------------------------------------------------------
+WHAT THIS RUN DOES NOT DEMONSTRATE. Every line here is a limit on the section above, and each is
+a promotion someone could make from this file and should not.
+
+  It does not bound the wall-clock budgets. Two latencies were sampled once each -- 0.6050s
+  against a 20s budget, 0.1106s against a 6s ceiling -- on one runner, at one moment, at one
+  image version. The log states no core count and no load, so this file cannot even assert the
+  runner was quiet; the margins are what was measured and the machine's condition is not. A
+  green run says the budgets were not exceeded here. It says nothing about the budgets under
+  contention, and the design already concedes the two failure modes are unequal: parallel_claim
+  exits 2 and reports UNATTRIB, render_session's `|| fail=1` produces an accusation. Neither
+  fact is a property of the fixtures established by this run.
+
+  It does not establish cross-build equivalence of the shellcheck pin. E9's narrow claim
+  (P2:86-91) got its first datum and nothing more: the linux and darwin builds of 0.9.0 reached
+  the same verdict on THIS tree at THIS basis. One tree, one basis, one agreement. The pin
+  exists because 0.9.0 and 0.11.0 disagree on SC2015 for identical source, which is a statement
+  about versions; the build half is now tested once and is not thereby settled.
+
+  It does not make this run the source of the twelve declared states. Those are read off the
+  register's literals at run_tests.sh:853-874, and this run agreeing with all twelve does not
+  reverse that direction. D3's rule stands: a future run disagreeing with a row is a divergence
+  to investigate and then amend in a commit that says what changed, never a reason to edit the
+  register into agreement with a log.
+
+  It does not say anything about the provenance of the gitleaks bytes. The digest is
+  trust-on-first-use and .gitleaks-version:34-41 says so. This run reproduced the same bytes as
+  the first download; that is the whole of what a TOFU pin buys, and it is not a statement about
+  origin.
+
+  It does not close ADR-009 OR-B. The gitleaks step brings a scanner for one fixture's control;
+  it does not scan this repository and it is not that gate. Untouched, and named as untouched.
+
+  It is n=1. One image version, one runner, one moment. Ten confirmations are ten observations,
+  not ten properties.
+
+--------------------------------------------------------------------------------------------
+THE BRANCH P2 DID NOT HAVE, AND IT IS NOT CLOSED BY THIS FILE.
+
+P2's F1-F10 enumerate observations "available in the CI log of the first run", and every one of
+them presumes a CI log exists. The first thing that happened was that no log existed: `git push`
+was refused with GH013, GitHub push protection naming the canary at
+tests/bypass_fe_secret_in_context_fixture.sh:126 as a Slack API Token. F9 covers a job that fails
+before `bash tests/run_tests.sh` is reached; there is no F for the tree never arriving at the
+runner. P2 assumed transport and predicted only what the runner would do with what it received.
+
+That gap is registered in P3 and it is registered as a lacuna of P2, not as a repair of it. This
+file does not close it either. The run read here exists because the ten commits d75b72f..3c2680d
+reached the remote only after the detection was allowlisted at the remote -- a state of the
+remote that no artifact in this tree records and no gate here can see (P3:57-61). The
+`# gitleaks:allow` directive on that line binds gitleaks and nothing else; GitHub's scanner does
+not read it and there is no in-place directive it does read. So the sequence that produced this
+log is: refusal, an out-of-tree decision, then transport. Only the third step is visible from
+inside the repository, and the CI log is evidence of the third step alone.
+
+P2 is not edited. GATE-4 pins it at the digest it had before any of this was known, and that pin
+is the reason this scoring lives in a separate file rather than as an amendment. A prediction
+improved after the event is a description -- which is what this document is, and it is why it
+carries no authority P2 does not lend it.
