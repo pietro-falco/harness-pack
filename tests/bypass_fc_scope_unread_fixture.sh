@@ -2,6 +2,23 @@
 # F-c -- `scope` is declared REQUIRED, with a stated shape, and is read by
 # nothing in the pack.
 #
+# THIS ROW STANDS GREEN, and has since c846887. It was registered RED and stood
+# RED with 0 of 3 obligations held. What closed it is c846887 -- "feat(launcher):
+# STOP on a Mode B spec whose scope violates the declared shape", 2026-08-11 --
+# which put the gate in the launcher's decision block beside the spec.tools and
+# spec.criteria STOPs, on the path those already fire on and before spawn.
+# scripts/launch_worker.sh:176-183 now refuses each of the three obligations on
+# its own line: missing, empty, and not repo-relative. Refused, never normalized
+# -- stripping a leading / or resolving a ".." would hand the run a perimeter the
+# operator never declared.
+#
+# Everything below this paragraph is written in the tense of the defect, because
+# that defect is what this fixture still poses on every run. Take that gate back
+# out of the decision block, or soften any one of the three refusals into a
+# normalization, and this row goes red again, which is its whole job. Its
+# register line in tests/run_tests.sh reads GREEN; ADR-017 D3 is why moving that
+# literal without a commit that says what changed is meant to be expensive.
+#
 # THE SUBJECT is templates/spec.mode-b.template.md:21-22 composed with every
 # script under scripts/. The template says:
 #

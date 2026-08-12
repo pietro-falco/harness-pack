@@ -802,6 +802,159 @@ echo "== session transcript renderer =="
 # as successful work.
 bash tests/render_session_fixture.sh || fail=1
 
+echo "== bypass falsifier register: every tracked falsifier, in its declared state (ADR-017 D1) =="
+# Until this block existed the tests/bypass_* falsifiers were linted by the gate
+# below and executed by nothing. They sat inside the perimeter of the tooling
+# and outside the perimeter of the meaning: ALL TESTS PASSED was printed over a
+# tree in which any of them could be broken, could have gone green on its own,
+# or could be missing entirely, and the suite had no way to know which. ADR-017
+# D1 is the decision that the string above, and the exit 0 beside it, now
+# additionally assert that every tracked falsifier ran and was observed in the
+# state it declares.
+#
+# THE REGISTER IS DATA -- one literal line per falsifier, carrying its path, its
+# declared state and its exit-2 policy, driven by the loop below (D2).
+# Deliberately not a compacted array: a
+# reader counting rows and a `grep -c 'tests/bypass_'` must reach the same
+# number, and the tracker's WIR-5 counts the second.
+#
+# THE DECLARED STATE IS READ OFF THE FIXTURE'S OWN HEADER, never off a run (D6).
+# Seeding these literals from a first execution would make the register a
+# procedure certifying itself -- it would agree with whatever the tree does
+# today, which is the question and not the answer.
+#
+# DIVERGENCE FAILS IN BOTH DIRECTIONS (D3). Declared RED and observed GREEN
+# fails exactly as declared GREEN and observed RED does. A control that started
+# binding with nobody recording why is a finding about this repo, not a repair
+# to absorb, and the only way to clear it is to investigate and then amend the
+# literal here in a commit that says what changed.
+#
+# rc 2 IS A FAILURE UNLESS THE ROW DECLARES OTHERWISE, AND IS NEVER A PASS (D4).
+# The default is the strict reading: a bypass falsifier's exit 2 is FIXTURE
+# BROKEN -- its own control could not confirm what it is measuring. That is
+# deterministic, reproducible, and cleared by a human edit rather than by a
+# re-run on a quieter machine. On 2026-08-11 exactly that state sat in the tree
+# while this suite printed ALL TESTS PASSED.
+#
+# The exception is declared per row, in the THIRD COLUMN, and is admissible on
+# one ground only: the fixture's own header defines its exit 2 as an ATTRIBUTION
+# failure -- the row could not reach its question -- rather than a broken
+# control. That row spends `unmeasured`, like the parallel-claim block above,
+# and for the same reason: a refusal nobody can attribute accuses nobody. The
+# reading is a property of the fixture, declared beside it, never a choice made
+# at the call site, and a row that does not literally say UNMEASURED-2 gets the
+# strict reading. Neither reading prints ALL TESTS PASSED: `fail` exits 1,
+# `unmeasured` exits 2 with TESTS INCONCLUSIVE. The column decides what this
+# suite ACCUSES, never whether it certifies.
+BYPASS_REGISTER=""
+bypass_row() { BYPASS_REGISTER="${BYPASS_REGISTER}${1} ${2} ${3}"$'\n'; }
+
+#          path                                               declared  exit-2 policy
+bypass_row tests/bypass_f1_lease_worktree_fixture.sh          RED       BROKEN
+bypass_row tests/bypass_f2_guard_nonbash_fixture.sh           RED       BROKEN
+bypass_row tests/bypass_f3_oracle_writable_fixture.sh         RED       BROKEN
+bypass_row tests/bypass_f4_deny_literal_fixture.sh            RED       BROKEN
+bypass_row tests/bypass_f5_receipt_provenance_fixture.sh      RED       BROKEN
+bypass_row tests/bypass_f6_permission_layers_write_fixture.sh RED       BROKEN
+bypass_row tests/bypass_f7_const_pin_absent_fixture.sh        RED       BROKEN
+# The one lenient row in the register, and it is lenient because its own header
+# is what says so -- F8 declares three states, and spells the third:
+#
+#   UNMEASURED (2)  the launcher refused for a reason NOT attributable to the
+#                   detector. The row never reached its own question: that is
+#                   neither a pass nor a fail, and it must not be spelled as
+#                   either.
+#
+# Routing that to `fail` would accuse this repo of a defect the row never
+# observed. It is the only row at this basis whose header carries that clause.
+bypass_row tests/bypass_f8_tamper_gate_unwired_fixture.sh     RED       UNMEASURED-2
+bypass_row tests/bypass_f9_ci_verity_unwired_fixture.sh       RED       BROKEN
+bypass_row tests/bypass_fb_budget_tokens_unbounded_fixture.sh GREEN     BROKEN
+bypass_row tests/bypass_fc_scope_unread_fixture.sh            GREEN     BROKEN
+bypass_row tests/bypass_fe_secret_in_context_fixture.sh       RED       BROKEN
+
+# COMPLETENESS IS MEMBERSHIP, NOT CARDINALITY (D5), and it runs before the
+# fixtures because it is the cheap half. The set of registered paths must EQUAL
+# the set `git ls-files` tracks, and the two directions are accused separately
+# because they are different defects: a tracked falsifier nobody registered is a
+# control the suite never runs, and a registered path that is not tracked is a
+# row measuring something no clone will have.
+#
+# A count would pass a register carrying one row twice and one row not at all --
+# right total, wrong contents, and exactly one falsifier silently unrun. Set
+# comparison catches that duplicate too: `comm` pairs lines, so the second copy
+# has no partner on the tracked side and is accused as registered-not-tracked
+# while its victim is accused as tracked-not-registered.
+bypass_declared_paths="$(printf '%s' "$BYPASS_REGISTER" | awk 'NF {print $1}' | LC_ALL=C sort)"
+set +e
+bypass_tracked_paths="$(git ls-files -- 'tests/bypass_*' | LC_ALL=C sort)"
+bypass_ls_rc=$?
+set -e
+if [ "$bypass_ls_rc" -ne 0 ] || [ -z "$bypass_tracked_paths" ]; then
+  echo "FAIL [bypass register completeness]: \`git ls-files -- 'tests/bypass_*'\` did not answer, so the register's completeness went unchecked. That is a failure and not an unmeasured invariant: D5 is the clause that makes an unwired falsifier visible, and a run that could not evaluate it must not certify the register"
+  fail=1
+else
+  # -13 keeps what only the tracked side has; -23 what only the register has.
+  bypass_unregistered="$(LC_ALL=C comm -13 <(printf '%s\n' "$bypass_declared_paths") <(printf '%s\n' "$bypass_tracked_paths"))"
+  bypass_untracked="$(LC_ALL=C comm -23 <(printf '%s\n' "$bypass_declared_paths") <(printf '%s\n' "$bypass_tracked_paths"))"
+  if [ -n "$bypass_unregistered" ]; then
+    echo "FAIL [bypass register completeness]: tracked and NOT registered -- $(printf '%s' "$bypass_unregistered" | tr '\n' ' ')"
+    echo "      D5: a tracked falsifier absent from the register is a control this suite never runs. Register it beside the others, carrying the state its own header declares, never the state a run produced"
+    fail=1
+  fi
+  if [ -n "$bypass_untracked" ]; then
+    echo "FAIL [bypass register completeness]: registered and NOT tracked -- $(printf '%s' "$bypass_untracked" | tr '\n' ' ')"
+    echo "      D5: a registered path git does not track measures nothing in a fresh clone. Commit the falsifier, or drop the row -- and if the path appears twice in the register, this is the second copy"
+    fail=1
+  fi
+  if [ -z "$bypass_unregistered" ] && [ -z "$bypass_untracked" ]; then
+    echo "ok [bypass register completeness]: registered set == tracked set ($(printf '%s\n' "$bypass_tracked_paths" | wc -l | tr -d ' ') falsifiers)"
+  fi
+fi
+
+# The fixtures are invoked with stdin closed: the loop reads the register off a
+# here-string, and a child that consumed stdin would eat the rows below it and
+# silently shorten the register. The here-string keeps the loop in this shell,
+# so `fail` set inside it is the same `fail` the tail reads.
+while read -r bp_path bp_declared bp_exit2; do
+  [ -n "$bp_path" ] || continue
+  if [ ! -f "$bp_path" ]; then
+    echo "FAIL [bypass $bp_path]: registered and not on disk"
+    fail=1
+    continue
+  fi
+  set +e
+  bp_out="$(bash "$bp_path" 2>&1 </dev/null)"
+  bp_rc=$?
+  set -e
+  # Exit 2 leaves this loop by one of two doors, and the row's own third column
+  # is what decides which (D4). Same rc, same loop, different verdict -- and the
+  # strict door is the default, so a row that declares nothing gets accused.
+  if [ "$bp_rc" -eq 2 ]; then
+    if [ "$bp_exit2" = "UNMEASURED-2" ]; then
+      unmeasured=$((unmeasured + 1))
+      echo "unattrib [bypass $bp_path]: exit 2, and this row declares UNMEASURED-2 -- its header defines exit 2 as a refusal it cannot attribute to the mechanism under test, so the row never reached its own question. Not a pass, not a fail; the suite does not certify this run"
+    else
+      fail=1
+      echo "FAIL [bypass $bp_path]: FIXTURE BROKEN (exit 2) -- the fixture's own control could not confirm what it is measuring. D4: with no UNMEASURED-2 on this row, exit 2 routes to fail. It is cleared by realigning the fixture by hand, not by re-running it"
+    fi
+    printf '%s\n' "$bp_out" | sed 's/^/      | /'
+    continue
+  fi
+  case "$bp_rc" in
+    0) bp_observed="GREEN" ;;
+    1) bp_observed="RED" ;;
+    *) bp_observed="EXIT$bp_rc" ;;
+  esac
+  if [ "$bp_observed" = "$bp_declared" ]; then
+    echo "ok [bypass $bp_path]: declared $bp_declared, observed $bp_observed"
+    continue
+  fi
+  fail=1
+  echo "FAIL [bypass $bp_path]: declared $bp_declared, observed $bp_observed (exit $bp_rc). D3: investigate, then amend this row's literal in the commit that says what changed -- editing it to match this run is the failure mode the register exists to make expensive"
+  printf '%s\n' "$bp_out" | sed 's/^/      | /'
+done <<< "$BYPASS_REGISTER"
+
 echo "== shellcheck =="
 # Same gate as CI, not a local approximation of it: version and severity are
 # read from the committed pin, so the invocation below is character-for-
