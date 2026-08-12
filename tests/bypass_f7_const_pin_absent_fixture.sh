@@ -85,8 +85,9 @@ case "$ERR" in
 esac
 WRONG_RC="$RC"
 run right
-[ "$RC" -eq 0 ] && [ "$OUT" = "$ACTUAL" ] \
-  || broken "a MATCHING pin did not pass (rc=$RC out=${OUT:0:12}); nothing below is measurable"
+if [ "$RC" -ne 0 ] || [ "$OUT" != "$ACTUAL" ]; then
+  broken "a MATCHING pin did not pass (rc=$RC out=${OUT:0:12}); nothing below is measurable"
+fi
 RIGHT_RC="$RC"
 RIGHT_OUT="$OUT"
 note "control: wrong pin -> rc=$WRONG_RC STOP CONST-HASH-MISMATCH; matching pin -> rc=$RIGHT_RC, digest echoed"

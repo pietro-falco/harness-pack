@@ -70,10 +70,12 @@ CTL_RM="$(ask 'rm CONSTITUTION.md')"
 CTL_RM_WHY="$(why)"
 CTL_NV="$(ask "git commit --no-verify -m x")"
 CTL_NV_WHY="$(why)"
-[ "$CTL_RM" = "2" ] && [ "$CTL_RM_WHY" = "G3-BLOCKED" ] \
-  || broken "the deletion control was not refused by the DENY list (rc=$CTL_RM why=$CTL_RM_WHY); nothing below is measurable"
-[ "$CTL_NV" = "2" ] && [ "$CTL_NV_WHY" = "G3-BLOCKED" ] \
-  || broken "the hook-bypass control was not refused by the DENY list (rc=$CTL_NV why=$CTL_NV_WHY); nothing below is measurable"
+if [ "$CTL_RM" != "2" ] || [ "$CTL_RM_WHY" != "G3-BLOCKED" ]; then
+  broken "the deletion control was not refused by the DENY list (rc=$CTL_RM why=$CTL_RM_WHY); nothing below is measurable"
+fi
+if [ "$CTL_NV" != "2" ] || [ "$CTL_NV_WHY" != "G3-BLOCKED" ]; then
+  broken "the hook-bypass control was not refused by the DENY list (rc=$CTL_NV why=$CTL_NV_WHY); nothing below is measurable"
+fi
 note "control: 'rm CONSTITUTION.md' -> rc=$CTL_RM, 'git commit --no-verify' -> rc=$CTL_NV, both by the DENY list"
 
 # ---- the rows: the same two effects, spelled otherwise ----------------------

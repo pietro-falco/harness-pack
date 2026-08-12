@@ -74,7 +74,9 @@ git -C "$REPO" worktree add -b fixture-second "$WT" >/dev/null 2>&1 \
 # answer.
 ROOT_A="$(cd "$REPO" && git rev-parse --show-toplevel 2>/dev/null)"
 ROOT_B="$(cd "$WT" && git rev-parse --show-toplevel 2>/dev/null)"
-[ -n "$ROOT_A" ] && [ -n "$ROOT_B" ] || broken "could not resolve both worktree toplevels"
+if [ -z "$ROOT_A" ] || [ -z "$ROOT_B" ]; then
+  broken "could not resolve both worktree toplevels"
+fi
 [ "$ROOT_A" != "$ROOT_B" ] || broken "the two worktrees resolved the same toplevel"
 
 # One repo: `git rev-parse --git-common-dir` is the object store both worktrees
@@ -82,8 +84,9 @@ ROOT_B="$(cd "$WT" && git rev-parse --show-toplevel 2>/dev/null)"
 # a red below cannot be read as "two unrelated repos took two unrelated leases".
 COMMON_A="$(cd "$REPO" && git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)"
 COMMON_B="$(cd "$WT" && git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)"
-[ -n "$COMMON_A" ] && [ "$COMMON_A" = "$COMMON_B" ] \
-  || broken "the two worktrees do not share one git common dir; they are not one repo"
+if [ -z "$COMMON_A" ] || [ "$COMMON_A" != "$COMMON_B" ]; then
+  broken "the two worktrees do not share one git common dir; they are not one repo"
+fi
 
 SLICE="S-042"
 acq() {  # acq <root> <run-id> -> exit code of the take
