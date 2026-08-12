@@ -1,0 +1,54 @@
+# The gitleaks pin, read by the `gitleaks` step in .github/workflows/ci.yml.
+# It sits beside .shellcheck-version and takes the same shape on purpose, but
+# the two pins are NOT load-bearing in the same way, and reading this one as if
+# it were the other would be a mistake in both directions.
+#
+# WHAT THIS TOOL IS FOR HERE. Exactly one thing: tests/bypass_fe's control 2
+# hands a canary -- a manifestly fictitious `xoxb-` Slack bot token, every
+# variable component zeroed -- to a scanner and requires it to come back with a
+# finding. The fixture will not assert on its own authority that a string is a
+# secret, because a row proving that ARBITRARY text reaches the worker system
+# prompt proves nothing anyone disputes. gitleaks is that external judgment and
+# nothing else. It does not scan this repository, it is not a secret gate over
+# the tree, and it is not the closure of ADR-009 OR-B, which remains open.
+#
+# WHY THE VERSION IS NOT BEHAVIOURALLY LOAD-BEARING, unlike shellcheck's.
+# .shellcheck-version pins 0.9.0 because 0.9.0 and 0.11.0 reach OPPOSITE
+# verdicts on identical source -- SC2015 fires on one and is silent on the
+# other -- so a floating shellcheck lets CI and the local gate disagree about a
+# clean tree. There is no comparable disagreement here. What is being asked of
+# gitleaks is a detection verdict on the canonical shape of a Slack bot token,
+# not an analysis verdict on this repository's sources, and every 8.x release
+# carries that rule. The version is pinned for reproducibility of the RUN, not
+# because the verdict hangs on it.
+#
+# WHAT WOULD ACTUALLY MOVE THIS. Two things, and neither is a version number in
+# isolation. First, the invocation shape: bypass_fe calls `gitleaks dir
+# --no-banner <dir>` and reads the exit status, so a release that renames or
+# removes the `dir` subcommand breaks the control -- loudly, as exit 2, which is
+# the correct failure. Second, the rule itself: if the Slack-bot-token rule were
+# ever dropped, the canary would stop being a finding and the fixture would
+# refuse to proceed rather than pass. Both are announced by the fixture, not
+# swallowed by it. Bump the version and the digest together; never one alone.
+#
+# THE DIGEST IS TRUST-ON-FIRST-USE, and this file is the honest place to say so.
+# It was computed on 2026-08-12 from the artifact as downloaded from the
+# upstream release, and it was checked against nothing else: no signature, no
+# second channel, no independent publication of the hash. What it buys is that
+# every CI run afterwards gets the SAME bytes as that first download, and that a
+# silently re-cut release artifact stops the job. What it does not buy is any
+# statement about the provenance of those bytes. A pin whose origin is unstated
+# reads as verified; this one is stated.
+#
+# THE ARCHIVE LAYOUT DIFFERS FROM SHELLCHECK'S. The binary sits at the ROOT of
+# gitleaks' tarball, with no shellcheck-v$VER/ subdirectory, so the extraction
+# directory is itself the bin directory. The CI step depends on that and says so
+# where it extracts.
+#
+# ONE SIDE READS THIS FILE, not two. tests/run_tests.sh does not consult it: on
+# an authoring host bypass_fe takes whatever gitleaks is on PATH, and a host
+# with none gets FIXTURE BROKEN rather than a quiet pass. That asymmetry with
+# .shellcheck-version is deliberate and is a consequence of the paragraph above
+# -- the local run does not need THIS build to obtain the judgment it needs.
+GITLEAKS_VERSION=8.30.1
+GITLEAKS_SHA256_LINUX_X64=551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb

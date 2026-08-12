@@ -44,7 +44,52 @@ jobs:
           # rather than wire the gate.
           echo "SHELLCHECK=$SHELLCHECK" >> "$GITHUB_ENV"
           "$SHELLCHECK" --severity="$SEV" scripts/*.sh tests/*.sh
+      - name: gitleaks
+        run: |
+          # WHY THIS STEP EXISTS. tests/bypass_fe's control 2 hands a canary to
+          # a SCANNER and requires a finding: the fixture will not assert on its
+          # own authority that a string is a secret. ubuntu-latest ships no
+          # gitleaks, so without this step that control cannot run, the fixture
+          # exits 2, ADR-017 D4 routes exit 2 to `fail`, and the step below
+          # accuses this repository of a broken fixture on every push and every
+          # pull request. That prediction was falsified on the authoring host
+          # before CI met it; the capture is committed under the evidence tree.
+          # The answer is to bring the instrument, never to soften D4 or edit
+          # the fixture.
+          VER="$(sed -n 's/^GITLEAKS_VERSION=//p' .gitleaks-version)"
+          SHA="$(sed -n 's/^GITLEAKS_SHA256_LINUX_X64=//p' .gitleaks-version)"
+          # Unpacked outside the checkout for the same reason the shellcheck
+          # step above is: the next step runs the suite, and fixtures that read
+          # the working tree must not see a downloaded tarball as a repo change.
+          DL="${RUNNER_TEMP:-/tmp}/gitleaks-pin"
+          mkdir -p "$DL"
+          TAR="$DL/gitleaks_${VER}_linux_x64.tar.gz"
+          curl -fsSL -o "$TAR" \
+            "https://github.com/gitleaks/gitleaks/releases/download/v$VER/gitleaks_${VER}_linux_x64.tar.gz"
+          echo "$SHA  $TAR" | sha256sum -c -
+          # The binary sits at the ROOT of this archive, with no versioned
+          # subdirectory -- gitleaks does not package the way shellcheck does --
+          # so the extraction directory is itself the bin directory.
+          tar -xzf "$TAR" -C "$DL"
+          "$DL/gitleaks" version
+          # $GITHUB_PATH, and NOT $GITHUB_ENV as the shellcheck step uses. The
+          # fixture invokes the bare word `gitleaks` and gates on
+          # `command -v gitleaks`: there is no $GITLEAKS seam to point at a
+          # path, so a step that exported a variable would leave control 2
+          # exactly where it was and this whole step would buy nothing.
+          echo "$DL" >> "$GITHUB_PATH"
+          # A PROBE, NOT A DEPENDENCY, and it must never fail the job. The
+          # fixture needs node and this workflow pins none; if the runner image
+          # stops shipping one, this line is where the log says so. Adding
+          # setup-node here would erase the measurement instead of taking it,
+          # which is a decision to make from the log rather than ahead of it.
+          node --version || echo "note: this runner image carries no node on PATH"
       - name: tests
         run: bash tests/run_tests.sh
 # Release hardening (wire at first tag, see docs/PUBLISHING.md):
-# artifact attestations, OpenSSF Scorecard, gitleaks, npm OIDC provenance.
+# artifact attestations, OpenSSF Scorecard, npm OIDC provenance.
+# gitleaks left that list on 2026-08-12. It is no longer something to wire at a
+# tag: it is the step above, and it is there for a reason that has nothing to do
+# with release hardening -- a bypass fixture needs an external judgment on a
+# canary. What that step brings is the SCANNER, not a secret gate over this
+# repository's own tree. The gate is a separate decision and is still open.
