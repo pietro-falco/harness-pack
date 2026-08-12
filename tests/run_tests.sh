@@ -805,13 +805,26 @@ bash tests/render_session_fixture.sh || fail=1
 echo "== shellcheck =="
 # Same gate as CI, not a local approximation of it: version and severity are
 # read from the committed pin, so the invocation below is character-for-
-# character the one .github/workflows/ci.yml runs. Point $SHELLCHECK at a
-# pinned binary to reproduce a CI verdict exactly.
+# character the one .github/workflows/ci.yml runs -- and it runs only when the
+# binary is the pinned one, which is what makes that sentence true rather than
+# aspirational. Point $SHELLCHECK at a pinned binary to reproduce a CI verdict
+# exactly.
 #
-# The tool being absent is no longer a quiet skip. A gate that steps aside
-# when its tool is missing and still lets the suite print ALL TESTS PASSED is
-# not a gate -- it certifies something it never looked at. Absent tool is
-# therefore unmeasured: nothing is accused, and nothing is claimed either.
+# Two ways this gate can fail to be that gate, and neither is a quiet skip. A
+# gate that steps aside and still lets the suite print ALL TESTS PASSED is not
+# a gate -- it certifies something it never looked at.
+#
+#   tool absent      nothing ran at all.
+#   tool mismatched  something ran, but not this gate. 0.9.0 and 0.11.0
+#                    disagree about SC2015 on identical source, so a verdict
+#                    from an unpinned binary neither clears these sources nor
+#                    accuses them: reporting it as a pass is the certification
+#                    this block refuses, and reporting it as a failure accuses
+#                    the writer of a defect the pinned gate never described.
+#
+# Both are therefore unmeasured: nothing is accused, and nothing is claimed
+# either. The old behaviour here was to warn and certify anyway, which said
+# both "this verdict does NOT predict CI's" and ALL TESTS PASSED in one run.
 SC_PIN_VERSION="$(sed -n 's/^SHELLCHECK_VERSION=//p' .shellcheck-version)"
 SC_PIN_SEVERITY="$(sed -n 's/^SHELLCHECK_SEVERITY=//p' .shellcheck-version)"
 SC_BIN="${SHELLCHECK:-shellcheck}"
@@ -821,14 +834,11 @@ if ! command -v "$SC_BIN" >/dev/null 2>&1; then
 else
   SC_HAVE="$("$SC_BIN" --version | sed -n 's/^version: //p')"
   if [ "$SC_HAVE" != "$SC_PIN_VERSION" ]; then
-    # Loud, but not blocking. Making a version mismatch fail would break the
-    # documented `run_tests.sh` -> ALL TESTS PASSED flow on every machine whose
-    # package manager ships a different shellcheck, and the check itself still
-    # ran. What it cannot do is predict CI: 0.9.0 and 0.11.0 disagree about
-    # SC2015 on identical source, so a green here is not a green there.
-    echo "WARNING [shellcheck]: running $SC_HAVE, the gate pins $SC_PIN_VERSION. This verdict does NOT predict CI's -- set \$SHELLCHECK to a $SC_PIN_VERSION binary before trusting it"
+    unmeasured=$((unmeasured + 1))
+    echo "unattrib [shellcheck]: '$SC_BIN' is $SC_HAVE and the gate pins $SC_PIN_VERSION, so the shell sources went unchecked by this gate this run; not a pass, not a fail. Set \$SHELLCHECK to a $SC_PIN_VERSION binary"
+  else
+    "$SC_BIN" --severity="$SC_PIN_SEVERITY" scripts/*.sh tests/*.sh || fail=1
   fi
-  "$SC_BIN" --severity="$SC_PIN_SEVERITY" scripts/*.sh tests/*.sh || fail=1
 fi
 
 echo "== compile check =="
