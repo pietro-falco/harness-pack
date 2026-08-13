@@ -3,11 +3,11 @@
 [![ci](https://github.com/pietro-falco/harness-pack/actions/workflows/ci.yml/badge.svg)](https://github.com/pietro-falco/harness-pack/actions/workflows/ci.yml)
 [![license: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-> Pinned rules, a fail-closed guard, hash-chained receipts, and an
+> Pinned rules, a fail-closed guard, a hash-chained run log, and an
 > operator kill-switch: the governance layer around every agent run.
 
 **An agent's "done" is a claim, not a fact.** harness-pack turns that
-claim into a deterministic, tamper-evident receipt: which rules were in
+claim into a deterministic run record — which rules were in
 force (by hash), which model actually ran (by manifest), what the run
 cost, and how it ended. It does this with zero runtime dependencies
 beyond the Python 3 standard library and bash, so the entire enforcement
