@@ -298,3 +298,77 @@ rather than letters invented here.
 shell in a single turn per probe, each with the script's digest recorded before
 execution and its exit code after. No measurement was taken by an agent session
 inside the tree it measured.
+
+## Amendment 1 — 2026-08-13 — two rows of the Basis table no longer match HEAD; the table is a reading at an instant, and OR-7 opens against a tracker fact that claims otherwise
+
+Appended, not edited. `status` remains `accepted`; D1 through D4 are unaltered, not
+superseded and not renumbered, and no open requirement above is rewritten in place.
+The Basis table at `:46-53` stands exactly as written, digits included — this
+amendment records what the four pinned blobs measure today and what that does and
+does not mean. Nothing above this line is touched.
+
+**Basis of this amendment.** `harness-pack` at
+`14e225f5e9413946cb72024b4e8bc931f7107874`, branch `main`, working tree carrying no
+tracked modification and one untracked directory. Each of the four paths pinned at
+`:50-53` was measured the way the pin was measured, `git show HEAD:<path> | shasum
+-a 256`:
+
+| Row | Artifact | Pinned | At this basis |
+|---|---|---|---|
+| `:50` | `scripts/guard_pretooluse.py` | `2a4b861f8dd1fe8c2abaa2c2872ae483d3b42dc381ef3f5cde589e719795d07b` | unchanged |
+| `:51` | `templates/settings.mode-b.json` | `36cabfb418e499fd5dc1be105312ab7348c0c8f08355d7f28d30863146eaf7da` | unchanged |
+| `:52` | `docs/STACK.md` | `37ce7d581c65846da7a1718168026e69213de3996e9378720df4d697db8ecb3b` | `e4a9a21e3d66cd0702dba13eec4c904a8622611676acea9ae4ff07e8d3de4074` |
+| `:53` | `.verity/claims.json` | `564a4b44040b15e18e53321bc4049bab6b6eb11255707ea34fae40721bc5cc6c` | `95e92630f7e31e480db7a418a50806b2f78df01aa970930be3aae0ff437135f1` |
+
+Two of four have moved. The guard and the settings template have not, and the pins
+at `:50` and `:51` still name the blobs at HEAD.
+
+**What moved them.** Two commits touch either path between this document's basis,
+`c9d67704`, and the basis above. Both are dated 2026-08-13.
+
+- `5f47378` `docs(stack): pin the artifact conventions in the agent contract` —
+  adds the `### Artifact conventions` section to `docs/STACK.md`, and appends to
+  `.verity/claims.json` the claim `drift-guard-agent-contract-artifact-conventions`,
+  which greps `docs/STACK.md` for that heading.
+- `bbbe0ba` `docs(adr): ratify ADR-020 — the publishable artifact is the Statement`
+  — appends to `.verity/claims.json` the claim
+  `publication-boundary-statement-allowlist`.
+
+On `.verity/claims.json` the whole diff `c9d67704..14e225f` is those two claims
+appended in place: zero removed, zero rewritten. The six privacy-lint claims and the
+four drift-guard claims that this document was written over are byte-identical to
+what it read.
+
+**The record this amendment makes.** The table at `:46-53` is introduced, in its own
+words, as `Blobs read for this document, by digest at the basis`. It is a minute of a
+reading taken at one instant, not a live obligation, and a digest in it that moves is
+not a defect and is not to be read as one. Two independent measurements at this
+basis, neither taken on trust:
+
+- Each of the four digests occurs **exactly once** in this repository, excluding
+  `.git`: on its own row of that table. `2a4b861f…` at `:50`, `36cabfb4…` at `:51`,
+  `37ce7d58…` at `:52`, `564a4b44…` at `:53`. One occurrence each, four total, no
+  second copy anywhere in the tree.
+- No decision of this document cites any of them. D1 through D4 turn on the launch
+  line, the settings file, the guard body and three fixtures, and none names a
+  digest. Nothing under `scripts/`, `tests/`, `.verity/` or `.github/workflows/`
+  reads the table: `tests/run_tests.sh` names no ADR digest, no fixture names this
+  document at all, and `ci.yml` runs shellcheck, gitleaks and the suite.
+
+A pin nothing reads cannot go stale in the sense that matters here, because nothing
+downstream of it was ever true by virtue of it.
+
+## Open requirements — Amendment 1
+
+- **OR-7 — a tracker fact asserts a correspondence its own mechanism never
+  measures.** The vault's harness thread tracker carries, under `THR-ADR`, a cited
+  fact `ADR-2` whose claim reads in its own words `ADR-011:53 pins
+  .verity/claims.json, and the pin still matches the HEAD blob`. Its `kind` is
+  `sha256_git_blob`, whose implementation resolves `rev:path`, hashes the blob it
+  gets back, and compares the result against an `expected` transcribed into the
+  tracker. It never opens this document and never reads line 53. The digest at `:53`
+  and the digest in the tracker are two copies with no reader in common: they can
+  diverge from one another, in either direction, with nothing in either artefact
+  able to detect it. The claim describes a mechanism the fact does not have.
+  Falsified by a fact that reads both copies, or by the withdrawal of the claim that
+  asserts the correspondence.
