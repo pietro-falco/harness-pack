@@ -919,6 +919,35 @@ bypass_row tests/bypass_att_no_subject_no_statement_fixture.sh GREEN    BROKEN
 bypass_row tests/bypass_att_result_desync_fixture.sh          GREEN     BROKEN
 bypass_row tests/bypass_att_subject_missing_fixture.sh        GREEN     BROKEN
 
+# ADR-020's three, landed with its ratification, and they are the rows the
+# paragraph above said this commit was not allowed to write. ADR-006:56 forbade
+# them while ADR-020 was Proposed; it is Accepted as of 2026-08-13 and the
+# prohibition is spent. Two of the three also close ADR-019's last two open
+# requirements -- OR-5 is bypass_att_prose_leak and OR-4 is
+# bypass_att_policies_constitution -- which ADR-019 said in as many words would
+# "close there".
+#
+# All three are declared GREEN and each carries a control that makes its own
+# assertion MOVE, on the standard the six rows above are held to:
+#
+#   prose_leak                     six leak shapes the boundary must refuse,
+#                                  beside one conforming artifact it must accept,
+#                                  beside a receipt PROVEN to carry all five
+#                                  leaking strings before the artifact is judged.
+#   policies_constitution          four arms, and the two digests are asserted
+#                                  DIFFERENT before arm 2 runs -- a row that
+#                                  cannot distinguish the wrong value from the
+#                                  right one is not a row.
+#   receipt_host_path_published    the only one of the three whose RED was
+#                                  ALREADY MEASURED rather than predicted:
+#                                  N3-PUBLISH.md censused 2 of 49 receipts
+#                                  carrying the token. The fixture reproduces it
+#                                  at the census's own two JSON paths and fails
+#                                  closed if it cannot.
+bypass_row tests/bypass_att_prose_leak_fixture.sh             GREEN     BROKEN
+bypass_row tests/bypass_att_policies_constitution_fixture.sh  GREEN     BROKEN
+bypass_row tests/bypass_receipt_host_path_published_fixture.sh GREEN    BROKEN
+
 # COMPLETENESS IS MEMBERSHIP, NOT CARDINALITY (D5), and it runs before the
 # fixtures because it is the cheap half. The set of registered paths must EQUAL
 # the set `git ls-files` tracks, and the two directions are accused separately

@@ -25,6 +25,12 @@ rather than inherited.
   HARNESS_MANIFEST  the manifest the launcher resolved. The only field read from
                     it is `verifier_id`, and its absence is a fail-closed STOP on
                     the model of CONST-HASH-MISMATCH (launch_checks.py:61-64).
+  CLAIMS_SHA256     the sha256 of the TARGET repository's .verity/claims.json,
+                    taken by the launcher inside its gate branch. ADR-020 D4's
+                    ResourceDescriptor, and the second of the two digest lines
+                    the family named -- ADR-019 OR-1 and ADR-020 OR-1. EMPTY is a
+                    decided state and not a failure: no gate ran, or the manifest
+                    was unreadable, and `policies` is then `[]`.
 
 WHAT THIS WRITER NEVER READS, and the rule is an allowlist rather than a denylist
 (ADR-019 D6, whose rationale ADR-020 D2 carries). No field of the Statement is
@@ -122,7 +128,46 @@ def _properties(receipt):
     return props
 
 
-def compose(receipt, subject_name, subject_sha256, verifier_id):
+def _policies(claims_sha256):
+    """ADR-020 D4, and the field ADR-019 OR-1 left written as `[]` with a reason.
+
+    D4 decides what this carries: "the `ResourceDescriptor` of the **claims
+    manifest of the target repository** -- `.verity/claims.json`, the path
+    `verity` `src/verify.ts:9` fixes as `DEFAULT_MANIFEST_PATH`. Its `digest` is
+    the sha256 of that file's bytes, computed **at the moment of the gate**".
+    The launcher takes that digest inside its gate branch and passes it here;
+    this function decides only how to spell it.
+
+    DIGEST ALONE, NO PATH. `resource_descriptor.md:26-27` is satisfied by
+    `digest` on its own -- "a ResourceDescriptor MUST specify one of `uri`,
+    `digest` or `content` at a minimum" -- and ADR-020 D2's allowlist is why the
+    minimum is what gets written: a `uri` here would be an absolute path in a
+    publishable artifact, which is the whole thing D3's boundary refuses.
+
+    THE CONSTITUTION NEVER APPEARS HERE. D4: "`CONSTITUTION.md` governs the
+    CHILD -- the subject being judged -- not the judge." The receipt carries
+    `constitution_hash` and this function does not read it. That is asserted by
+    tests/bypass_att_policies_constitution_fixture.sh rather than left to this
+    comment.
+
+    `[]` IS THE HONEST BRANCH, NOT A DEGRADED ONE. An empty CLAIMS_SHA256 means
+    the gate did not run, or the manifest was not readable when it did. D4:
+    "nothing is invented. The fact is recorded and `verifier.policies` is left
+    `[]`", which `svr.md:74-76` makes the minimal CONFORMANT value.
+    """
+    value = (claims_sha256 or "").strip()
+    if not value:
+        return []
+    # A digest that is present but malformed is not a weaker descriptor, it is a
+    # false one, and it is refused on exactly the ground D7 refuses an empty
+    # subject: a fabricated descriptor costs a consumer the ability to trust any
+    # descriptor, including every true one.
+    if len(value) != 64 or any(c not in "0123456789abcdef" for c in value):
+        _stop("STOP: POLICY-DIGEST-MALFORMED CLAIMS_SHA256 is not 64 lowercase hex characters; no Statement written")
+    return [{"digest": {"sha256": value}}]
+
+
+def compose(receipt, subject_name, subject_sha256, verifier_id, claims_sha256=""):
     """The Statement. Four keys, statement.md:9-21; `predicate` is optional there
     (`:62`) and is present because SVR v0.2 requires three fields inside it."""
     return {
@@ -143,19 +188,13 @@ def compose(receipt, subject_name, subject_sha256, verifier_id):
         "predicate": {
             "verifier": {
                 "id": verifier_id,
-                # [] AND THE REASON, written here rather than left to be inferred.
-                # ADR-020 D4 decides what this field carries -- the
-                # ResourceDescriptor of the target repository's claims manifest --
-                # and ADR-020 is Proposed. ADR-006:56 forbids writing code against
-                # a Proposed ADR, so that decision is not implemented here and is
-                # not half-implemented either. svr.md:74-76 makes [] the minimal
-                # CONFORMANT form: "The `verifier.policies` field MUST be present.
-                # If no explicit policies were used, or the verifier cannot
-                # reference the policies, producers MUST encode this as an empty
-                # array." A recorded [] with a written reason is honest; a
-                # fabricated descriptor is not. ADR-019 OR-1 stays open, and the
-                # line that closes it is ADR-020 OR-1's second `shasum`.
-                "policies": [],
+                # ADR-020 D4, ratified 2026-08-13. This field carried `[]` with a
+                # written reason while ADR-020 was Proposed and ADR-006:56 forbade
+                # implementing it; the reason is now in _policies() above, and
+                # ADR-019 OR-1 closes with this line. `[]` remains the value on
+                # the branch D4 declares for it -- no gate, or no readable
+                # manifest -- and it is still the minimal conformant form there.
+                "policies": _policies(claims_sha256),
             },
             "timeCreated": receipt["ended_at"],
             "properties": _properties(receipt),
@@ -226,7 +265,11 @@ def main(argv):
     if not isinstance(receipt.get("ended_at"), str) or not receipt["ended_at"]:
         _stop("STOP: TIME-CREATED-ABSENT receipt %s carries no ended_at; svr.md:99 requires timeCreated; no Statement written" % receipt_path)
 
-    statement = compose(receipt, subject_name, out_sha256, verifier_id)
+    # ADR-020 D4's descriptor. Read from the environment for the same reason
+    # OUT_SHA256 is: the launcher computes it at the moment of the gate, which is
+    # a moment this writer is not present for.
+    statement = compose(receipt, subject_name, out_sha256, verifier_id,
+                        os.environ.get("CLAIMS_SHA256") or "")
 
     # ADR-018 D1's form, and the bytes on disk ARE the serialization: no trailing
     # newline, so sha256(file) equals sha256(the canonical string) and the

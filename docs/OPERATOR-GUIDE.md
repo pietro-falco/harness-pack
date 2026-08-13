@@ -131,4 +131,6 @@ Any edit to `CONSTITUTION.md` requires recomputing its sha256 and updating `cons
 
 The Claude Code CLI and hooks contract can drift. Three files are the only seams: `scripts/launch_worker.sh` for flags, `templates/settings.mode-b.json` for hook wiring, `scripts/guard_pretooluse.py` for the guard itself. Verify flag and field names against current docs whenever you touch a seam.
 
-Run the HALT drill on a schedule you will actually keep. Keep the rollup current, so the committed chain stays close to the loose receipts. And keep secret scanning in front of anything public: receipts are designed to be safe to publish, transcripts are not.
+Run the HALT drill on a schedule you will actually keep. Keep the rollup current, so the committed chain stays close to the loose receipts. And keep secret scanning in front of anything public.
+
+**The publishable artifact is the side-car Statement, not the receipt** (ADR-020 D1/D2). An earlier version of this sentence said receipts were designed to be safe to publish. Measured, that was false: a census of 49 receipts found 2 carrying the operator's home directory, and the mechanism puts it there whenever a `file_exists` claim FAILs in the baseline — the state the launcher itself calls healthy and normal, so the leak is correlated with the run being useful. The receipt is not sanitised and is not made safer; it is removed from the question. Publish `<run_id>.intoto.json`, never `<run_id>.receipt.json`, and never the transcript.

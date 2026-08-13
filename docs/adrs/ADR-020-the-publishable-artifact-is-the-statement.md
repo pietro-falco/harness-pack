@@ -1,6 +1,6 @@
 ---
 type: adr
-status: proposed
+status: accepted
 title: "The publishable artifact is the Statement: an allowlist, and a claim that presides over what is emitted"
 id: ADR-020
 date: 2026-08-13
@@ -11,15 +11,128 @@ related-adrs: [harness-pack/ADR-004, harness-pack/ADR-005, harness-pack/ADR-006,
 
 ## Status
 
-Proposed
+Accepted 2026-08-13 by direct operator ratification, on the text committed at
+`95f508bcff7cbc893e9ab25925cc73ff0f2039c5`, git blob
+`0532e3986ee0627c49114b5199e7f888f61e9de2`. Originally proposed 2026-08-13 as a
+docs-only commit under `harness-pack/ADR-006:56` — "No code is written against
+this ADR while it is Proposed" — which `harness-pack/ADR-009:23` reads as
+general. Per the two-commit lifecycle, acceptance requires operator review and a
+separate ratification commit. This is that commit. [verified]
 
-**This ADR decides; no code is written against it while it is Proposed.** No
-writer, no claim, no fixture and no documentation edit ships with this commit,
-on the rule `harness-pack/ADR-006:56` states — "No code is written against this
-ADR while it is Proposed" — and which `harness-pack/ADR-009:23` applies
-generally. D1 identifies a false sentence in `docs/OPERATOR-GUIDE.md` and does
-**not** correct it here: the correction is an edit to an existing file and
-belongs to this ADR's implementation, not to its proposal. [verified]
+**The ratification commit is the implementing commit**, on the precedent
+`harness-pack/ADR-018` and `harness-pack/ADR-019` set in the two documents
+before this one. Five things ship, and they are the whole of what this decision
+costs:
+
+- **The boundary.** `scripts/statement_lint.py`, D3's claim expressed as a
+  detector. Its primary pass is **structural**: every string in a Statement must
+  occupy a slot the file names and satisfy that slot's rule, and an unrecognised
+  key is refused without its value being inspected. That is D2's allowlist as
+  code. The two blunt checks D3 names by hand — the literal `/Users/` token and
+  an absolute path by shape — run as a second pass over every string at every
+  depth.
+- **The wiring.** `publication-boundary-statement-allowlist` in
+  `.verity/claims.json`, which runs the detector's self-test and then sweeps
+  every emitted `*.intoto.json`. It reaches the artifact by walking the
+  filesystem, which is the one capability `privacy-lint-user-paths`
+  structurally lacks.
+- **The second `shasum`.** `scripts/launch_worker.sh` computes the sha256 of the
+  target repository's `.verity/claims.json` **inside the gate branch**, and
+  `scripts/write_statement.py` spells it as D4's `ResourceDescriptor`. This was
+  OR-1 here and OR-1 in `harness-pack/ADR-019`, and it closes both.
+- **The correction.** `docs/OPERATOR-GUIDE.md`'s sentence, which D1 declared
+  false and deferred to this commit. Its replacement names the Statement as the
+  publishable artifact, states the measurement that made the old sentence false,
+  and says plainly that the receipt was removed from the question rather than
+  made safer.
+- **Three falsifiers**, registered in `tests/run_tests.sh` under `ADR-017` D2,
+  each carrying the state its own header declares (`ADR-017` D6):
+
+| Falsifier | Decision | Declared | RED | File |
+|---|---|---|---|---|
+| `bypass_att_prose_leak` | D2, D3 | GREEN | produced and observed here | `tests/bypass_att_prose_leak_fixture.sh` |
+| `bypass_att_policies_constitution` | D4 | GREEN | produced and observed here | `tests/bypass_att_policies_constitution_fixture.sh` |
+| `bypass_receipt_host_path_published` | D1, D3 | GREEN | already measured, cited | `tests/bypass_receipt_host_path_published_fixture.sh` |
+
+**All three are declared GREEN, and that is stated rather than left to look like
+the register going soft.** The implementation lands in the same arc as the
+falsifiers, so their subject exists on arrival — the same situation
+`harness-pack/ADR-019`'s six were registered GREEN in. What keeps them from being
+vacuous is that each carries a control that makes its own assertion **move**.
+`bypass_att_prose_leak` proves the receipt it derives from carries all five
+leaking strings before it judges the artifact. `bypass_att_policies_constitution`
+asserts the constitution's digest and the claims manifest's digest are
+**different** before testing which one appears. `bypass_receipt_host_path_published`
+reproduces the census's RED at its own two JSON paths and fails closed if it
+cannot.
+
+**Two of the three also close `harness-pack/ADR-019`'s last two open
+requirements**, which that document said in as many words would "close there":
+OR-5 is `bypass_att_prose_leak` and OR-4 is `bypass_att_policies_constitution`.
+Together with OR-1 they are recorded as an appended amendment in
+`harness-pack/ADR-019` itself — the form this repository uses for a
+post-acceptance closure, which `vault/ADR-080` states as "Appended, not edited"
+and which `harness-pack/ADR-018` Amendment 1 used one document ago.
+
+**The ratified text differs from the proposed text on seven points, named here
+rather than left to a diff. No Decision text changes: D1 through D5 stand word
+for word as proposed.**
+
+1. This Status block, which records ratification in place of the
+   nothing-ships-yet paragraph the proposing commit carried.
+2. **The Basis's measurement-documents paragraph**, repointed from
+   `${TMPDIR}/attest-s1/` to the tracked manifest at
+   `.verity/evidence/2026-08-13-attestation-s1/README.md`, with the bytes
+   recorded as held in the operator's private governance vault. The digests are
+   unchanged, because the bytes are. This repair was made **before** acceptance
+   attached, for the reason stated there: an Accepted ADR is immutable and the
+   temporary directory is swept.
+3. The Verification section's three rows, whose "Not yet observed" was true when
+   written and stopped being true in this commit for two of them. Each original
+   sentence is kept and the observation appended beneath it.
+4. The Verification section gains the D4 row's fixture **name**, which the
+   proposed text described without naming.
+5. The Non-goals bullet reading "**It writes no code**, no claim, no fixture and
+   no schema" — true of the proposing commit, not true of this one. No schema
+   file ships even so. The bullet "It does not edit `docs/OPERATOR-GUIDE.md`" is
+   likewise spent.
+6. The Open requirements: OR-1 is closed in place with the closure recorded
+   beneath the original text. OR-2 through OR-6 stay open, each with its state at
+   ratification recorded.
+7. The Assumption ledger's A3 row, whose residual was resolved in this commit by
+   a mechanism the row did not anticipate. The previous reading is preserved and
+   the observation appended under it.
+
+**Three facts observed at ratification, recorded here rather than discovered
+later.**
+
+- **A3's false-positive risk is resolved by scheme, not by tuning.** The row
+  carried the absolute-path shape check as `[assumed]` because "a URI is the only
+  one that could resemble a path". Measured, that is exactly right and the
+  collision is total: `https://verifier.example.invalid/harness-pack/v1` is
+  indistinguishable from a path by any shape rule loose enough to catch
+  `/srv/agents/private/verifier`. The detector therefore exempts a scheme-bearing
+  URI from the **shape** check and exempts nothing from the **literal** check,
+  and it does **not** exempt `file:` — a file URI is an absolute path with a
+  scheme in front of it, and an exemption covering it would be the exemption that
+  swallows the check. Both leaking specimens in the self-test are `file:` URIs
+  for that reason. [verified]
+- **D4's descriptor is reachable, and the empty branch is narrower than the
+  ADR implied.** `.verity/claims.json` is readable at gate time because
+  `measure_criteria` invokes `verity` in `$HALT_ROOT` and `verity`
+  `src/verify.ts:9` resolves `DEFAULT_MANIFEST_PATH` relative to it — an
+  unreadable manifest makes `verity` exit 2, which the launcher already reads as
+  NO-VERDICT. So the `[]` branch is not primarily "the manifest was missing"; it
+  is **"no gate ran"**, which is every run where the child exited non-zero. That
+  is the modal empty case and it was not the one A2 named. [verified]
+- **The example manifest's placeholder is refused by the boundary, and that is
+  correct.** `templates/manifest.example.json` carries
+  `OPERATOR_VERIFIER_ID_URI`, which is not a URI, so an operator who ran with the
+  example manifest unedited would emit a Statement the boundary refuses at
+  `$.predicate.verifier.id`. `harness-pack/ADR-004` requires the placeholder and
+  D2 requires the slot to hold a URI; the two do not conflict, because the
+  placeholder is a value the operator is required to replace and the boundary is
+  where forgetting becomes loud instead of silent. [verified]
 
 ## Numbering note
 
@@ -83,8 +196,34 @@ Citations into `harness-pack` are read against the committed blob
 (`git show HEAD:<path>`), never the working tree, which is dirty at this basis.
 Citations into `verity` and the vault are read against the pinned commits above.
 
-**Measurement documents**, under `${TMPDIR}/attest-s1/`. Cited, **not
-re-derived**; no census below was re-run for this document.
+**Measurement documents.** Cited by digest, **not re-derived**; no census below
+was re-run for this document.
+
+Their manifest is tracked in this repository at
+`.verity/evidence/2026-08-13-attestation-s1/README.md`, which carries the path,
+sha256 and byte length of every file in the corpus and none of their bytes. The
+bytes themselves are held in the **operator's private governance vault**, in a
+frozen bundle under the same names. The split is deliberate and the manifest
+states its reason: the measurement documents record absolute home paths and the
+names of private repositories, because that is what they measured, and this
+repository is destined to be public. Rewriting them so the privacy lint passes
+would falsify the measurement these citations rest on; exempting
+`.verity/evidence/` from the lint would be a privacy rule with a carve-out for
+the one directory holding the private material. So **the digest travels and the
+bytes do not** — a sha256 identifies the bytes it names wherever those bytes are
+held, which is what makes the split cost these citations nothing. A reader who
+wants the corpus has to be given it; what a reader gets from the manifest is the
+ability to check, byte for byte, that whatever they are given is what this
+document cited.
+
+**This paragraph replaces a Basis that pointed at `${TMPDIR}/attest-s1/`.** That
+location is swept on this platform, so the proposed text was a document whose
+evidence base had an expiry — and an Accepted ADR is immutable, so a Basis
+pointing at volatile evidence had to be repaired **before** acceptance attached
+to it rather than after. `harness-pack/ADR-018` and `harness-pack/ADR-019`
+carried the same defect and were repaired the same way, one commit earlier; the
+manifest's own "Who cites it" table recorded this document as the outstanding
+one. The digests below are **unchanged**, because the bytes are. [verified]
 
 | Document | sha256 |
 |---|---|
@@ -398,6 +537,21 @@ receipts carrying the token, at these two JSON paths:
 that RED inside the suite instead of inside a measurement document that nothing
 executes. [verified]
 
+**HELD IN THE SUITE AT RATIFICATION.** `tests/bypass_receipt_host_path_published_fixture.sh`
+reproduces the census's RED at **both** of its JSON paths and fails closed if it
+cannot — the paths are read structurally rather than grepped, because the census
+named paths and a grep would agree with the token anywhere. It then asserts the
+emitted Statement carries none of it, and separately asserts the **receipt still
+does**: a row that silently benefited from a sanitiser would be measuring a
+decision nobody took, and this document's Non-goals rule that sanitiser out.
+
+**The token is never written literally in that file.** It is assembled at runtime
+from its two halves, because a tracked file carrying it is what
+`privacy-lint-user-paths` exists to refuse — and a fixture that had to be added
+to that claim's exclusion list in order to run would be *reproducing* the defect
+D3 criticises rather than measuring it. Three lines, and it keeps both claims
+honest at once. [verified]
+
 **D2 — `bypass_att_prose_leak`.** A Statement carrying any field outside D2's
 allowlist — a `verity` `evidence` string, a `gate.reason`, a `denials` member, a
 `subtype`, a `session_id` — must be **rejected**.
@@ -407,7 +561,25 @@ so there is no measured RED behind this one. It is a prediction until the fixtur
 runs, and it must be written so that it fails against the *lenient* implementation
 — the one that copies a field through because the field happened to be in hand.
 
-**D4 — a `verifier.policies` fixture.** A fixture asserting that
+**PRODUCED AND OBSERVED AT RATIFICATION.** `tests/bypass_att_prose_leak_fixture.sh`
+constructs six leaking Statements — an `evidence`, a `reason`, a `subtype`, a
+`session_id`, a `denials` member, and one that is subtler than the other five: an
+**allowed key carrying a disallowed value**, a real `gate.reason` string placed
+in `predicate.properties`. That sixth shape is what distinguishes an allowlist
+over slots from an allowlist over slots *and* their contents; a key-name check
+alone accepts it. All six were refused, the conforming control was accepted.
+
+The row proper is stronger than the six shapes. The fixture drives
+`scripts/write_receipt.py` with a `cc.json` carrying all three of D1's carrier
+classes at once, then **proves the receipt actually carries all five leaking
+strings** before judging anything — without that proof the artifact could be
+clean for a reason unrelated to D2. It then emits the Statement and searches its
+**bytes** for each of the five. Zero present. The emitter is run, never read:
+what D2 decides is a property of the artifact, not of the writer's intentions.
+[verified]
+
+**D4 — a `verifier.policies` fixture**, named at ratification as
+`bypass_att_policies_constitution`. A fixture asserting that
 `verifier.policies` **never** contains the digest of `CONSTITUTION.md`.
 
 **Not yet observed, and declared as such.** Its value is that it fails on the
@@ -420,6 +592,19 @@ reach, from the fact that the constitution's digest is present and the manifest'
 is not — the same argument `harness-pack/ADR-019` D2's fixture makes about
 `HEAD`.
 
+**PRODUCED AND OBSERVED AT RATIFICATION**, in four arms, and the fixture asserts
+its own premise before it measures: `sha256(CONSTITUTION.md)` and
+`sha256(.verity/claims.json)` are checked **different** first, because a row that
+cannot distinguish the wrong value from the right one is not a row. It then
+composes a receipt carrying the constitution's real digest — so the attractive
+value is genuinely in the emitter's hand — and measures: (1) with a gate digest,
+`policies` carries the claims manifest's descriptor and nothing else; (2) the
+constitution's digest appears **nowhere** in the artifact's bytes; (3) with no
+gate digest, `policies` is `[]` and the constitution is **not** reached for once
+no other descriptor is at hand — the exact reach D4 refuses, tested at the moment
+it would be most tempting; (4) a malformed digest STOPs the emitter and writes no
+file. [verified]
+
 **D5 — no fixture named here.** The hazard is in another repository, outside this
 repository's suite, and its fix is a `.gitignore` line whose falsifier is
 `git check-ignore`. Naming a fixture in this suite against an artifact this suite
@@ -427,9 +612,12 @@ cannot reach is the defect `harness-pack/ADR-017` is about. It is OR-2.
 
 ## Non-goals
 
-- **It writes no code**, no claim, no fixture and no schema.
+- **It writes no code**, no claim, no fixture and no schema. *Spent at
+  ratification: the boundary, the claim and three fixtures ship. No schema file
+  ships even so.*
 - **It does not edit `docs/OPERATOR-GUIDE.md`.** D1 declares the sentence false
-  and defers the correction to implementation.
+  and defers the correction to implementation. *Spent at ratification: this is
+  that implementation, and the sentence is corrected.*
 - **It does not modify the receipt** — not its fields, not its serialization, not
   one byte. The receipt stays exactly as unpublishable as it is; the response is
   a different artifact, not a sanitised receipt.
@@ -448,9 +636,30 @@ cannot reach is the defect `harness-pack/ADR-017` is about. It is OR-2.
   `.verity/claims.json`'s bytes at gate time. That line does not exist. It is
   implementation, on the same model as `harness-pack/ADR-019` OR-6, and is not
   written here.
+
+  **CLOSED at ratification: the implementation carries it.**
+  `scripts/launch_worker.sh` computes the sha256 of
+  `$HALT_ROOT/.verity/claims.json` **inside the gate branch**, immediately after
+  `measure_criteria` returns, and `scripts/write_statement.py` spells it as a
+  `ResourceDescriptor` carrying `digest` and nothing else. It uses `hashlib`
+  through `python3 -c` rather than `shasum(1)`, for the reason
+  `harness-pack/ADR-019` OR-6 gives — one library for every digest in the receipt
+  family.
+
+  **Inside the gate branch and nowhere else**, because `measure_criteria` runs
+  twice and t0 is a baseline, not a verification: a digest taken at t0 would name
+  the policy in force before the child ran, which is not the policy the verdict
+  was reached under. This also closes `harness-pack/ADR-019` OR-1, recorded there
+  as an appended amendment. [verified]
 - **OR-2 — the worker repository's ignore rule.** D5's one-line `.gitignore`
   fix, in another repository, as a separate commit. Falsified by
   `git check-ignore` against that repository's receipts directory.
+
+  **OPEN at ratification, and deliberately so.** D5 says this is not this ADR's
+  job to make and that it does not wait on this ADR's acceptance. The hazard is
+  still live: that repository still holds stageable leaking receipts. Nothing in
+  this commit changed that, which is the residual this document's Consequences
+  already state rather than imply.
 - **OR-3 — `verity` is absent from `vault/ADR-051` D1's prefix registry.**
   That registry lists `vault/`, `reps/`, `harnesswright/`, `harness-pack/`,
   `reps-coach/` and a reserved `webapp/`. `vault/ADR-080`'s own namespace table
@@ -460,15 +669,43 @@ cannot reach is the defect `harness-pack/ADR-017` is about. It is OR-2.
   this, and `vault/ADR-080` OR-3 already applies it to a different namespace.
   Registering `verity/` is a vault-side act and is not performed here.
   [verified]
+
+  **OPEN at ratification, and it is open in TWO documents rather than one.**
+  `harness-pack/ADR-018`'s numbering note and this one both cite `verity/`
+  prefixes against a registry that does not list it. It is a vault-side act and
+  is delegated to the vault's ADR thread rather than carried further here.
 - **OR-4 — the Statement's own canonical form.** `harness-pack/ADR-018` D1 binds
   new content-addressed artifacts. Whether the side-car is content-addressed, and
   therefore whether it enters the chain, was left open as
   `harness-pack/ADR-019` OR-3 and is not closed here.
+
+  **HALF-CLOSED at ratification, and the half that closed is named.** Whether the
+  side-car is content-addressed was answered **yes** in `harness-pack/ADR-019`
+  OR-3 and its fixture is `bypass_att_canon_reorder`. Whether it is rolled
+  **into the chain** is untouched: no ADR has taken that decision, and D5's
+  falsifier establishes only that the chain survives the side-car's existence.
+  That remaining half stays open here under this number.
 - **OR-5 — the `verifier.id` domain**, inherited unchanged from
   `harness-pack/ADR-019` OR-2. An operator decision.
+
+  **OPEN at ratification, and unchanged.** `harness-pack/ADR-019` OR-2 closed the
+  question of *where the value comes from* — the manifest, fail-closed, never
+  defaulted. Which domain remains the operator's to choose in their own copy.
+  This commit adds one observation to it and no decision: the placeholder
+  `OPERATOR_VERIFIER_ID_URI` is **refused by D3's boundary**, because it is not a
+  URI. An operator who never replaces it gets a loud refusal rather than a
+  Statement naming a placeholder as its verifier. [verified]
 - **OR-6 — at least one non-`command` claim.** See Consequences. Until one
   exists, D4's descriptor is well-formed and the Statement's `subject` digest
   comes from the transcript alone.
+
+  **OPEN at ratification, and the count moved the wrong way.** This commit adds a
+  twelfth claim to `.verity/claims.json` — `publication-boundary-statement-allowlist`
+  — and it is `type: command`, like the eleven before it. It has to be: what it
+  judges is an untracked artifact that may not exist yet, which is the one thing
+  `file_matches` and `git_committed` cannot express. So `verity/0002`'s
+  structured-digest slot still yields this repository nothing, and the reason is
+  now one claim stronger than when Consequences stated it. [verified]
 
 ## Consequences
 
@@ -491,6 +728,16 @@ cannot reach is the defect `harness-pack/ADR-017` is about. It is OR-2.
   structured-digest slot yields this repository **nothing** until at least one
   claim becomes `file_matches` or `git_committed`. That is OR-6, a claims-layer
   decision on this side, not a defect on `verity`'s. [verified]
+- **The Statement's byte shape changes, and one earlier measurement now describes
+  a superseded artifact.** D4's descriptor adds a populated `policies` array on
+  every gated run, so a Statement emitted after this commit is longer than one
+  emitted before it and has a different content id. `harness-pack/ADR-018`
+  Amendment 1 records 516, 539 and 607 bytes as `bypass_att_canon_reorder`'s own
+  output *at its stated basis*; those numbers are a record of what was measured
+  there and are not a live claim about any artifact emitted after this one. The
+  fixture recomputes rather than asserting constants, so it is unaffected. This
+  is exactly what pinning a basis is for, and it is recorded here rather than
+  left for a reader to notice as a discrepancy. [verified]
 
 ## Assumption ledger
 
@@ -499,6 +746,6 @@ Every `[assumed]` in this document, with the observation that would falsify it.
 | # | Assumption | Falsifier |
 |---|---|---|
 | A1 | **[assumed]** The `HARNESS_` vocabulary closed at `harness-pack/ADR-019` D4 is sufficient to express every verdict a consumer needs, so that D2's allowlist never has to be widened to a free-text field. | The first consumer requirement that cannot be met by adding a closed-vocabulary property — i.e. one that genuinely needs a string only the verifier could have written. That would reopen D2, not merely extend the enum. |
-| A2 | **[assumed]** `.verity/claims.json` is readable at gate time in every deployment topology, including the enforced runtime location of `harness-pack/ADR-001`. | The first gate run in which the manifest cannot be read. D4 already declares the branch this takes: record the fact, emit `verifier.policies: []`. Falsification costs nothing because the fallback is written. |
-| A3 | **[assumed]** An absolute path is detectable by shape in D3's claim without an unacceptable false-positive rate over legitimate Statement content. | A Statement that D3's claim refuses and that carries nothing outside D2's allowlist. Under D2 the risk is low — a conforming Statement contains only digests, enum values, ids, timestamps and URIs, and a URI is the only one that could resemble a path — but "low" is not "measured", and it has not been measured. |
+| A2 | **[assumed]** `.verity/claims.json` is readable at gate time in every deployment topology, including the enforced runtime location of `harness-pack/ADR-001`. | The first gate run in which the manifest cannot be read. D4 already declares the branch this takes: record the fact, emit `verifier.policies: []`. Falsification costs nothing because the fallback is written. **OBSERVED AT RATIFICATION, and the row named the wrong empty case.** The manifest is readable at gate time by construction: `measure_criteria` invokes `verity` in `$HALT_ROOT` and `verity` `src/verify.ts:9` resolves `DEFAULT_MANIFEST_PATH` relative to it, so an unreadable manifest makes `verity` exit 2 — a state the launcher already reads as NO-VERDICT. The `[]` branch is therefore dominated not by a missing manifest but by **no gate having run at all**, which is every run whose child exited non-zero and which the launcher skips the gate for. That is the modal empty case, it is frequent rather than exceptional, and the fallback D4 wrote covers it unchanged. |
+| A3 | **[assumed]** An absolute path is detectable by shape in D3's claim without an unacceptable false-positive rate over legitimate Statement content. | A Statement that D3's claim refuses and that carries nothing outside D2's allowlist. Under D2 the risk is low — a conforming Statement contains only digests, enum values, ids, timestamps and URIs, and a URI is the only one that could resemble a path — but "low" is not "measured", and it has not been measured. **MEASURED AT RATIFICATION, and the row was right about the collision and wrong about it being a matter of rate.** A URI does not merely *resemble* a path: `https://verifier.example.invalid/harness-pack/v1` and `/srv/agents/private/verifier` are indistinguishable to any shape rule loose enough to catch the second. There is no threshold that separates them, so the detector does not look for one. It exempts a **scheme-bearing URI** from the shape check, exempts **nothing** from the literal `/Users/` check, and does **not** exempt `file:` — a file URI is an absolute path with a scheme in front of it. Both leaking specimens in the self-test are `file:` URIs precisely so that the exemption is measured rather than trusted. The falsifier this row named is retired; a new one would be a legitimate non-`file` URI slot that must carry a filesystem path, and D2 admits none. |
 | A4 | **[assumed]** The census's 49 receipts are representative of what receipts will contain, in the sense that the three carrier classes are exhaustive rather than merely the three that were found. | A receipt field carrying child- or verifier-authored content that is not in D1's list of three. The classes were read from `scripts/write_receipt.py`'s source rather than from the data, which is what makes this an assumption about the *writer* being fully read, not about the sample being large. Re-reading the writer at any later HEAD falsifies or confirms it directly. |

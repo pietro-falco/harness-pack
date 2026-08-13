@@ -77,6 +77,13 @@
       "description": "docs/STACK.md retains the pinned agent-contract heading '### Artifact conventions' (ADR-003 D3).",
       "run": "git grep -qF '### Artifact conventions' -- docs/STACK.md",
       "expect": { "exitCode": 0 }
+    },
+    {
+      "id": "publication-boundary-statement-allowlist",
+      "type": "command",
+      "description": "ADR-020 D3: every emitted in-toto Statement conforms to D2's allowlist. Unlike the privacy-lint claims above, this one presides over the EMITTED ARTIFACT and not over the tree -- side-car Statements are written beside the receipt under an ignored directory, so no git grep can ever reach them, which is the defect ADR-020 D1 measured in privacy-lint-user-paths. The --selftest arm is the control: it requires the boundary to accept a conforming specimen and refuse five leaking ones on every run, so the claim still discriminates on a checkout where no run has emitted anything yet. tests/bypass_att_prose_leak_fixture.sh drives the same detector with more arms.",
+      "run": "python3 scripts/statement_lint.py --selftest && python3 scripts/statement_lint.py --sweep",
+      "expect": { "exitCode": 0 }
     }
   ]
 }

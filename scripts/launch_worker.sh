@@ -409,6 +409,49 @@ if [ "$CC_EXIT" -eq 0 ]; then
   GATE_JSON="$MEASURED_JSON"
 fi
 
+# ADR-020 D4's ResourceDescriptor, and it is the SECOND shasum -- the one
+# ADR-019 OR-1 and ADR-020 OR-1 both named and neither wrote. D4: predicate.
+# verifier.policies carries "the ResourceDescriptor of the claims manifest of
+# the target repository -- .verity/claims.json, the path verity src/verify.ts:9
+# fixes as DEFAULT_MANIFEST_PATH. Its digest is the sha256 of that file's bytes,
+# computed AT THE MOMENT OF THE GATE, so that the Statement records the policy
+# that was actually in force rather than the one on disk when a reader looks."
+#
+# A SEPARATE BLOCK, NOT AN EXTRA LINE INSIDE THE ONE ABOVE, and the reason is
+# not style. tests/adr008_falsifier_fixture.sh patches this file's t1 call site
+# by matching those five lines VERBATIM, and refuses to patch rather than
+# silently match nothing -- a "red" that was just the green run under another
+# name is the defect it is built to avoid. Editing inside the anchor breaks a
+# tracked falsifier in another ADR's family to save one `if`. Taken here, the
+# digest is still within the gate's own duration of the read verity performed.
+#
+# GATED ON THE SAME CONDITION AND NOWHERE ELSE. measure_criteria runs twice --
+# t0 above and the gate -- and t0 is a baseline, not a verification. A digest
+# taken at t0 would name the policy in force before the child ran, which is not
+# the policy the verdict was reached under. $HALT_ROOT is the directory verity
+# was invoked in, so it is the directory DEFAULT_MANIFEST_PATH resolves against.
+#
+# THE CONSTITUTION IS NOT A CANDIDATE HERE, and its absence is the decision.
+# CONSTITUTION.md governs the CHILD, not the judge; $CHASH is already in hand at
+# this point and is the value a producer reaches for when SVR demands a
+# descriptor. D4 refuses that reach, and tests/bypass_att_policies_constitution
+# is the falsifier that holds the refusal.
+#
+# EMPTY IS A DECIDED STATE. A run whose gate never ran -- every run whose child
+# exited non-zero -- leaves this empty, and so does an unreadable manifest.
+# write_statement.py then emits `policies: []`, which svr.md:74-76 makes the
+# minimal conformant form. D4: "If the claims manifest is not reachable at gate
+# time, nothing is invented."
+CLAIMS_SHA256=""
+if [ "$CC_EXIT" -eq 0 ]; then
+  CLAIMS_MANIFEST="$HALT_ROOT/.verity/claims.json"
+  if [ -r "$CLAIMS_MANIFEST" ]; then
+    CLAIMS_SHA256="$(python3 -c 'import hashlib,sys;print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' "$CLAIMS_MANIFEST" 2>/dev/null || true)"
+  else
+    echo "note: $CLAIMS_MANIFEST is not readable at gate time; verifier.policies will be [] (ADR-020 D4)" >&2
+  fi
+fi
+
 # Receipt: reflects the gate, not just CC exit. claims[] carries item-level verdicts for
 # the slice's criteria (D6); stop_reason names what actually stopped the run (D7).
 #
@@ -451,6 +494,7 @@ STATEMENT_WRITER="$SELF_DIR/write_statement.py"
 STATEMENT="$RECEIPTS_DIR/$RUN_ID.intoto.json"
 if [ -f "$STATEMENT_WRITER" ]; then
   OUT_PATH="$OUT" OUT_SHA256="$OUT_SHA256" HARNESS_MANIFEST="$MANIFEST" \
+  CLAIMS_SHA256="$CLAIMS_SHA256" \
     python3 "$STATEMENT_WRITER" "$RECEIPT" "$STATEMENT" || true
 else
   echo "note: write_statement.py not resolvable at $STATEMENT_WRITER; no Statement emitted" >&2

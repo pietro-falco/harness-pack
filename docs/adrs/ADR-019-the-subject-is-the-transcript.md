@@ -856,3 +856,82 @@ Decided from the S1/S2 measurement corpus listed in the Basis, principally
 `3c2680d` in which every line citation above was read against the committed blob
 and every external specification re-fetched and re-hashed. No citation in this
 document was carried forward from prose.
+
+## Amendment 1 — 2026-08-13 — OR-1, OR-4 and OR-5 close: `harness-pack/ADR-020` is ratified
+
+Appended, not edited. `status` remains `accepted`; no decision D1 through D7 is
+altered, superseded or renumbered, and no open requirement is rewritten in place.
+Nothing above this line is touched. This amendment records that **the three open
+requirements this document deferred to `harness-pack/ADR-020` are closed**, by
+the exact event each of them named, and states what the closures did and did not
+settle. The form is the one this repository already uses for a post-acceptance
+record — `harness-pack/ADR-008` Amendments 1 and 2, `harness-pack/ADR-010`
+Amendments 1 and 2, `harness-pack/ADR-018` Amendment 1 one document ago — and
+which `vault/ADR-080` states as "Appended, not edited."
+
+**The condition all three set, quoted.** OR-1: "This OR closes when
+`harness-pack/ADR-020` is ratified and its own OR-1 — the second `shasum` — is
+written." OR-5: "`ADR-C` is `harness-pack/ADR-020` … and it is **Proposed**.
+`harness-pack/ADR-006:56` forbids writing that fixture against a Proposed ADR, so
+it belongs to that document's ratification. Both this OR and OR-4 close there."
+
+**The condition is met.** `harness-pack/ADR-020` was ratified on 2026-08-13 and
+its ratification commit is its implementing commit.
+
+**OR-1 — `verifier.policies` placement. CLOSED, and not in the direction this
+document's own text leaned toward.** The OR named the constitution as "the
+obvious candidate ResourceDescriptor, since its digest is already pinned and
+enforced". `harness-pack/ADR-020` D4 refuses that candidate and gives the reason:
+`CONSTITUTION.md` governs the **child**, not the judge, and putting it in
+`verifier.policies` would assert that the harness verified the run against the
+constitution — which is precisely what the harness does not do. The field now
+carries the `ResourceDescriptor` of the **target repository's claims manifest**,
+digest only, computed inside the launcher's gate branch. The `[]` this document
+shipped with a written reason was the honest placeholder it was described as, and
+it remains the value on the branch D4 declares for it. [verified]
+
+**OR-4 — a falsifier for D3. CLOSED.**
+`tests/bypass_att_policies_constitution_fixture.sh`, registered under `ADR-017`
+D2 and declared GREEN by its own header. D3 assigned the constitution to "a
+material or an annotation"; the falsifier holds the negative half of that
+assignment — that it is **never** a `verifier.policies` entry — which is the half
+an implementation can get wrong silently. It measures the constitution's absence
+from the artifact's bytes while the constitution's real digest sits in the
+receipt the emitter was handed, and it asserts the two digests differ before it
+does so. [verified]
+
+**OR-5 — a falsifier for D6. CLOSED.**
+`tests/bypass_att_prose_leak_fixture.sh`, registered under `ADR-017` D2 and
+declared GREEN by its own header. D6 drew the boundary and deferred its rationale
+to ADR-C; that rationale is `harness-pack/ADR-020` D2, and this is its falsifier.
+It proves the receipt carries all five leaking strings before it judges the
+Statement, which is what keeps the row from being a green assertion about an
+artifact that never had the defect. [verified]
+
+**What this amendment does NOT do.** It does not reopen OR-3's second half:
+whether the side-car is rolled **into** the chain is still a decision no ADR has
+taken, and `harness-pack/ADR-020` OR-4 carries it forward unchanged. It does not
+close OR-2 — the `verifier.id` **domain** remains the operator's choice, and what
+`harness-pack/ADR-020` adds there is one observation and no decision: the
+placeholder `OPERATOR_VERIFIER_ID_URI` is refused by D3's boundary because it is
+not a URI, so forgetting to replace it is loud rather than silent. It changes no
+digest, migrates no chain, and touches neither `scripts/receipt_chain.py` nor the
+receipt's serialization.
+
+**One consequence worth stating rather than leaving to be noticed.** D4's
+descriptor changes the Statement's byte shape on every gated run, so a side-car
+emitted after `harness-pack/ADR-020` is longer than one emitted under this
+document alone and has a different content id. The byte counts
+`harness-pack/ADR-018` Amendment 1 records are that fixture's output *at its
+stated basis* and are not a live claim about any later artifact;
+`bypass_att_canon_reorder` recomputes rather than asserting constants and is
+unaffected. [verified]
+
+### Provenance of this amendment
+
+Written at `harness-pack` `HEAD` `95f508bcff7cbc893e9ab25925cc73ff0f2039c5`,
+against this document's git blob `5ab400434fcd4b9d240b8a249020a0689ed06b0c` and
+`harness-pack/ADR-020`'s git blob `0532e3986ee0627c49114b5199e7f888f61e9de2` —
+the text ratified in the same arc. Every closure above is recorded against the
+fixture's own observed output on this basis, read from the run and not from the
+fixture's source.
