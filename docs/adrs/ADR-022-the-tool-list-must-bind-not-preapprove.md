@@ -1,10 +1,10 @@
 ---
 status: proposed
 title: "The tool list must bind, not merely pre-approve"
-basis: harness-pack@3f027d7
+basis: harness-pack@0d65945
 date: 2026-08-13
-supersedes: none
-narrows: ADR-011 (premise, one direction only — see D5)
+corrects: ADR-011 — a factual claim in Context, not a decision (D5)
+departs_from: ADR-011 D1 (D6)
 ---
 
 # ADR-022 — The tool list must bind, not merely pre-approve
@@ -14,8 +14,6 @@ narrows: ADR-011 (premise, one direction only — see D5)
 `spec.tools` has, since the launcher existed, reached the child on one flag:
 `scripts/launch_worker.sh:358` passes `--allowedTools "$TOOLS"`, where `$TOOLS` is
 the comma-joined list emitted by the decision block at `:184` and read at `:192`.
-`templates/spec.template.md:11` states the intent in a comment: `tools:
-"Read,Edit,Bash,Grep,Glob"   # passed to --allowedTools in Mode B`.
 
 That flag does not do what the field name promises. Measured on claude 2.1.231,
 one prompt, two runs, everything else held constant:
@@ -32,12 +30,20 @@ one prompt, two runs, everything else held constant:
 `--allowedTools` names which tools execute without a permission prompt. It removes
 nothing. `--tools` removes. Every Mode B run to date has therefore declared a tool
 list that pre-approved a subset of a surface it never narrowed, and the model could
-reach every other built-in by accepting a prompt the launcher answers for it —
+reach every other built-in through a prompt the launcher answers for it —
 `--permission-mode dontAsk` at `:359`.
 
-ADR-011 is titled "the perimeter does not bound the capability" and names the
-allowlist at `:75` as one of its producers. This decision does not contradict that
-title; it removes one of the two reasons the title was true.
+Two facts about the field itself, established while authoring this decision and
+recorded because they change what D1 buys:
+
+**The field has two shapes.** `templates/spec.mode-b.template.md:9-13` declares a
+YAML list — `Read`, `Bash`, `Grep`, `Glob`. `templates/spec.template.md:11` declares
+a comma-joined string including `Edit`. Two templates, two shapes, two default sets,
+one field name. D7 decides which one this ADR binds.
+
+**The Mode B default contains `Bash`.** A run built from the template is bounded in
+its built-in surface and unbounded in what a bounded tool reaches. D5 states the
+consequence rather than letting D1's title imply otherwise.
 
 ## Decisions
 
@@ -62,42 +68,108 @@ list that omits `EndConversation` does not remove it. This is stated, not measur
 here, and D4 asserts only that the exception is declared: no falsifier in this
 register may treat `EndConversation`'s presence as a breach of the bound.
 
-**D5 — ADR-011's premise is narrowed in one direction only.** `--tools` bounds the
-*built-in tool surface*. It does not bound what a bounded tool can reach: a spec
-declaring `Bash` still hands the child unbounded capability through the shell, and
-`spec.scope` still reaches no enforcement point (`:176-183` validates and drops it;
-`tests/bypass_fc_scope_unread_fixture.sh:1-3` states the defect). ADR-011 stands on
-the Bash case. This ADR retires the allowlist as an excuse, nothing more.
+**D5 — ADR-011 carries a factual claim this decision corrects, and a residue this
+decision does not touch.**
+
+ADR-011 states, in Context at `:78-79`, that the allowlist *"has a closed complement
+by construction: a tool not named is not admitted"*; at `:87` that *"the first layer
+is the right shape and it works"*; inside D3's motivation at `:157` that *"the
+allowlist is the closed layer"*; and in Consequences at `:217` that it *"is already
+the right shape"*. The measurement in Context falsifies all four. None is a
+decision — the claim lives in prose that supports decisions, never in a D — so no
+decision of ADR-011 is superseded, and ADR-011 stands. It is `accepted` and
+immutable (`:3`, `:14`), so those four lines stay on disk saying something the tree
+denies. This clause is the correction; there is no other place to put it.
+
+The residue is untouched and stays ADR-011's. `spec.scope` is validated in shape at
+`scripts/launch_worker.sh:176-183` and then dropped: the decision line at `:184`
+emits six fields and scope is not among them, `:192` reads six fields and scope is
+not among them, and neither permission layer is ever handed the list —
+`grep -n 'scope' scripts/guard_pretooluse.py templates/settings.mode-b.json` returns
+nothing. The guard returns 0 for every non-Bash tool at `:83-84` and, for Bash,
+matches sixteen command spellings at `:30-46` with no predicate over the write
+target. A spec declaring `Bash` therefore buys an unbounded run whatever `--tools`
+says. That is ADR-011's case, and this ADR retires the allowlist as an excuse,
+nothing more.
+
+**D6 — admission is not enforcement, and this decision departs from ADR-011 D1 on
+that distinction.** ADR-011 D1 (`:121`, `:128-129`) decides that an enforcement rule
+binds *"an effect on a path, never a tool name and never a command spelling"*. D1
+above expresses a rule over tool names. The two are reconciled by class, not by
+exception: ADR-011 D1 governs rules that judge what an admitted tool may do, where a
+name is a proxy for an effect and a bad one. `--tools` decides what is admitted at
+all. A tool that is not on the surface produces no effect to judge, so no predicate
+over a write target could express it. The departure is declared here rather than
+argued away, and OR-6 carries the risk that the distinction is a convenience.
+
+**D7 — the Mode B template's list form is what this decision binds.**
+`templates/spec.mode-b.template.md:9-13` is the normative shape. The string form at
+`templates/spec.template.md:11` is Mode A's and is out of scope here; its divergence
+in both shape and default set is recorded as OR-5 and belongs to whoever owns that
+template.
 
 ## Falsifier register
 
-Each row must be RED at basis. A row that cannot go red is not registered.
+No row in this register exists at basis, and none has been observed. That is the
+state, stated rather than implied: `git ls-files -- 'tests/bypass_ft_*'` is empty and
+`grep -n 'FT-' tests/run_tests.sh` returns nothing. Each row must be **written and
+observed RED before the implementing commit exists**, with its red captured under
+`.verity/evidence/2026-08-13-adr022-first-red/`. Ratification without those four
+observations is a ratification against a register that decides nothing (ADR-017 D5).
+
+Every row is hermetic. The live semantics of `--tools` cannot be a CI row: it needs a
+real child, and ADR-002 requires launch checks that a fresh clone can run offline.
+Rows drive the real launcher with a `claude` stub first on `PATH` that prints its
+argv and exits — the same mechanism ADR-010's fixtures use to feed a constructed
+input to a writer reachable only through the launcher.
 
 | id | fixture | asserts | at basis |
 |---|---|---|---|
-| FT-1 | `tests/bypass_ft_tools_not_bound_fixture.sh` | a tool absent from `spec.tools` is absent from the child's reported surface | RED |
-| FT-2 | `tests/bypass_ft_allowlist_widens_bound_fixture.sh` | an allowlist name absent from `spec.tools` STOPs the launcher before spawn | RED |
-| FT-3 | `tests/bypass_ft_mcp_survives_bound_fixture.sh` | with the bound in force and no `--strict-mcp-config`, MCP tools remain reachable | RED |
-| FT-4 | `tests/bypass_ft_bash_unbound_fixture.sh` | with `tools: Bash`, a write outside `spec.scope` succeeds | RED, and stays RED under this ADR by design — it is ADR-011's residue (D5), not this ADR's obligation |
+| FT-1 | `tests/bypass_ft_tools_not_bound_fixture.sh` | the launcher's spawned command carries `--tools` with exactly `spec.tools`; absent flag or divergent list is RED | RED, unobserved |
+| FT-2 | `tests/bypass_ft_allowlist_widens_bound_fixture.sh` | an allowlist name absent from `spec.tools` STOPs the launcher before spawn | RED, unobserved |
+| FT-3 | `tests/bypass_ft_mcp_survives_bound_fixture.sh` | the spawned command carries `--strict-mcp-config` and no `--mcp-config` | RED, unobserved |
+| FT-4 | `tests/bypass_ft_bash_unbound_fixture.sh` | with `tools: [Bash]`, no layer holds a predicate over the write target: the decision line at `:184` emits no scope, the read at `:192` takes none, and neither `guard_pretooluse.py` nor `settings.mode-b.json` names the field | RED, and stays RED under this ADR by design — D5's residue, not this ADR's obligation |
 
-FT-1 is the probe in Context, frozen. It is the whole of D1's evidence and must be
-observed RED before the implementing commit exists.
+FT-4's subject overlaps `tests/bypass_fc_scope_unread_fixture.sh`, which is GREEN
+since `c846887` and measures the *shape* refusal. FT-4 measures the *absence of an
+enforcement point* and must not be closeable by any repair to shape validation.
+
+## Consequences
+
+A spec built from the Mode B template is bounded to four built-ins and unbounded in
+capability, because `Bash` is one of the four. D1 buys a real narrowing for a spec
+that omits `Bash`, and a nominal one for the modal spec that does not. Removing
+`Bash` from the template default would change what every existing spec resolves to
+and is not decided here.
 
 ## Open risks
 
-**OR-1 — ADR-011's decision number is not read.** This document narrows ADR-011's
-premise but names no D. ADR-011 is `accepted` and immutable; the narrowing clause
-must cite the decision it narrows before ratification. Not determinable from what was
-read at authoring time.
+**OR-1 — Discharged 2026-08-13.** No single decision of ADR-011 carries the premise;
+it lives in Context and Consequences prose. D5 cites all four lines and reclassifies
+the act from narrowing to correction.
 
-**OR-2 — the Mode B template's default tool line is unread.** If
-`templates/spec.mode-b.template.md` defaults to a wide list, D1 binds to a bound
-nobody chose, and the modal run is bounded only nominally. Read before ratification.
+**OR-2 — Discharged 2026-08-13.** The Mode B default is `Read, Bash, Grep, Glob`
+(`templates/spec.mode-b.template.md:9-13`). Recorded in Context and Consequences.
 
-**OR-3 — the semantics are measured on 2.1.231 only.** A future release in which
-`--tools` stops removing is a silent widening with no local signal. FT-1 is the
-detector; it must run in CI, not only on the authoring host.
+**OR-3 — the semantics are measured on 2.1.231 only, and no row detects a change.**
+A release in which `--tools` stops removing is a silent widening with no local
+signal, because the detecting measurement is not hermetic and cannot run in CI. The
+live probe is re-run and its output captured on every CLI upgrade, by procedure and
+not by gate. This is a declared hole.
 
 **OR-4 — propagation to subagents is unmeasured.** Whether `--tools` bounds tools
-spawned through the Agent tool was not tested. Until it is, no spec may declare a
-subagent-spawning run as bounded. This blocks the subagent arc, not this decision.
+reached through the Agent tool was not tested. Until it is, no spec may declare a
+subagent-spawning run as bounded.
+
+**OR-5 — two templates declare one field in two shapes.** `spec.template.md:11` is a
+comma string including `Edit`; `spec.mode-b.template.md:9-13` is a YAML list without
+it. D7 scopes this ADR to the second. The divergence itself is undecided.
+
+**OR-6 — D6's distinction may be a convenience.** Admission and enforcement are
+separated here on a reading of ADR-011 D1's intent, not on a clause that draws the
+line. If the distinction does not hold, D1 is a departure needing its own
+supersession of ADR-011 D1 rather than a reconciliation.
+
+**OR-7 — ADR-011:75 cites `launch_worker.sh:343`/`:344`; at this basis those lines
+are `:358`/`:359`.** Line drift inside an immutable document. Recorded, not
+repairable.
