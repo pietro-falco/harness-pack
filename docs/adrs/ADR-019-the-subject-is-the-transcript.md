@@ -18,6 +18,20 @@ writer, no fixture, no schema and no test ships with this commit, on the rule
 `harness-pack/ADR-006:56` states and `harness-pack/ADR-009:23` applies
 generally. [verified]
 
+Amended in place while still Proposed (2026-08-13), on the text committed at
+`240f8cf9b4602e205c30f313987282cea1eb62bf`, git blob
+`eb39ec52d69204f0b14db1b4390ce939c431985c`. The amendment **adds `D7` and
+changes no existing Decision text**: D1 through D6 stand word for word as they
+were proposed. `D7` closes the one gap this document's own Assumption ledger had
+already named — an `error_no_output` run, "where the Statement has no subject to
+name, and D1 gives no rule for that case" — and the ledger row that named it is
+rewritten to record that the case is now decided rather than assumed. The
+Verification section gains `D7`'s falsifier by name; no fixture ships here
+either, for the same reason the paragraph above gives. Proposed ADRs are
+amendable in place; immutability attaches at acceptance. The form and the rule
+are `vault/ADR-080`'s, whose own Status block records the same act performed on
+itself while it was Proposed. [verified]
+
 ## Numbering note
 
 019 is taken by sweep, not by increment, and it is the successor of the number
@@ -335,6 +349,52 @@ ADR, and is deferred to it rather than half-argued here. What this document
 needs from it is only the boundary: the Statement is the machine-readable
 assertion, and free text is not part of it.
 
+### D7 — No transcript, no Statement
+
+If `$OUT` is **absent or unreadable at the moment the digest is taken** — the
+moment D1 fixes, between `CC_EXIT=$?` at `scripts/launch_worker.sh:371` and the
+writer at `:409` — the launcher emits **no Statement at all**. The absence of
+the side-car file is itself the signal.
+
+Three shapes this rule refuses, named one at a time because each is a thing
+someone would otherwise reach for:
+
+- **No Statement with an empty subject.** Statement v1 does not admit one.
+  `statement.md:37`, verbatim: "Each element MUST have `digest` set." A
+  subject-less Statement is not a degraded artifact, it is a rejected one, so
+  emitting one buys nothing a consumer can use. [verified]
+- **No substitute subject.** Not `HEAD`, not the spec blob, not the
+  constitution. D2 and D3 refuse each of those on the merits for the run that
+  succeeded; a failure branch is not a licence to revisit them.
+- **No change to the receipt.** The run still writes its receipt exactly as it
+  writes one today, carrying the `{"subtype": "error_no_output"}` that
+  `scripts/write_receipt.py:156-158` substitutes for an unreadable `cc.json`.
+  D5's "**The proprietary receipt does not change by one byte as a result of
+  this ADR**" holds on this branch too, and this decision is where that is
+  stated rather than assumed. [verified]
+
+**Why silence rather than a well-formed artifact.** Since Statement v1 rejects a
+subject-less Statement, the only way to emit one on this branch is to
+**fabricate a subject**. That is the same trade D2 already refused for `HEAD`,
+and it fails in the same way. An artifact that is **absent** is a verifiable
+fact: a third party looks for `<run_id>.intoto.json` beside the receipt, does
+not find it, and knows precisely what that means. An artifact that is
+**present** carrying an invented subject is a false assertion — well-formed,
+machine-readable and wrong — which is the failure mode D2 names as "the one an
+attestation is least able to survive, because a consumer has no way to detect it
+from the artifact". [verified]
+
+The asymmetry is the argument. A missing side-car costs a consumer one lookup. A
+fabricated one costs them the ability to trust any side-car, including every
+true one.
+
+**This is a rule about the failure branch, and the failure branch is the first
+thing an external reader inspects.** D1 is written for the run that produced a
+transcript and says nothing about the run that did not. An unstated failure rule
+is not an absent rule: it is a rule decided later, by whoever writes the code,
+under time pressure, in the direction that yields an artifact. It is decided
+here instead, while nothing has been written and the decision is free.
+
 ## Verification
 
 Named here, authored at acceptance, to `vault/ADR-073` D1's standard — "A gate
@@ -369,6 +429,16 @@ verify**. This is `harnesswright/ADR-0008` D5 `:115`'s own falsifier, adopted
 verbatim in shape: "Under the rejected in-receipt design the same fixture breaks
 the chain, and that break is the demonstration." [verified] that the fixture is
 specified there.
+
+**D7 — `bypass_att_no_subject_no_statement`.** A run whose `cc.json` is
+unreadable produces a receipt and **zero** `.intoto.json` files. **Not yet
+observed, and declared as such** — no `error_no_output` run has been measured at
+this basis and no Statement has ever been emitted, so both halves of the
+assertion are predictions. Unlike D3 and D6 below, this row is not an exclusion
+rule over a non-existent artifact: it asserts the **absence** of a file, which
+is observable the moment a writer exists and is observable on a run the launcher
+can already produce. The fixture belongs to this ADR's implementation, not to
+the amendment that adds this decision, and it is written when the writer is.
 
 **D3 and D6 — no fixture named here.** Both are exclusion rules over an artifact
 that does not exist; a falsifier named against a non-existent artifact is the
@@ -432,12 +502,20 @@ defect `harness-pack/ADR-017` is about. They are OR-4 and OR-5.
   concurrent writer. *Falsified by:* any path that reopens `$OUT` after `:371` —
   a wrapper, a hook, a retry, or a `gtimeout`/`timeout` kill at `:364-365`
   leaving a partially flushed file that is later completed.
-- **[assumed] Every run's `$OUT` exists at digest time.**
+- **DECIDED, no longer assumed — `$OUT` may be absent at digest time.**
   `scripts/write_receipt.py:156-158` handles an unreadable `cc.json` by
-  substituting `{"subtype": "error_no_output"}`, which means the file can be
-  missing or malformed. *Falsified by:* an `error_no_output` run — where the
-  Statement has no subject to name, and D1 gives no rule for that case. This is
-  the nearest thing to a gap in D1 and it is named rather than papered over.
+  substituting `{"subtype": "error_no_output"}`, so the file can be missing or
+  malformed. The proposed text carried this as `[assumed]`, with the note that
+  "D1 gives no rule for that case". **`D7` is now that rule** — no transcript,
+  no Statement — and it carries its own falsifier,
+  `bypass_att_no_subject_no_statement`. What remains open is not the rule but
+  the observation: **[assumed]** that the branch is reachable as described,
+  since no `error_no_output` run has been measured at this basis. *Falsified
+  by:* an `error_no_output` run that emits an `.intoto.json` at all — which
+  falsifies D7, not this row; or by a reading of `write_receipt.py:156-158`
+  under which `cc.json` cannot in fact be unreadable, which would make D7
+  vacuous. That second falsifier is why the row stays in the ledger instead of
+  being deleted as answered.
 - **[assumed] The re-fetched `svr.md` at sha256 `60d47f83…` is what
   `in-toto/attestation` `main` serves to others.** Two readings of this URI have
   already disagreed once. *Falsified by:* a third reading with a different
