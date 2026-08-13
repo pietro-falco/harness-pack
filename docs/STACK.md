@@ -136,3 +136,22 @@ fresh session needs nothing beyond this section to operate correctly.
 - Model identity is indirect by design: specs and governance name
   abstract tiers (T0–T3) or `*_CLASS_MODEL` placeholders; concrete
   model IDs live only in an untracked local manifest.
+
+### Artifact conventions
+
+- A digest is an in-toto `DigestSet` — a map from algorithm name to
+  lowercase hex, `{"<algorithm-name>": "<hex>"}`. Never a field whose
+  name is the algorithm. A git object id is `gitBlob` or `gitCommit`,
+  never `sha256`. (harness-pack/ADR-018 D2)
+- A new artifact that receives a content-addressed identifier declares
+  its canonicalization before it receives one: JSON, keys sorted
+  lexicographically, compact separators, no whitespace, UTF-8. That
+  form is **not** RFC 8785 and is never described as JCS.
+  (harness-pack/ADR-018 D1; the naming prohibition is its OR-1)
+- An external specification is cited by digest, never by URI.
+  (harness-pack/ADR-019 D4)
+- An artifact meant for consumption outside this stack is built by
+  **allowlist** — digests, closed-enum values, ids, RFC 3339
+  timestamps, URIs — and no field of it is ever populated by a string
+  the child or verity produced. Never a denylist.
+  (harness-pack/ADR-020 D2)

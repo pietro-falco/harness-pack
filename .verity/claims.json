@@ -70,6 +70,13 @@
       "description": "docs/STACK.md retains the pinned agent-contract heading '### Scope and stops' (ADR-003 D3).",
       "run": "git grep -qF '### Scope and stops' -- docs/STACK.md",
       "expect": { "exitCode": 0 }
+    },
+    {
+      "id": "drift-guard-agent-contract-artifact-conventions",
+      "type": "command",
+      "description": "docs/STACK.md retains the pinned agent-contract heading '### Artifact conventions' (ADR-003 D3).",
+      "run": "git grep -qF '### Artifact conventions' -- docs/STACK.md",
+      "expect": { "exitCode": 0 }
     }
   ]
 }
