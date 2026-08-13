@@ -372,6 +372,30 @@ CC_EXIT=$?
 set -e
 ENDED="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
+# The one line ADR-019 D1 costs, and it is taken HERE for a reason the decision
+# states as a constraint rather than a preference: "the sha256 of its raw bytes,
+# computed AFTER the child closes -- `CC_EXIT=$?` at :371 -- and BEFORE the
+# writer is invoked at :409". The redirection above completes before $? is read,
+# so the file is closed and final at this point, and nothing between here and the
+# writer reopens it. This was ADR-019 OR-6; it is the whole of D1's cost, and
+# without it the launcher holds the transcript's PATH and never its digest --
+# which is the measured defect (GAP.md:207, `subject[0].digest set | FAIL | FAIL
+# | FAIL`) the whole arc exists to close.
+#
+# hashlib, not shasum(1): python3 is already a hard dependency of this launcher
+# and launch_checks.py:61 pins the constitution with exactly this call, so the
+# two digests in the receipt family are computed by one library and not by two
+# tools that differ per platform.
+#
+# EMPTY IS A DECIDED STATE, NOT A FAILURE. If $OUT is absent or unreadable the
+# variable stays empty and the launcher does not stop: ADR-019 D7 owns that
+# branch, the receipt is written exactly as always, and write_statement.py emits
+# no side-car at all. The absence of the file is the signal.
+OUT_SHA256=""
+if [ -r "$OUT" ]; then
+  OUT_SHA256="$(python3 -c 'import hashlib,sys;print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' "$OUT" 2>/dev/null || true)"
+fi
+
 # Gate (ADR-004 D7): a Mode B run's "done" is a claim, not a fact. When CC exited 0, run
 # verity over the target repo's manifest and judge THIS slice's declared criteria only
 # (ADR-004 criteria = claim IDs; the manifest is repo-level and accretes across slices, so
@@ -407,6 +431,30 @@ CC_EXIT="$CC_EXIT" GATE_JSON="$GATE_JSON" BASELINE_JSON="$BASELINE_JSON" \
   CONSTITUTION_HASH="$CHASH" TOOL_VERSION="$TOOLVER" \
   STARTED_AT="$STARTED" ENDED_AT="$ENDED" \
   python3 "$WRITER" "$OUT" "$RECEIPT"
+
+# Side-car in-toto Statement (ADR-019 D5): a SIBLING file, `<run_id>.intoto.json`,
+# written beside the receipt and never into it. The precedent is
+# harnesswright/ADR-0008 D5:107-109 and it is adopted rather than reinvented --
+# receipt_chain.py:47-48 records the sha256 of the source file's bytes, so a
+# receipt mutated after a rollup breaks every chain line covering it. The
+# proprietary receipt does not change by one byte as a result of this.
+#
+# FAIL-OPEN AT THE CALL SITE, fail-closed inside the writer, and the two are not
+# in tension. write_statement.py refuses to emit a Statement it cannot emit
+# correctly (a manifest with no verifier_id, a receipt with no ended_at) and
+# writes nothing when it refuses. What must never happen is that refusal changing
+# what the RUN reports: the run is the thing attested, not the attestation, so a
+# non-zero exit here is swallowed and neither the exit code below nor the gate's
+# verdict can move because of it. An operator reads the refusal on stderr; a
+# consumer reads the absence of the file.
+STATEMENT_WRITER="$SELF_DIR/write_statement.py"
+STATEMENT="$RECEIPTS_DIR/$RUN_ID.intoto.json"
+if [ -f "$STATEMENT_WRITER" ]; then
+  OUT_PATH="$OUT" OUT_SHA256="$OUT_SHA256" HARNESS_MANIFEST="$MANIFEST" \
+    python3 "$STATEMENT_WRITER" "$RECEIPT" "$STATEMENT" || true
+else
+  echo "note: write_statement.py not resolvable at $STATEMENT_WRITER; no Statement emitted" >&2
+fi
 
 RECEIPT_STOP_REASON="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("stop_reason",""))' "$RECEIPT")"
 # ADR-010 D3 extends the notification contract to carry refusals.count: "A refused

@@ -1,6 +1,6 @@
 ---
 type: adr
-status: proposed
+status: accepted
 title: "Algorithm as data: tagged digests and a declared canonical form"
 id: ADR-018
 date: 2026-08-13
@@ -11,14 +11,82 @@ related-adrs: [harness-pack/ADR-005, harness-pack/ADR-006, harness-pack/ADR-008,
 
 ## Status
 
-Proposed
+Accepted 2026-08-13 by direct operator ratification, on the text committed at
+`e4bfef2c0ac0c01b34e76ba33364fdedc2c900b6`, git blob
+`ce7b8bf4347a4b4d9c0f3fc5d2db773e678164da`. Originally proposed 2026-08-13 as a
+docs-only commit, under `harness-pack/ADR-006:56` — "No code is written against
+this ADR while it is Proposed" — which `harness-pack/ADR-009:23` reads as
+general. Per the two-commit lifecycle, acceptance requires operator review and a
+separate ratification commit. This is that commit. [verified]
 
-**This ADR decides; no code is written against it while it is Proposed.** No
-implementation, no fixture, no schema file and no test ships with this commit.
-`harness-pack/ADR-006:56` states the rule of itself — "No code is written
-against this ADR while it is Proposed" — and `harness-pack/ADR-009:23` reads it
-as general and applies it to itself in the same words. This document adopts that
-reading and applies it here. [verified]
+**The ratification commit is the implementing commit, and for a constraint ADR
+the implementation is the falsifiers.** Three of the four this document names
+land here, registered in `tests/run_tests.sh` under `ADR-017` D2, each carrying
+the state its own header declares (`ADR-017` D6):
+
+| Falsifier | Decision | Declared | File |
+|---|---|---|---|
+| `bypass_att_alg_unpinned` | D2 | RED | `tests/bypass_att_alg_unpinned_fixture.sh` |
+| `bypass_att_two_digest_shapes` | D3 | GREEN | `tests/bypass_att_two_digest_shapes_fixture.sh` |
+| `bypass_chain_form_migration` | D4 | RED | `tests/bypass_chain_form_migration_fixture.sh` |
+
+`bypass_att_canon_reorder` (D1) is **not** written here, and its reason is OR-6.
+
+**The ratified text differs from the proposed text on five points, named here
+rather than left to a diff. No Decision text changes: D1 through D5 stand word
+for word as proposed.**
+
+1. This Status block, which records ratification in place of the
+   nothing-ships-yet paragraph the proposing commit carried.
+2. The Verification section's D1 row, which named a fixture this commit does not
+   write; it now says why and refers to OR-6.
+3. The Non-goals bullet reading "It writes no code, no schema file, and no
+   fixture" — true of the proposing commit, not true of this one. No code and no
+   schema file ship even so.
+4. The Verification section's D4 row, whose "Not yet observed" was true when it
+   was written and stopped being true in this commit. The original sentence is
+   kept and the observation appended beneath it, so the record still shows what
+   was inferred before it was seen.
+5. The Basis's measurement-document paragraph, which cited the corpus at the
+   temporary path it was produced under. The digests are unchanged — the same
+   bytes — and the citation now names the split the corpus was carried into: a
+   manifest tracked in this repository at
+   `.verity/evidence/2026-08-13-attestation-s1/README.md`, and the bytes
+   themselves held in the operator's private governance vault. Acceptance is
+   what makes this document immutable, so a Basis pointing at a swept directory
+   had to be repaired before acceptance attached to it, not after. The list
+   stays at five and not six: the split is this same difference told correctly,
+   not an additional one.
+
+Two facts observed at ratification, recorded here rather than discovered later:
+
+- **D4's falsifier was `[inferred]` and is now observed.** The proposed text
+  said of it, "Not yet observed; declared as such".
+  `bypass_chain_form_migration` ran at this basis and `verify` refused the mixed
+  chain with the signature `INVALID: chain broken at line 3`, exactly as
+  `scripts/receipt_chain.py:70` and `:73` predicted. The inference held.
+  [verified]
+- **The shellcheck leg of the gate does cover the shell this commit adds, and
+  an earlier reading that said otherwise was wrong.** That reading observed that
+  `.shellcheck-version` pins 0.9.0 while the ratifying host carries 0.11.0, and
+  concluded from the mismatch alone that `tests/run_tests.sh` could only report
+  `unattrib [shellcheck]` and exit 2 — leaving the three fixtures unchecked by
+  the pinned linter. The conclusion did not survive being tested. The pin
+  carries a digest per platform, and `scripts/fetch_shellcheck.sh:35` routes
+  `Darwin:arm64` to the pinned `darwin.x86_64` build under Rosetta 2, for the
+  reason `.shellcheck-version:14-21` states: without a darwin artifact the gate
+  on this host is not unfavourable but *unreachable*, and a verdict nobody can
+  reach is not a gate anyone can be held to. Fetched at this basis, the tarball
+  hashed `7d3730694707605d6e60cec4efcb79a0632d61babc035aa16cda1b897536acf5`,
+  matching `SHELLCHECK_SHA256_DARWIN_X86_64` character for character, and the
+  extracted binary reports `version: 0.9.0`. With `$SHELLCHECK` pointed at it
+  the suite prints ALL TESTS PASSED and exits 0, and the pinned linter at
+  `--severity=style` returns **zero diagnostics and exit 0 on each of the three
+  fixtures**. The distinction matters in the direction that costs something: an
+  unreachable gate reported as unreachable is honest, but reported as
+  unreachable when a committed script reaches it is the ratification declining
+  to run its own gate — which is the substitution `ADR-017` exists to make
+  expensive, in the shape hardest to notice. [verified]
 
 ## Numbering note
 
@@ -62,9 +130,72 @@ Citations into `harness-pack` are read against the committed blob
 Citations into `verity` and `harnesswright` are read against the pinned commits
 above.
 
-**Measurement documents.** The S1/S2 measurement corpus under
-`${TMPDIR}/attest-s1/`. These are the evidence base; this document cites them
-and does not re-derive them.
+**Measurement documents.** The S1/S2 measurement corpus, carried as a split.
+Its manifest — path, sha256 and byte length for each of the thirty-two files —
+is at `.verity/evidence/2026-08-13-attestation-s1/README.md` in this repository.
+Its bytes are held in the operator's private governance vault, in a frozen
+evidence bundle carrying those same thirty-two files under the same names. These
+are the evidence base; this document cites them by digest and does not re-derive
+them, and the digest is the same in either location because the bytes are.
+
+**The corpus was produced under a temporary directory, made durable in this
+repository, and then moved into the private vault by the operator.** All three
+moves are written down, because the provenance of evidence is itself evidence
+and the last link alone is not the chain. The bytes were written under
+`${TMPDIR}/attest-s1/`, with one specification under `${TMPDIR}/attest-s2/`, on
+a platform that sweeps that location — so the proposing commit's Basis cited an
+evidence base with an expiry. They were copied unmodified into
+`.verity/evidence/2026-08-13-attestation-s1/`, and every digest in the two
+tables below was recomputed against that copy and compared with the value cited
+here: **twelve citations, twelve matches, no divergence.** Taken together with
+the two specifications `harness-pack/ADR-019` pins and this document does not,
+that re-verification covered fourteen. They were then moved out of this
+repository, and re-verified a second time at their new location — **all
+thirty-two files, not only the fourteen the ADRs pin, matching on both sha256
+and byte length, with no divergence**, and with the set of files there equal to
+the set of rows in the manifest. Each move changed the path and nothing else.
+[verified]
+
+**Open requirement, recorded here so it is not rediscovered.** Two further
+documents cite this same corpus by the temporary path and are **not** repointed
+by this commit: `harness-pack/ADR-020`, at
+`docs/adrs/ADR-020-the-publishable-artifact-is-the-statement.md` in this
+repository, and `verity/0002`, at
+`docs/adrs/0002-structured-evidence-the-digest-exists.md` in `verity`. Both are
+Proposed, so both are still amendable, and each is its own commit. Until they
+are repointed, two Proposed documents in this family rest on a path that does
+not survive a reboot.
+
+**The corpus is not tracked in this repository, and that is the decision rather
+than an omission.** The privacy lint in `.verity/claims.json` guards tracked
+files and its pathspecs exclude `docs/adrs/` but nothing under
+`.verity/evidence/`. Measured over the thirty-two files while they were still on
+disk here and before any was staged, four of its six claims went red:
+`privacy-lint-user-paths` (21 files), `privacy-lint-worker-repo-names` (15),
+`privacy-lint-vault-name` (7), `privacy-lint-operator-uid-bare` (4). The
+measurement documents carry absolute paths and repository names because that is
+what they measured — `N3-PUBLISH.md` is a census of receipts *by path* — so
+rewriting them to pass the lint would falsify the evidence this document cites,
+and widening the lint to exempt `.verity/evidence/` would be a privacy rule with
+a carve-out for the one directory holding the private material.
+
+Neither was done. The corpus was split instead: the manifest is tracked here and
+the bytes are held in the private vault. The earlier form of this paragraph left
+the choice open and said the citations did not depend on it; the choice has since
+been made, and this is where it is recorded. It costs the citations nothing for
+exactly the reason already stated: **the digests identify these bytes wherever
+they are held.** [verified]
+
+**One measured fact about the corpus's new location, recorded because it is a
+property of the destination and not of the transfer.** The tree the bytes now
+sit in is human-write exclusive under the vault's own written policy — a
+standing rule stated for that whole tree, carrying one narrow behavioural
+carve-out that has nothing to do with evidence — rather than a directory that
+merely happens to be configured against agent writes. The agent holding the
+corpus could not place it there and declined to try, and the move is the
+operator's own act. A destination whose write-exclusivity is policy rather than
+configuration is one whose guarantee does not change when a settings file does.
+[verified]
 
 | Document | sha256 |
 |---|---|
@@ -88,6 +219,10 @@ length — the same file read twice gave two different versions.
 | in-toto `DigestSet` | `spec/v1/digest_set.md` @ `in-toto/attestation` `main` | `0b1889fdea7f6d623b41555632aedf04ee4398cf02a32002060608c75ebb038e` | 8873 |
 | in-toto Statement v1 | `spec/v1/statement.md`, S1 copy | `cbe684a18b812b8b613d9202eb43b2ea24477f91a2ad6ca5be935185a455ebea` | — |
 | in-toto ResourceDescriptor | `spec/v1/resource_descriptor.md`, S1 copy | `bee71bedd6a957771233cbbe6494144157b865992e53cc91d607a8e02a34c58a` | — |
+
+The Source column names where each file was fetched from. The copies these
+digests were taken from are in the corpus bundle named above, under `spec/`;
+their paths and byte lengths are rows in the manifest.
 
 **Assertion labels.** `[verified]` — established by an artifact cited here and
 re-readable by a third party. `[inferred]` — follows from cited artifacts by an
@@ -304,14 +439,25 @@ governance … are untouched". This is a project document citing governance, whi
 is the exempt direction, and the exemption holds whatever status this document
 later takes. [verified]
 
-**D1 — `bypass_att_canon_reorder`.** The same logical content, serialized with
-reordered keys, must produce the same content id. **RED already observed in S1**,
-and not predicted: `DETERMINISM.md:17-21`, on-disk
-`61733668c8e16518ae7fb38502af10664cdc60646c779ece9aba84f5623ccb20` at 1560 bytes
-against sorted/compact
+**D1 — `bypass_att_canon_reorder`, named and NOT written. It is OR-6.** The
+assertion stands as stated: the same logical content, serialized with reordered
+keys, must produce the same content id. What cannot be written yet is a fixture
+that asserts it against anything D1 binds.
+
+The measured RED is real and is cited unchanged — `DETERMINISM.md:17-21`,
+on-disk `61733668c8e16518ae7fb38502af10664cdc60646c779ece9aba84f5623ccb20` at
+1560 bytes against sorted/compact
 `c4da63a63f17793349c33e7fd3d283ce7e8157a02e6a883fae18f9e6d598e5e9` at 1298
-bytes. The fixture's job is to hold that RED in the suite instead of in a
-measurement document. [verified]
+bytes. [verified] But it was measured **on the existing receipt**, and D1
+exempts the existing receipt in as many words: "**The existing receipt is not
+retroactively canonicalized.**" A fixture built on that measurement would assert
+D1 against the one artifact D1 does not reach, and would go green or red on
+changes to a file this decision promises not to touch.
+
+D1 binds **new** content-addressed artifacts, and none exists. Writing the
+fixture now would produce a green assertion about nothing — which is the defect
+`harness-pack/ADR-017` is about, and it is not admitted into the register that
+exists to prevent it. OR-6 carries it, with the moment it becomes writable.
 
 **D2 — `bypass_att_alg_unpinned`.** A new artifact that writes a digest into a
 field whose *name* is the algorithm must be rejected. **RED today, trivially and
@@ -338,6 +484,19 @@ and `:73`: the appended line's `prev` would not be read as `prev_sha256`, so the
 `entry.get("prev_sha256") != prev` test at `:70` compares `None` against a hex
 string. Not yet observed; declared as such.
 
+**Observed at ratification, and the inference held.**
+`tests/bypass_chain_form_migration_fixture.sh` seeded a two-line old-form chain
+with `receipt_chain.py append`, confirmed it verifies, appended a new-form line
+whose `prev.sha256` is the sha256 of line 2's raw bytes — so the line is
+materially correct under the new form and only its *shape* is wrong — and
+`verify` refused it: `INVALID: chain broken at line 3`, the signature
+`receipt_chain.py:71` emits. A second arm appended the same line carrying an
+explicit seam declaration and was refused identically, which measures the other
+half of D4: the "declared seam line" this decision permits has **no reader**,
+because `:70` reads exactly `prev_sha256` and `seq`. That is OR-4, now observed
+rather than assumed. The assertion is on the signature and not on an exit
+integer, per `vault/ADR-073` D1 `:248-251`. [verified]
+
 **D5 — no fixture here.** The schema does not exist, so there is nothing to
 falsify. This is OR-3, and naming it as an open requirement rather than as a
 falsifier is deliberate: a falsifier listed against a non-existent artifact is
@@ -355,7 +514,11 @@ document does:
 - **It does not amend `harnesswright`.** That is OR-2, in another repo.
 - **It does not choose the predicate or the subject.** That is
   `harness-pack/ADR-019`.
-- **It writes no code**, no schema file, and no fixture.
+- **It writes no code and no schema file.** `scripts/write_receipt.py`,
+  `scripts/receipt_chain.py` and `templates/receipt.schema.json` are read by the
+  fixtures this commit lands and are edited by none of them. The proposing
+  commit's form of this bullet also said "and no fixture"; the ratification
+  commit ships three, which the Status block names and the register carries.
 
 ## Open requirements
 
@@ -375,6 +538,26 @@ document does:
   decided here. Falsified by the first chain that needs to change shape.
 - **OR-5 — `RS-001`'s prose invariant.** D4's form change moves
   `specs/recurring/RS-001-receipt-rollup.md:21` and `:83`. Not performed here.
+- **OR-6 — `bypass_att_canon_reorder`, D1's falsifier, deferred to its first
+  subject.** D1 binds **new** content-addressed artifacts and exempts the
+  existing receipt, and no new artifact exists at this basis. A fixture written
+  now would either assert D1 against the exempt receipt — the wrong artifact —
+  or against nothing at all, and a falsifier that is green because its subject
+  does not exist is precisely the defect `harness-pack/ADR-017` names and the
+  register built under `ADR-017` D2 refuses to carry.
+
+  **Its birth moment is the first side-car Statement emitted** — the artifact
+  `harness-pack/ADR-019` D5 places beside the receipt. That file is the first
+  thing this repository content-addresses under D1, and the fixture is written
+  in the commit that first writes one: reorder its keys, re-serialize, and
+  require the same content id. Until then D1 is a constraint with no artifact to
+  constrain, which is a fact about the schedule and not a hole in the decision.
+
+  `harness-pack/ADR-019` OR-3 approaches the same seam from the other side — it
+  leaves open whether the side-car is content-addressed at all. If that
+  question is answered *no*, this OR does not close; it moves to whichever new
+  artifact is content-addressed first, and if none ever is, D1 binds nothing and
+  should be superseded rather than left standing with an unwritable falsifier.
 
 ## Consequences
 
@@ -425,3 +608,76 @@ Decided from the S1/S2 measurement corpus listed in the Basis, and from a
 re-verification pass at `harness-pack` `3c2680d` in which every line citation
 above was read against the committed blob and every external spec re-fetched and
 re-hashed. No citation in this document was carried forward from prose.
+
+## Amendment 1 — 2026-08-13 — OR-6 closes: `bypass_att_canon_reorder` has its subject
+
+Appended, not edited. `status` remains `accepted`; no decision D1 through D5 is
+altered, superseded or renumbered, and no open requirement is rewritten in place.
+Nothing above this line is touched. This amendment records that **OR-6 is
+closed**, by the exact event OR-6 itself named, and states what the closure did
+and did not settle. The form is the one this repository already uses for a
+post-acceptance record — `harness-pack/ADR-008` Amendments 1 and 2,
+`harness-pack/ADR-010` Amendments 1 and 2 — and which `vault/ADR-080` states as
+"Appended, not edited."
+
+**The condition OR-6 set, quoted.** "**Its birth moment is the first side-car
+Statement emitted** — the artifact `harness-pack/ADR-019` D5 places beside the
+receipt. That file is the first thing this repository content-addresses under D1,
+and the fixture is written in the commit that first writes one: reorder its keys,
+re-serialize, and require the same content id."
+
+**The condition is met.** `harness-pack/ADR-019` was ratified on 2026-08-13 and
+its ratification commit is its implementing commit. `scripts/write_statement.py`
+emits `<run_id>.intoto.json` beside the receipt, serialized in **D1's form** —
+keys sorted lexicographically, compact separators, no whitespace, UTF-8 — and
+with **no trailing newline**, so the file's bytes are the serialization and
+`sha256(file)` is the artifact's content id without a second convention about
+framing. `harness-pack/ADR-019` OR-3, which OR-6's last paragraph made the
+closure conditional on, is answered **yes** in that document. [verified]
+
+**The fixture, and what it had to show before it was allowed to agree with
+itself.** `tests/bypass_att_canon_reorder_fixture.sh` is registered in
+`tests/run_tests.sh` under `ADR-017` D2, declared **GREEN** by its own header
+(`ADR-017` D6). Hashing the same bytes twice agrees trivially, so the row is
+carried by two controls rather than by the agreement:
+
+- **the reordering is real** — the reordered object serialized naively differs,
+  byte for byte, from the emitted file (539 bytes against 516). If it did not,
+  nothing was reordered and the agreement would be tautological;
+- **the form is load-bearing** — the same reordered object in the receipt's own
+  form (`indent=1`, unsorted, the form `scripts/write_receipt.py:163` uses and
+  which D1 explicitly exempts) yields a **different** content id at 607 bytes.
+  This is `DETERMINISM.md:24-26`'s measured formatting delta reproduced on the
+  new artifact rather than cited from the exempt one.
+
+With both controls holding, the reordered object re-serialized in D1's form
+reproduced the emitted file's content id exactly. [verified]
+
+**What this amendment does NOT do.** It does not migrate any chain and does not
+touch `scripts/receipt_chain.py`: `bypass_att_alg_unpinned` and
+`bypass_chain_form_migration` remain **RED**, as the register declares, and D4's
+next-genesis rule is untouched. It does not close OR-1, and this text calls the
+adopted form what D1 calls it and by no other name. OR-2 through OR-5 are
+unaffected. The tracked sample `examples/receipt-chain.sample.jsonl` and the
+existing receipt are exempt under D1 and D4 and were neither read as findings nor
+written.
+
+**One consequence worth stating rather than leaving to be noticed.** This
+repository now holds **two** digest-carrying artifact families, not one. The
+Context section's argument for reconciling the two tagged-digest conventions
+"before the first artifact exists" has spent its window: the side-car is that
+first artifact, and it was born in D2's `DigestSet` spelling —
+`{"sha256": "<hex>"}` in `subject[0].digest`, which is also `statement.md:15`'s
+own shape. D3's supersession of `harnesswright/ADR-0008` D5 `:111` therefore now
+has an artifact behind it rather than only a decision, and **OR-2 — the
+`harnesswright` amendment — is unchanged and still owed**. Until it lands, the
+two documents disagree on disk while an artifact exists that follows this one.
+[verified]
+
+### Provenance of this amendment
+
+Written at `harness-pack` `HEAD` `076b219bc446d478adf712dacc9836491623f8ce`,
+against `harness-pack/ADR-019` git blob
+`13064f802801addcb40b203e2b76608ebe1612db` — the text ratified in the same arc.
+Every measurement quoted above is the fixture's own output on this basis, read
+from the run and not from the fixture's source.

@@ -873,6 +873,52 @@ bypass_row tests/bypass_fb_budget_tokens_unbounded_fixture.sh GREEN     BROKEN
 bypass_row tests/bypass_fc_scope_unread_fixture.sh            GREEN     BROKEN
 bypass_row tests/bypass_fe_secret_in_context_fixture.sh       RED       BROKEN
 
+# The attestation family, landed with ADR-018's ratification. Three rows and not
+# four: ADR-018 names a falsifier for each of D1-D4, and D1's
+# (`bypass_att_canon_reorder`) is NOT here. It cannot be written yet -- D1 binds
+# NEW content-addressed artifacts and exempts the existing receipt, and no new
+# artifact exists until ADR-019's side-car Statement does, so the file would be
+# a green assertion about nothing. It is carried as ADR-018 OR-6 with that
+# reason and its birth moment, which is the honest place for it: a falsifier
+# listed against a non-existent artifact is the defect ADR-017 is about, and
+# registering one here would put that defect inside the register built to
+# prevent it.
+#
+# Two of these three rows clear by the same edit to scripts/receipt_chain.py,
+# because this repository holds exactly ONE digest-carrying artifact today. They
+# are separate rows because they are separate decisions -- D2 accuses the
+# spelling of a digest in any new artifact, D4 accuses the timing of this one --
+# and each header says so.
+bypass_row tests/bypass_att_alg_unpinned_fixture.sh           RED       BROKEN
+bypass_row tests/bypass_att_two_digest_shapes_fixture.sh      GREEN     BROKEN
+bypass_row tests/bypass_chain_form_migration_fixture.sh       RED       BROKEN
+
+# ADR-019's six, landed with its ratification. All six are declared GREEN, and
+# that is not the register going soft: ADR-019's implementation -- the digest line
+# at scripts/launch_worker.sh and scripts/write_statement.py -- lands in the same
+# arc, so its falsifiers are green on arrival for the same reason
+# bypass_att_two_digest_shapes was. What keeps them from being vacuous is that
+# every one of them carries a control that makes its own assertion MOVE: a
+# fabricated artifact the row must refuse, beside the real one it must accept. A
+# row that can only ever say GREEN is not registered here, whatever it is called.
+#
+# The first of them also closes ADR-018 OR-6, which named its own birth moment:
+# "the first side-car Statement emitted". That artifact now exists, so
+# bypass_att_canon_reorder has a subject and stops being the green assertion about
+# nothing the OR refused to admit.
+#
+# ADR-019's OR-4 and OR-5 -- falsifiers for its D3 and D6 -- are NOT among these
+# six and are not registered. Their birth moment has arrived (the writer exists),
+# but D6's falsifier is bypass_att_prose_leak, which ADR-020 D2 owns and which
+# ADR-006:56 forbids while ADR-020 is Proposed. Naming a row here for a fixture
+# this commit does not write is the defect ADR-017 is about.
+bypass_row tests/bypass_att_canon_reorder_fixture.sh          GREEN     BROKEN
+bypass_row tests/bypass_att_chain_survives_sidecar_fixture.sh GREEN     BROKEN
+bypass_row tests/bypass_att_dirty_tree_subject_fixture.sh     GREEN     BROKEN
+bypass_row tests/bypass_att_no_subject_no_statement_fixture.sh GREEN    BROKEN
+bypass_row tests/bypass_att_result_desync_fixture.sh          GREEN     BROKEN
+bypass_row tests/bypass_att_subject_missing_fixture.sh        GREEN     BROKEN
+
 # COMPLETENESS IS MEMBERSHIP, NOT CARDINALITY (D5), and it runs before the
 # fixtures because it is the cheap half. The set of registered paths must EQUAL
 # the set `git ls-files` tracks, and the two directions are accused separately

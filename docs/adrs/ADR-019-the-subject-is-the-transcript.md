@@ -1,6 +1,6 @@
 ---
 type: adr
-status: proposed
+status: accepted
 title: "The subject is the transcript: a side-car in-toto Statement"
 id: ADR-019
 date: 2026-08-13
@@ -11,12 +11,119 @@ related-adrs: [harness-pack/ADR-004, harness-pack/ADR-005, harness-pack/ADR-006,
 
 ## Status
 
-Proposed
+Accepted 2026-08-13 by direct operator ratification, on the text committed at
+`076b219bc446d478adf712dacc9836491623f8ce`, git blob
+`13064f802801addcb40b203e2b76608ebe1612db`. Originally proposed 2026-08-13 as a
+docs-only commit, then amended in place while still Proposed to add `D7`, under
+`harness-pack/ADR-006:56` — "No code is written against this ADR while it is
+Proposed" — which `harness-pack/ADR-009:23` reads as general. Per the two-commit
+lifecycle, acceptance requires operator review and a separate ratification
+commit. This is that commit. [verified]
 
-**This ADR decides; no code is written against it while it is Proposed.** No
-writer, no fixture, no schema and no test ships with this commit, on the rule
-`harness-pack/ADR-006:56` states and `harness-pack/ADR-009:23` applies
-generally. [verified]
+**The ratification commit is the implementing commit**, on the precedent
+`harness-pack/ADR-018` set one document ago. Four things ship, and they are the
+whole of what this decision costs:
+
+- **The digest line.** `scripts/launch_worker.sh` computes the sha256 of `$OUT`'s
+  raw bytes between `CC_EXIT=$?` and the receipt writer, exactly where D1 places
+  it. This was OR-6 and it is one `if` and one `python3 -c`.
+- **The emitter.** `scripts/write_statement.py`, a sibling of
+  `scripts/write_receipt.py` on the same I/O contract, composing the Statement
+  from the receipt and the digest and serializing it in `harness-pack/ADR-018`
+  D1's form.
+- **The wiring.** The launcher invokes the emitter after the receipt writer,
+  **fail-open at the call site**: a refusal inside the emitter writes no file and
+  cannot move the run's exit code or the gate's verdict. The run is the thing
+  attested; the attestation is not the run.
+- **The manifest key.** `templates/manifest.example.json` gains `verifier_id`,
+  carrying a **placeholder** in the `*_CLASS_MODEL` convention and never a real
+  domain, per `harness-pack/ADR-004`. This closes OR-2.
+
+Six falsifiers land with it, registered in `tests/run_tests.sh` under `ADR-017`
+D2, each carrying the state its own header declares (`ADR-017` D6):
+
+| Falsifier | Decision | Declared | File |
+|---|---|---|---|
+| `bypass_att_subject_missing` | D1 | GREEN | `tests/bypass_att_subject_missing_fixture.sh` |
+| `bypass_att_dirty_tree_subject` | D2 | GREEN | `tests/bypass_att_dirty_tree_subject_fixture.sh` |
+| `bypass_att_result_desync` | D4 | GREEN | `tests/bypass_att_result_desync_fixture.sh` |
+| `bypass_att_chain_survives_sidecar` | D5 | GREEN | `tests/bypass_att_chain_survives_sidecar_fixture.sh` |
+| `bypass_att_no_subject_no_statement` | D7 | GREEN | `tests/bypass_att_no_subject_no_statement_fixture.sh` |
+| `bypass_att_canon_reorder` | `harness-pack/ADR-018` D1 | GREEN | `tests/bypass_att_canon_reorder_fixture.sh` |
+
+The sixth row is not this document's falsifier. It belongs to
+`harness-pack/ADR-018` D1 and lands here because that ADR's **OR-6 named this
+exact moment** as its birth: "Its birth moment is the first side-car Statement
+emitted — the artifact `harness-pack/ADR-019` D5 places beside the receipt." That
+artifact now exists, so the fixture has a subject. The closure is recorded in
+`harness-pack/ADR-018` itself as an appended amendment, which is how a post-
+acceptance closure is recorded in this repository — the form
+`harness-pack/ADR-008` and `harness-pack/ADR-010` already use, and `vault/ADR-080`
+states as "Appended, not edited." [verified]
+
+**All six are declared GREEN, and that is stated rather than left to look like
+the register going soft.** The implementation lands in the same arc as the
+falsifiers, so their subject exists on arrival — the same situation
+`bypass_att_two_digest_shapes` was registered GREEN in. What keeps them from
+being vacuous is that every one carries a control that makes its own assertion
+**move**: a fabricated artifact the row must refuse, beside the real one it must
+accept. Where a RED had already been measured it is cited (D1); where a RED was a
+prediction it was **produced and observed in this commit** (D4, D7).
+
+**The ratified text differs from the proposed text on six points, named here
+rather than left to a diff. No Decision text changes: D1 through D7 stand word
+for word as proposed.**
+
+1. This Status block, which records ratification in place of the
+   nothing-ships-yet paragraph the proposing commit carried. The paragraph
+   recording the in-place `D7` amendment is kept verbatim below, because it is
+   part of the record and not part of the claim.
+2. The Verification section's D4 and D7 rows, whose "Not yet observed" was true
+   when written and stopped being true in this commit. Each original sentence is
+   kept and the observation appended beneath it, so the record still shows what
+   was predicted before it was seen — the form `harness-pack/ADR-018` used for
+   its own D4 row.
+3. The Verification section gains a seventh row, for `bypass_att_canon_reorder`,
+   which is `harness-pack/ADR-018` D1's falsifier and is named here because this
+   commit is where it becomes writable.
+4. The Non-goals bullet reading "**It writes no code**, no fixture, and no
+   schema" — true of the proposing commit, not true of this one. No schema file
+   ships even so.
+5. The Open requirements: OR-2, OR-3 and OR-6 are closed in place, each with the
+   closure recorded beneath the original text. OR-1 stays open and its written
+   branch is named. OR-4 and OR-5 stay open with their birth moment recorded as
+   having arrived.
+6. The Assumption ledger's `D7`-reachability row, whose observation was taken in
+   this commit. The previous reading is preserved and the observation appended
+   under it.
+
+**Two facts observed at ratification, recorded here rather than discovered
+later.**
+
+- **`D7`'s branch is reachable, and NOT by the route a reader would assume.**
+  `bypass_att_no_subject_no_statement` drove the launcher in tree twice. With the
+  transcript genuinely **unreadable** at digest time, the run wrote its receipt
+  carrying `subtype: error_no_output` and **zero** `.intoto.json` files: both
+  halves of D7's assertion, observed. With an executor that simply **wrote
+  nothing**, the receipt also read `error_no_output` — and a Statement **was**
+  emitted, over a zero-byte transcript, subject digest
+  `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`. The two
+  states are not one state. `$OUT` is created by the launcher's own redirection
+  `"${CMD[@]}" < "$SPEC" > "$OUT"` **before the child runs**, so an empty or
+  malformed transcript is readable and has a digest like any other byte string.
+  **`error_no_output` in a receipt does not imply D7's branch was taken**, and
+  attesting to a zero-byte transcript is D1 applied literally with nothing
+  fabricated. The Assumption ledger row that carried this as `[assumed]` is
+  updated below rather than deleted. [verified]
+- **The side-car is content-addressed, and the framing is part of the identity.**
+  The emitter writes `harness-pack/ADR-018` D1's form with **no trailing
+  newline**, so `sha256(file bytes)` equals the digest of the canonical string
+  and no second convention about framing is needed. `bypass_att_canon_reorder`
+  measured a 516-byte artifact whose reordered re-serialization reproduces its
+  content id exactly, while the same object in the receipt's own form
+  (`indent=1`, unsorted) produces a different one at 607 bytes — `DETERMINISM.md`'s
+  measured formatting delta, reproduced on the new artifact. That is OR-3
+  answered **yes**. [verified]
 
 Amended in place while still Proposed (2026-08-13), on the text committed at
 `240f8cf9b4602e205c30f313987282cea1eb62bf`, git blob
@@ -64,7 +171,25 @@ Citations into `harness-pack` are read against the committed blob
 a fact D2 turns on. Citations into `verity` and `harnesswright` are read against
 the pinned commits above.
 
-**Measurement documents**, under `${TMPDIR}/attest-s1/`. Cited, not re-derived.
+**Measurement documents**, carried as a split. Their manifest — path, sha256 and
+byte length for each of the thirty-two files — is at
+`.verity/evidence/2026-08-13-attestation-s1/README.md` in `harness-pack`; their
+bytes are held in the operator's private governance vault. Cited by digest, not
+re-derived, and the digest is the same in either location because the bytes are.
+
+**Produced under a temporary directory, made durable in `harness-pack`, and then
+moved into the private vault by the operator**, because the provenance of
+evidence is itself evidence and the last link alone is not the chain. The bytes
+were written under `${TMPDIR}/attest-s1/`, with one specification under
+`${TMPDIR}/attest-s2/`, on a platform that sweeps that location; they were copied
+unmodified, every digest in the two tables below was recomputed against the copy
+and matched the value cited here, and all thirty-two files were re-verified again
+at their new location on both sha256 and byte length. Each move changed the path
+and nothing else. `harness-pack/ADR-018`'s Basis carries the same repointing,
+both re-verification counts, the decision to track the manifest rather than the
+bytes and the privacy-lint measurement behind it, and the measured fact that the
+corpus's new location is human-write exclusive by the vault's own policy rather
+than by configuration. [verified]
 
 | Document | sha256 |
 |---|---|
@@ -411,6 +536,15 @@ predicted: all three projections fail the Statement v1 rule —
 `statement.md:37`, "Each element MUST have `digest` set." The fixture's job is
 to hold that RED in the suite rather than in a measurement document. [verified]
 
+**Landed at ratification.** `tests/bypass_att_subject_missing_fixture.sh` carries
+an acceptance predicate built from `statement.md:37` alone, refuses all three
+shapes `GAP.md` measured — subject absent, `subject[0]` without `digest`,
+`subject[0].digest` empty — accepts a hand-written conforming Statement, and then
+requires the emitted one to be accepted **with `subject[0].digest.sha256` equal
+to the transcript's recomputed bytes**. A subject carrying *some* digest
+satisfies `statement.md:37` while still naming the wrong artifact, so the row
+asserts which digest and not merely that there is one. GREEN. [verified]
+
 **D2 — the dirty-tree fixture.** A fixture that emits a Statement on a dirty
 tree and asserts that `subject[0]` is **not** `HEAD`'s commit. Its value is that
 it fails on the *easy* implementation: the one that reaches for
@@ -418,10 +552,38 @@ it fails on the *easy* implementation: the one that reaches for
 well-formed artifact. [inferred] that the easy implementation is the likely one,
 from the fact that `HEAD` is already derivable and `$OUT`'s digest is not.
 
+**Landed at ratification, and one thing was measured that this row's naive form
+would have got wrong.** `git rev-parse --show-object-format` returns `sha1`, so a
+commit id is 40 characters and a sha256 is 64: "`subject[0].digest.sha256` is not
+`HEAD`" can never be false by accident, and a row resting on that comparison
+alone would be green because two string lengths differ. So
+`tests/bypass_att_dirty_tree_subject_fixture.sh` refuses the easy
+implementation's artifact in **both spellings** before accepting the real one —
+`{"sha256": "<HEAD>"}`, the easy value under the algorithm name
+`harness-pack/ADR-018` D2 forbids for a git object id, and
+`{"gitCommit": "<HEAD>"}`, the same value correctly labelled and refused anyway,
+because the objection is not the spelling. The premise is measured in the run's
+own repository at assertion time (`git status --porcelain` non-empty), and the
+run's `HEAD` appears **zero times** in the emitted bytes. GREEN. [verified]
+
 **D4 — `bypass_att_result_desync`.** A Statement listing `HARNESS_GATE_PASS`
 while the gate exited non-zero must be **rejected**. **Not yet observed, and
 declared as such** — unlike D1, there is no measured RED behind this one, because
 no Statement has ever been emitted. It is a prediction until the fixture runs.
+
+**Observed at ratification, and the prediction held.** The fixture produced the
+RED itself rather than waiting for one: three fabricated desyncs — a Statement
+listing `HARNESS_GATE_PASS` beside a receipt whose gate read `FAIL`, `STOP` and
+`NO-VERDICT` in turn — were each refused, and the emitter was then shown to omit
+the property on all three of those runs while carrying it on a passing one.
+"The gate exited non-zero" is read as `$.gate.verdict != "PASS"` and **not** as
+`$.gate.verity_exit != 0`, and the reading is recorded because it is
+load-bearing: `verity` runs over the whole target repository while the gate is
+scoped to `spec.criteria`, so a run whose every declared criterion passes can sit
+beside a non-zero `verity_exit` from a claim this slice never declared. A
+detector keyed to the exit integer would refuse a Statement that is true.
+`HARNESS_GATE_PASS` is keyed to the verdict the launcher takes the run's own exit
+from. GREEN. [verified]
 
 **D5 — the chain survives the side-car.** A fixture that appends the receipt to
 a chain, writes the side-car, and re-verifies the chain, which **must still
@@ -429,6 +591,20 @@ verify**. This is `harnesswright/ADR-0008` D5 `:115`'s own falsifier, adopted
 verbatim in shape: "Under the rejected in-receipt design the same fixture breaks
 the chain, and that break is the demonstration." [verified] that the fixture is
 specified there.
+
+**Landed at ratification, and the demonstration is not where the quoted sentence
+implies it is.** The chain verified before the side-car; the receipt's bytes were
+unchanged after it (`5dc2bbb5…` on both sides); the covering line's recorded
+digest still matched; `verify` still said `VALID: chain intact`. The rejected
+in-receipt design, applied to a copy, moved the receipt's bytes to `fe70ad82…`
+while its covering line went on recording the first — **and `verify` reported
+`VALID` on that chain too**, because `scripts/receipt_chain.py:70` reads only
+`prev_sha256` and `seq` and `:73` re-hashes the *line*, never the source file.
+The break is real and `verify` is not the instrument that shows it, so the
+fixture asserts on the covering line's recorded digest and says so rather than
+letting a green `verify` stand in for a check it does not perform.
+`harness-pack/ADR-018` D4 measured the same narrowness from the other side.
+GREEN. [verified]
 
 **D7 — `bypass_att_no_subject_no_statement`.** A run whose `cc.json` is
 unreadable produces a receipt and **zero** `.intoto.json` files. **Not yet
@@ -440,9 +616,61 @@ is observable the moment a writer exists and is observable on a run the launcher
 can already produce. The fixture belongs to this ADR's implementation, not to
 the amendment that adds this decision, and it is written when the writer is.
 
+**Observed at ratification, in both halves, and one of them corrected a reading
+this document had not made explicit.** `tests/bypass_att_no_subject_no_statement_fixture.sh`
+drove `scripts/launch_worker.sh` **in tree** twice, with the executor stub
+fabricating the condition and nothing else:
+
+- **Transcript genuinely unreadable at digest time.** The run wrote its receipt,
+  carrying `subtype: error_no_output`, and the receipts directory held **zero**
+  `.intoto.json` files. Both halves of this row, observed against the unpatched
+  launcher. The fixture checks the premise — that the transcript really was
+  unreadable — rather than inferring it from the zero.
+- **Executor that simply wrote nothing.** The receipt *also* read
+  `error_no_output`, and a Statement **was** emitted, over a zero-byte
+  transcript, subject digest
+  `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`.
+
+**The two states are not one state, and the second is not a defect.** D7's
+condition is "absent or **unreadable**", which is a property of the file and not
+of its contents; `$OUT` is created by the launcher's own redirection
+`"${CMD[@]}" < "$SPEC" > "$OUT"` **before the child runs**, so an empty or
+malformed transcript is readable and has a digest like any other byte string.
+Attesting to it is D1 applied literally, with nothing fabricated and nothing
+substituted. What this observation costs is an inference a reader would otherwise
+have made for free: **`error_no_output` in a receipt does not imply that D7's
+branch was taken.** The Assumption ledger row that carried the branch's
+reachability as `[assumed]` is updated below rather than deleted, and the second
+falsifier it named — a reading under which `cc.json` cannot be unreadable, which
+would make D7 vacuous — is **answered no**: the branch was reached. [verified]
+
+**`bypass_att_canon_reorder` — not this document's row, named here because this
+is where it becomes writable.** It is `harness-pack/ADR-018` D1's falsifier, held
+open as that ADR's OR-6 for the reason it states — "a falsifier that is green
+because its subject does not exist is precisely the defect
+`harness-pack/ADR-017` names" — with its birth moment declared as "the first
+side-car Statement emitted". D5's side-car is that artifact. The fixture reorders
+the emitted Statement's keys at every depth, re-serializes in
+`harness-pack/ADR-018` D1's form, and requires the same content id; it first
+shows that the reordering is real (the naive serialization differs) and that the
+form is load-bearing (the receipt's own `indent=1` form yields a different
+content id). GREEN, and `harness-pack/ADR-018` OR-6 closes. [verified]
+
 **D3 and D6 — no fixture named here.** Both are exclusion rules over an artifact
 that does not exist; a falsifier named against a non-existent artifact is the
 defect `harness-pack/ADR-017` is about. They are OR-4 and OR-5.
+
+**At ratification the artifact exists, and neither row is written even so.** The
+premise that held them open is gone — there is a Statement to exclude things
+from — so their birth moment has arrived and is recorded as arrived. They are
+still not written here, for a reason that is specific rather than general: D6's
+falsifier is `bypass_att_prose_leak`, and `harness-pack/ADR-020` D2 owns it,
+names it, and is **Proposed**. `harness-pack/ADR-006:56` forbids writing code
+against a Proposed ADR, so the fixture belongs to that document's ratification
+and not to this one. D3's falsifier waits with it rather than shipping alone,
+because D3 and D6 are the two exclusion rules and splitting them across two
+commits would leave the register carrying half a pair with nothing recording why.
+Both stay OR-4 and OR-5, with this as their reason. [verified]
 
 ## Non-goals
 
@@ -453,7 +681,12 @@ defect `harness-pack/ADR-017` is about. They are OR-4 and OR-5.
   not one byte.
 - **It does not decide the claims layer.** That is a separate ADR (ADR-C), and
   D6 defers to it by name.
-- **It writes no code**, no fixture, and no schema.
+- **It writes no code**, no fixture, and no schema. True of the proposing commit;
+  **not true of this one**, which ships the digest line, the emitter, the wiring,
+  the manifest key and six fixtures, all named in the Status block. **No schema
+  file ships even so**, and nothing here modifies `scripts/write_receipt.py`,
+  `scripts/receipt_chain.py` or `templates/receipt.schema.json` — the receipt's
+  serialization, including `indent=1` at `write_receipt.py:163`, is untouched.
 
 ## Open requirements
 
@@ -466,18 +699,77 @@ defect `harness-pack/ADR-017` is about. They are OR-4 and OR-5.
   under-determined by D3 read against v0.2, and is **not decided here**.
   Falsified by the first conformant Statement: it must carry `verifier.policies`
   in some form, and whichever form it carries answers this.
+
+  **OPEN at ratification, and the branch that ships is the written one.** The
+  emitter writes `[]`, with the reason beside it in the source rather than left
+  to be reconstructed. `harness-pack/ADR-020` D4 decides what the field carries —
+  the `ResourceDescriptor` of the target repository's claims manifest, digested
+  at the moment of the gate — and that document is **Proposed**, so
+  `harness-pack/ADR-006:56` forbids implementing it. `svr.md:74-76` makes `[]`
+  the minimal **conformant** value: "If no explicit policies were used, or the
+  verifier cannot reference the policies, producers MUST encode this as an empty
+  array." A recorded `[]` with a written reason is honest; a fabricated
+  descriptor is not. This OR closes when `harness-pack/ADR-020` is ratified and
+  its own OR-1 — the second `shasum` — is written.
 - **OR-2 — the `verifier.id` domain.** D4 requires a URI under an
   operator-controlled domain. Which domain, and its versioning scheme, is an
   operator decision not taken here.
+
+  **CLOSED at ratification.** The value is read from the manifest, key
+  `verifier_id`, and is never defaulted: `scripts/write_statement.py` STOPs
+  fail-closed on its absence — `STOP: VERIFIER-ID-ABSENT` — on the model
+  `scripts/launch_checks.py:61-64` uses for `CONST-HASH-MISMATCH`.
+  `templates/manifest.example.json` carries a **placeholder** in the
+  `*_CLASS_MODEL` convention, `OPERATOR_VERIFIER_ID_URI`, never a real domain:
+  `harness-pack/ADR-004` keeps operator literals out of tracked files and
+  `privacy-lint-model-id` in `.verity/claims.json` already documents that
+  convention by name. The domain and its versioning scheme remain the operator's
+  to choose in their own copy, which is what this OR left open; what is closed is
+  **where the value comes from**. [verified]
 - **OR-3 — the side-car's own canonical form.** `harness-pack/ADR-018` D1 binds
   new content-addressed artifacts. Whether the side-car is itself
   content-addressed — and therefore whether it is rolled into the chain — is not
   decided here.
+
+  **CLOSED at ratification: YES.** The emitter serializes in
+  `harness-pack/ADR-018` D1's form — keys sorted lexicographically, compact
+  separators, no whitespace, UTF-8 — and writes **no trailing newline**, so the
+  file's bytes *are* the serialization and `sha256(file)` is the artifact's
+  content id with no second convention about framing. That is what makes
+  `harness-pack/ADR-018` OR-6 writable, and `bypass_att_canon_reorder` is the
+  fixture that holds it. Per `harness-pack/ADR-018` OR-1, no document in this
+  family may describe that form by the name of any external canonicalization
+  standard, and this paragraph does not.
+
+  **Whether the side-car is rolled INTO the chain is a separate question and is
+  not closed here.** D5's falsifier establishes only that the chain survives the
+  side-car's existence; appending the Statement as its own chain source is a
+  decision no ADR has taken. [verified]
 - **OR-4 — a falsifier for D3.** Named when the Statement writer exists.
+
+  **OPEN at ratification, with its birth moment recorded as arrived.** The writer
+  exists, so the premise that held this open is gone. It is not written here
+  because it is the pair to OR-5, whose reason is specific and is stated there.
 - **OR-5 — a falsifier for D6**, and ADR-C, which owns its rationale.
+
+  **OPEN at ratification.** ADR-C is `harness-pack/ADR-020`, it names D6's
+  falsifier `bypass_att_prose_leak` in its own Verification, and it is
+  **Proposed**. `harness-pack/ADR-006:56` forbids writing that fixture against a
+  Proposed ADR, so it belongs to that document's ratification. Both this OR and
+  OR-4 close there.
 - **OR-6 — the `shasum` line itself.** D1's whole cost is one line between
   `:371` and `:409` that does not exist. It is implementation and is not written
   here.
+
+  **CLOSED at ratification: the implementation carries it.**
+  `scripts/launch_worker.sh` now computes the sha256 of `$OUT`'s raw bytes
+  between `CC_EXIT=$?` and the receipt writer, exactly where D1 places it. It
+  uses `hashlib` through `python3 -c` rather than `shasum(1)`, because `python3`
+  is already a hard dependency of the launcher and `scripts/launch_checks.py:61`
+  pins the constitution with the same call — one library for both digests in the
+  receipt family, rather than a tool that differs per platform. An unreadable
+  `$OUT` leaves the variable empty, which is D7's branch and not a failure.
+  [verified]
 
 ## Consequences
 
@@ -516,6 +808,31 @@ defect `harness-pack/ADR-017` is about. They are OR-4 and OR-5.
   under which `cc.json` cannot in fact be unreadable, which would make D7
   vacuous. That second falsifier is why the row stays in the ledger instead of
   being deleted as answered.
+
+  **OBSERVED at ratification. The reading above is preserved and this is
+  appended under it, not substituted for it.** The branch **is** reachable:
+  `bypass_att_no_subject_no_statement` drove the launcher in tree with a
+  genuinely unreadable transcript at digest time, and the run produced a receipt
+  and zero `.intoto.json` files. The second falsifier — a reading under which
+  `cc.json` cannot be unreadable — is therefore **answered no**, and D7 is not
+  vacuous.
+
+  What the observation did change is the sentence this row is written in.
+  "`write_receipt.py:156-158` handles an unreadable `cc.json`" conflates two
+  states that are not one state, and the run measured both. An `error_no_output`
+  receipt is produced by a `cc.json` the writer cannot **parse**; D7 turns on a
+  `$OUT` the launcher cannot **read**. The launcher's own redirection
+  `"${CMD[@]}" < "$SPEC" > "$OUT"` creates the file before the child runs, so an
+  executor that writes nothing leaves an empty, perfectly readable transcript: the
+  receipt says `error_no_output` and a Statement **is** emitted, over zero bytes,
+  digest `e3b0c442…`. That is D1 applied literally with nothing fabricated, and it
+  is recorded here because the inference it blocks is one a reader would make for
+  free — **`error_no_output` in a receipt does not imply D7's branch was taken.**
+  What remains genuinely `[assumed]` is narrower than the row first carried:
+  **[assumed]** that the unreadable branch is reachable in *production* and not
+  only under a fixture that arranges it. *Falsified by:* a survey of real runs in
+  which no `$OUT` is ever unreadable, which would make D7 a rule about a state
+  only a test produces — still not vacuous, but smaller than it looks.
 - **[assumed] The re-fetched `svr.md` at sha256 `60d47f83…` is what
   `in-toto/attestation` `main` serves to others.** Two readings of this URI have
   already disagreed once. *Falsified by:* a third reading with a different

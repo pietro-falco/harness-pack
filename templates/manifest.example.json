@@ -4,6 +4,8 @@
   "_comment": "Config, not governance. Copy to your private location, edit freely; receipts record manifest_version. Model strings are opaque values.",
   "constitution_hash_expected": "00a92e1544ba9dd55591388830a7f86bf1a8d555e22f455f05b5eb267ecaf97d",
   "_comment_constitution_hash_expected": "Pins the exact governance bytes; launcher fail-closed on mismatch.",
+  "verifier_id": "OPERATOR_VERIFIER_ID_URI",
+  "_comment_verifier_id": "ADR-019 D4: predicate.verifier.id of the side-car in-toto Statement. A URI under a domain the OPERATOR controls, versioned when the verification logic changes materially (svr.md:86-90); the two values that version it are constitution_hash and manifest_version, both already in the receipt. Replace this placeholder in your own copy. It is a PLACEHOLDER in the *_CLASS_MODEL convention and never a real domain, for ADR-004's reason: no operator literal belongs in a tracked file. scripts/write_statement.py is fail-closed on its absence (STOP: VERIFIER-ID-ABSENT) and never defaults it.",
   "model_tiers": { "worker": "T3", "executor": "T2", "top": "T1" },
   "_comment_model_tiers": "ADR-005 D4: pack-side bridge from next's opaque model-string to a tier. Resolution: spec.model -> model_tiers[spec.model] -> tiers[T].chain[0]. Fail-closed: a model-string absent here is a STOP, never a default tier. 'top' is reachable only via an explicitly declared model; T0 is never a resolution target.",
   "tiers": {
