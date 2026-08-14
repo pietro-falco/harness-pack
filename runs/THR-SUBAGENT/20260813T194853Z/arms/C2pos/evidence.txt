@@ -1,0 +1,7 @@
+exit=0
+ws listing:
+c34e557bb6d8ab0d.marker
+token marker: PRESENT content=C2pos/20260813T194853Z
+control marker: ABSENT
+token in stream.jsonl: 6 occurrence(s)
+token in ~/.claude/projects transcripts: 0 file(s)

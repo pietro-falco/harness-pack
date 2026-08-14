@@ -1,0 +1,51 @@
+{
+ "arm": "A2fg",
+ "session_id": "1dce3698-7c77-4203-8e48-0eae600feea9",
+ "pin": "A2fg/20260813T194853Z",
+ "measured": true,
+ "disk": {
+  "alive": {
+   "present": true,
+   "stale": false,
+   "content": "A2fg/20260813T194853Z"
+  },
+  "bash": {
+   "present": false,
+   "stale": false,
+   "content": null
+  }
+ },
+ "stream": {
+  "transcript_files": [],
+  "tool_use_names": [
+   "Agent",
+   "Bash",
+   "Write"
+  ],
+  "bash_tool_use_total": 1,
+  "bash_tool_use_child": 1,
+  "bash_child_executed": 0,
+  "bash_child_denied_or_errored": 1,
+  "child_bash_detail": [
+   {
+    "use": {
+     "source": "stream",
+     "name": "Bash",
+     "id": "toolu_013LTFC9DU6Z8is3kG7D6M7R",
+     "parent_tool_use_id": "toolu_01HR1VSSQavkyesJVSJxS78b",
+     "input_head": "{\"command\": \"printf %s 'A2fg/20260813T194853Z' > /private/tmp/claude-501/-Users-pietrofalco-Code-harness-pack-docs-adrs/2aaf3780-0bd4-4236-9622-1c0090a3b5ef/scratchpad/armws/A2fg/A2fg.bash.marker\"}"
+    },
+    "result": {
+     "source": "stream",
+     "tool_use_id": "toolu_013LTFC9DU6Z8is3kG7D6M7R",
+     "is_error": true,
+     "content_head": "\"<tool_use_error>Error: No such tool available: Bash. Bash is disabled for this session, in subagents as well as here.</tool_use_error>\""
+    }
+   }
+  ]
+ },
+ "disk_says_child_bash": false,
+ "stream_says_child_bash": false,
+ "detectors_agree": true,
+ "note": null
+}

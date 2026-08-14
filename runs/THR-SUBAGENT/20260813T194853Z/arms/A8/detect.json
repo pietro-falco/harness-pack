@@ -1,0 +1,51 @@
+{
+ "arm": "A8",
+ "session_id": "28038de1-35fe-476f-b19d-72603ed28d8d",
+ "pin": "A8/20260813T194853Z",
+ "measured": true,
+ "disk": {
+  "alive": {
+   "present": true,
+   "stale": false,
+   "content": "A8/20260813T194853Z"
+  },
+  "bash": {
+   "present": true,
+   "stale": false,
+   "content": "A8/20260813T194853Z"
+  }
+ },
+ "stream": {
+  "transcript_files": [],
+  "tool_use_names": [
+   "Agent",
+   "Bash",
+   "Write"
+  ],
+  "bash_tool_use_total": 1,
+  "bash_tool_use_child": 1,
+  "bash_child_executed": 1,
+  "bash_child_denied_or_errored": 0,
+  "child_bash_detail": [
+   {
+    "use": {
+     "source": "stream",
+     "name": "Bash",
+     "id": "toolu_01A6vrrwiUkar2PVVo489WD8",
+     "parent_tool_use_id": "toolu_01JYPtkJDLGPDiC2Mpic1wp1",
+     "input_head": "{\"command\": \"printf %s 'A8/20260813T194853Z' > /private/tmp/claude-501/-Users-pietrofalco-Code-harness-pack-docs-adrs/2aaf3780-0bd4-4236-9622-1c0090a3b5ef/scratchpad/armws/A8/A8.bash.marker\", \"descrip"
+    },
+    "result": {
+     "source": "stream",
+     "tool_use_id": "toolu_01A6vrrwiUkar2PVVo489WD8",
+     "is_error": false,
+     "content_head": "\"(Bash completed with no output)\""
+    }
+   }
+  ]
+ },
+ "disk_says_child_bash": true,
+ "stream_says_child_bash": true,
+ "detectors_agree": true,
+ "note": null
+}

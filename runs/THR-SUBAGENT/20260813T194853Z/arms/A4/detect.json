@@ -1,0 +1,51 @@
+{
+ "arm": "A4",
+ "session_id": "40b78262-2a52-475e-9486-614715db5866",
+ "pin": "A4/20260813T194853Z",
+ "measured": true,
+ "disk": {
+  "alive": {
+   "present": true,
+   "stale": false,
+   "content": "A4/20260813T194853Z"
+  },
+  "bash": {
+   "present": true,
+   "stale": false,
+   "content": "A4/20260813T194853Z"
+  }
+ },
+ "stream": {
+  "transcript_files": [],
+  "tool_use_names": [
+   "Agent",
+   "Bash",
+   "Write"
+  ],
+  "bash_tool_use_total": 1,
+  "bash_tool_use_child": 1,
+  "bash_child_executed": 1,
+  "bash_child_denied_or_errored": 0,
+  "child_bash_detail": [
+   {
+    "use": {
+     "source": "stream",
+     "name": "Bash",
+     "id": "toolu_018yp9b2RxQSsq9okje5UQP2",
+     "parent_tool_use_id": "toolu_0148RStxGCRJZ548xmoSqRpL",
+     "input_head": "{\"command\": \"printf %s 'A4/20260813T194853Z' > /private/tmp/claude-501/-Users-pietrofalco-Code-harness-pack-docs-adrs/2aaf3780-0bd4-4236-9622-1c0090a3b5ef/scratchpad/armws/A4/A4.bash.marker\", \"descrip"
+    },
+    "result": {
+     "source": "stream",
+     "tool_use_id": "toolu_018yp9b2RxQSsq9okje5UQP2",
+     "is_error": false,
+     "content_head": "\"(Bash completed with no output)\""
+    }
+   }
+  ]
+ },
+ "disk_says_child_bash": true,
+ "stream_says_child_bash": true,
+ "detectors_agree": true,
+ "note": null
+}

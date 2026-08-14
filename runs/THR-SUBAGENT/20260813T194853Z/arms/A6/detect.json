@@ -1,0 +1,34 @@
+{
+ "arm": "A6",
+ "session_id": "db62cda0-c918-4007-8512-bd87844b3238",
+ "pin": "A6/20260813T194853Z",
+ "measured": true,
+ "disk": {
+  "alive": {
+   "present": true,
+   "stale": false,
+   "content": "A6/20260813T194853Z"
+  },
+  "bash": {
+   "present": false,
+   "stale": false,
+   "content": null
+  }
+ },
+ "stream": {
+  "transcript_files": [],
+  "tool_use_names": [
+   "Agent",
+   "Write"
+  ],
+  "bash_tool_use_total": 0,
+  "bash_tool_use_child": 0,
+  "bash_child_executed": 0,
+  "bash_child_denied_or_errored": 0,
+  "child_bash_detail": []
+ },
+ "disk_says_child_bash": false,
+ "stream_says_child_bash": false,
+ "detectors_agree": true,
+ "note": null
+}

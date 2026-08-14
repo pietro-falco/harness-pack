@@ -1,0 +1,13 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {"hooks": [{"type": "command", "command": "<LOCAL_ROOT>/Code/harness-pack/runs/THR-SUBAGENT/20260813T194853Z/arms/C2b/hooks/pretool.sh"}]}
+    ],
+    "SubagentStart": [
+      {"hooks": [{"type": "command", "command": "<LOCAL_ROOT>/Code/harness-pack/runs/THR-SUBAGENT/20260813T194853Z/arms/C2b/hooks/spawn.sh"}]}
+    ],
+    "SubagentStop": [
+      {"hooks": [{"type": "command", "command": "<LOCAL_ROOT>/Code/harness-pack/runs/THR-SUBAGENT/20260813T194853Z/arms/C2b/hooks/spawn.sh"}]}
+    ]
+  }
+}

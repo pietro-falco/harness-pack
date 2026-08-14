@@ -1,0 +1,51 @@
+{
+ "arm": "A5",
+ "session_id": "436a3cf9-cfad-45ab-a662-efa37f93ea82",
+ "pin": "A5/20260813T194853Z",
+ "measured": true,
+ "disk": {
+  "alive": {
+   "present": true,
+   "stale": false,
+   "content": "A5/20260813T194853Z"
+  },
+  "bash": {
+   "present": false,
+   "stale": false,
+   "content": null
+  }
+ },
+ "stream": {
+  "transcript_files": [],
+  "tool_use_names": [
+   "Agent",
+   "Bash",
+   "Write"
+  ],
+  "bash_tool_use_total": 1,
+  "bash_tool_use_child": 1,
+  "bash_child_executed": 0,
+  "bash_child_denied_or_errored": 1,
+  "child_bash_detail": [
+   {
+    "use": {
+     "source": "stream",
+     "name": "Bash",
+     "id": "toolu_01MandjC3vH34sFbeTa9rCNG",
+     "parent_tool_use_id": "toolu_01NfcnycfRfLGbdLNymL2gNY",
+     "input_head": "{\"command\": \"printf %s 'A5/20260813T194853Z' > /private/tmp/claude-501/-Users-pietrofalco-Code-harness-pack-docs-adrs/2aaf3780-0bd4-4236-9622-1c0090a3b5ef/scratchpad/armws/A5/A5.bash.marker\"}"
+    },
+    "result": {
+     "source": "stream",
+     "tool_use_id": "toolu_01MandjC3vH34sFbeTa9rCNG",
+     "is_error": true,
+     "content_head": "\"<tool_use_error>Error: No such tool available: Bash. Bash is disabled for this session, in subagents as well as here.</tool_use_error>\""
+    }
+   }
+  ]
+ },
+ "disk_says_child_bash": false,
+ "stream_says_child_bash": false,
+ "detectors_agree": true,
+ "note": null
+}
