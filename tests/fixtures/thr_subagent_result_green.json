@@ -1,0 +1,20 @@
+{
+ "schema": "thr-subagent-result/v1",
+ "run": "20260813T194853Z",
+ "cli_version": "2.1.231",
+ "apparatus_green": true,
+ "arms": {
+  "A8": {
+   "arm": "A8",
+   "session_id": "28038de1-35fe-476f-b19d-72603ed28d8d",
+   "measured": true,
+   "disk_says_child_bash": true,
+   "stream_says_child_bash": true,
+   "detectors_agree": true,
+   "alive_marker": true,
+   "bash_child_denied_or_errored": 0,
+   "question": "positive control: Bash in --tools and --allowedTools -> both markers",
+   "outcome": "CONFORME"
+  }
+ }
+}
