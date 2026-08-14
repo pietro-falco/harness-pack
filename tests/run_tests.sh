@@ -948,143 +948,46 @@ bypass_row tests/bypass_att_prose_leak_fixture.sh             GREEN     BROKEN
 bypass_row tests/bypass_att_policies_constitution_fixture.sh  GREEN     BROKEN
 bypass_row tests/bypass_receipt_host_path_published_fixture.sh GREEN    BROKEN
 
-# COMPLETENESS IS MEMBERSHIP, NOT CARDINALITY (D5), and it runs before the
-# fixtures because it is the cheap half. The set of registered paths must EQUAL
-# the set `git ls-files` tracks, and the two directions are accused separately
-# because they are different defects: a tracked falsifier nobody registered is a
-# control the suite never runs, and a registered path that is not tracked is a
-# row measuring something no clone will have.
+# ADR-022's four, landed with its ratification. THREE GREEN AND ONE RED, and
+# the red is the reason this block is worth reading.
 #
-# A count would pass a register carrying one row twice and one row not at all --
-# right total, wrong contents, and exactly one falsifier silently unrun. Set
-# comparison catches that duplicate too: `comm` pairs lines, so the second copy
-# has no partner on the tracked side and is accused as registered-not-tracked
-# while its victim is accused as tracked-not-registered.
-bypass_declared_paths="$(printf '%s' "$BYPASS_REGISTER" | awk 'NF {print $1}' | LC_ALL=C sort)"
-set +e
-bypass_tracked_paths="$(git ls-files -- 'tests/bypass_*' | LC_ALL=C sort)"
-bypass_ls_rc=$?
-set -e
-if [ "$bypass_ls_rc" -ne 0 ] || [ -z "$bypass_tracked_paths" ]; then
-  echo "FAIL [bypass register completeness]: \`git ls-files -- 'tests/bypass_*'\` did not answer, so the register's completeness went unchecked. That is a failure and not an unmeasured invariant: D5 is the clause that makes an unwired falsifier visible, and a run that could not evaluate it must not certify the register"
-  fail=1
-else
-  # -13 keeps what only the tracked side has; -23 what only the register has.
-  bypass_unregistered="$(LC_ALL=C comm -13 <(printf '%s\n' "$bypass_declared_paths") <(printf '%s\n' "$bypass_tracked_paths"))"
-  bypass_untracked="$(LC_ALL=C comm -23 <(printf '%s\n' "$bypass_declared_paths") <(printf '%s\n' "$bypass_tracked_paths"))"
-  if [ -n "$bypass_unregistered" ]; then
-    echo "FAIL [bypass register completeness]: tracked and NOT registered -- $(printf '%s' "$bypass_unregistered" | tr '\n' ' ')"
-    echo "      D5: a tracked falsifier absent from the register is a control this suite never runs. Register it beside the others, carrying the state its own header declares, never the state a run produced"
-    fail=1
-  fi
-  if [ -n "$bypass_untracked" ]; then
-    echo "FAIL [bypass register completeness]: registered and NOT tracked -- $(printf '%s' "$bypass_untracked" | tr '\n' ' ')"
-    echo "      D5: a registered path git does not track measures nothing in a fresh clone. Commit the falsifier, or drop the row -- and if the path appears twice in the register, this is the second copy"
-    fail=1
-  fi
-  if [ -z "$bypass_unregistered" ] && [ -z "$bypass_untracked" ]; then
-    echo "ok [bypass register completeness]: registered set == tracked set ($(printf '%s\n' "$bypass_tracked_paths" | wc -l | tr -d ' ') falsifiers)"
-  fi
-fi
-
-# The fixtures are invoked with stdin closed: the loop reads the register off a
-# here-string, and a child that consumed stdin would eat the rows below it and
-# silently shorten the register. The here-string keeps the loop in this shell,
-# so `fail` set inside it is the same `fail` the tail reads.
-while read -r bp_path bp_declared bp_exit2; do
-  [ -n "$bp_path" ] || continue
-  if [ ! -f "$bp_path" ]; then
-    echo "FAIL [bypass $bp_path]: registered and not on disk"
-    fail=1
-    continue
-  fi
-  set +e
-  bp_out="$(bash "$bp_path" 2>&1 </dev/null)"
-  bp_rc=$?
-  set -e
-  # Exit 2 leaves this loop by one of two doors, and the row's own third column
-  # is what decides which (D4). Same rc, same loop, different verdict -- and the
-  # strict door is the default, so a row that declares nothing gets accused.
-  if [ "$bp_rc" -eq 2 ]; then
-    if [ "$bp_exit2" = "UNMEASURED-2" ]; then
-      unmeasured=$((unmeasured + 1))
-      echo "unattrib [bypass $bp_path]: exit 2, and this row declares UNMEASURED-2 -- its header defines exit 2 as a refusal it cannot attribute to the mechanism under test, so the row never reached its own question. Not a pass, not a fail; the suite does not certify this run"
-    else
-      fail=1
-      echo "FAIL [bypass $bp_path]: FIXTURE BROKEN (exit 2) -- the fixture's own control could not confirm what it is measuring. D4: with no UNMEASURED-2 on this row, exit 2 routes to fail. It is cleared by realigning the fixture by hand, not by re-running it"
-    fi
-    printf '%s\n' "$bp_out" | sed 's/^/      | /'
-    continue
-  fi
-  case "$bp_rc" in
-    0) bp_observed="GREEN" ;;
-    1) bp_observed="RED" ;;
-    *) bp_observed="EXIT$bp_rc" ;;
-  esac
-  if [ "$bp_observed" = "$bp_declared" ]; then
-    echo "ok [bypass $bp_path]: declared $bp_declared, observed $bp_observed"
-    continue
-  fi
-  fail=1
-  echo "FAIL [bypass $bp_path]: declared $bp_declared, observed $bp_observed (exit $bp_rc). D3: investigate, then amend this row's literal in the commit that says what changed -- editing it to match this run is the failure mode the register exists to make expensive"
-  printf '%s\n' "$bp_out" | sed 's/^/      | /'
-done <<< "$BYPASS_REGISTER"
-
-echo "== shellcheck =="
-# Same gate as CI, not a local approximation of it: version and severity are
-# read from the committed pin, so the invocation below is character-for-
-# character the one .github/workflows/ci.yml runs -- and it runs only when the
-# binary is the pinned one, which is what makes that sentence true rather than
-# aspirational. Point $SHELLCHECK at a pinned binary to reproduce a CI verdict
-# exactly.
+# All four were written and observed RED against the launcher at ef78ad8 --
+# before scripts/launch_worker.sh was touched -- with each red captured under
+# .verity/evidence/2026-08-13-adr022-first-red/. ADR-022's own register makes
+# that ordering a condition of ratification: "ratification without those four
+# observations is a ratification against a register that decides nothing"
+# (ADR-017 D5). Three of them went green on D1/D2/D3 landing in the same tree.
 #
-# Two ways this gate can fail to be that gate, and neither is a quiet skip. A
-# gate that steps aside and still lets the suite print ALL TESTS PASSED is not
-# a gate -- it certifies something it never looked at.
+# THE FOURTH IS DECLARED RED AND IS EXPECTED TO STAY RED. This is not a row
+# awaiting repair and it is not a defect anyone forgot: ADR-022 D5 names
+# spec.scope's unenforceability "the residue", assigns it to ADR-011 rather
+# than to itself, and says of this ADR that it "retires the allowlist as an
+# excuse, nothing more". D3 above cuts both ways -- a row that started binding
+# with nobody recording why fails exactly as a row that stopped does -- so if
+# bypass_ft_bash_unbound goes GREEN, something carried the declared write
+# perimeter to a layer that can act on it, and that is a decision somebody
+# took and must record here rather than a repair to absorb quietly.
 #
-#   tool absent      nothing ran at all.
-#   tool mismatched  something ran, but not this gate. 0.9.0 and 0.11.0
-#                    disagree about SC2015 on identical source, so a verdict
-#                    from an unpinned binary neither clears these sources nor
-#                    accuses them: reporting it as a pass is the certification
-#                    this block refuses, and reporting it as a failure accuses
-#                    the writer of a defect the pinned gate never described.
+# The three green rows carry controls that make their own assertions MOVE, on
+# the standard the ADR-019 and ADR-020 blocks above are held to:
 #
-# Both are therefore unmeasured: nothing is accused, and nothing is claimed
-# either. The old behaviour here was to warn and certify anyway, which said
-# both "this verdict does NOT predict CI's" and ALL TESTS PASSED in one run.
-SC_PIN_VERSION="$(sed -n 's/^SHELLCHECK_VERSION=//p' .shellcheck-version)"
-SC_PIN_SEVERITY="$(sed -n 's/^SHELLCHECK_SEVERITY=//p' .shellcheck-version)"
-SC_BIN="${SHELLCHECK:-shellcheck}"
-if ! command -v "$SC_BIN" >/dev/null 2>&1; then
-  unmeasured=$((unmeasured + 1))
-  echo "unattrib [shellcheck]: '$SC_BIN' is not installed, so the shell sources went unchecked this run; not a pass, not a fail. The gate pins shellcheck $SC_PIN_VERSION -- install it, or set \$SHELLCHECK to a $SC_PIN_VERSION binary"
-else
-  SC_HAVE="$("$SC_BIN" --version | sed -n 's/^version: //p')"
-  if [ "$SC_HAVE" != "$SC_PIN_VERSION" ]; then
-    unmeasured=$((unmeasured + 1))
-    echo "unattrib [shellcheck]: '$SC_BIN' is $SC_HAVE and the gate pins $SC_PIN_VERSION, so the shell sources went unchecked by this gate this run; not a pass, not a fail. Set \$SHELLCHECK to a $SC_PIN_VERSION binary"
-  else
-    "$SC_BIN" --severity="$SC_PIN_SEVERITY" scripts/*.sh tests/*.sh || fail=1
-  fi
-fi
-
-echo "== compile check =="
-python3 -m py_compile scripts/*.py || fail=1
-
-# Three verdicts, because the suite now has a fixture with three outcomes. A
-# violation outranks an unmeasured invariant. An unmeasured invariant does NOT
-# print ALL TESTS PASSED and does NOT exit 0: the whole point of the third state
-# is that it cannot be a quiet pass, and a caller that gates on the documented
-# string or on the exit code sees the difference either way. Exit 2 says nothing
-# was broken and something was not looked at; exit 1 says something was broken.
-if [ "$fail" -ne 0 ]; then
-  echo "TESTS FAILED"
-  exit 1
-fi
-if [ "$unmeasured" -ne 0 ]; then
-  echo "TESTS INCONCLUSIVE: nothing failed, $unmeasured invariant(s) went unmeasured (see the unattrib lines above); re-run on an unloaded machine"
-  exit 2
-fi
-echo "ALL TESTS PASSED"
-exit 0
+#   tools_not_bound          a stand-in emitting --tools with the WRONG list
+#                            must be RED beside the real one it accepts, so the
+#                            row measures the bound and not the flag; a bound
+#                            emitted twice is RED on its own line.
+#   allowlist_widens_bound   a legal allowlist and an ABSENT one must both
+#                            still launch, so the STOP is a gate and not a
+#                            launcher that refuses everything.
+#   mcp_survives_bound       --strict-mcp-config TOGETHER WITH --mcp-config
+#                            must be RED, so the empty-set half of D3 is
+#                            measured rather than assumed.
+#
+# And the red one carries the same discipline in the opposite direction: a
+# fabricated quartet -- a launcher that emits and reads scope, a guard with a
+# predicate over the write target, a settings file naming the field -- must be
+# judged GREEN by the same decide(), or the row could only ever say RED and
+# would be a slogan rather than a measurement.
+bypass_row tests/bypass_ft_tools_not_bound_fixture.sh         GREEN     BROKEN
+bypass_row tests/bypass_ft_allowlist_widens_bound_fixture.sh  GREEN     BROKEN
+bypass_row tests/bypass_ft_mcp_survives_bound_fixture.sh      GREEN     BROKEN
+bypass_row tests/bypass_ft_bash_unbound_fixture.sh            RED       BROKEN

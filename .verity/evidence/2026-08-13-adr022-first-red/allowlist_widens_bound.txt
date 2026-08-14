@@ -1,0 +1,37 @@
+basis: ef78ad8cf57f23132d1181bd7522bf59aeba2e1c
+branch: main
+fixture: tests/bypass_ft_allowlist_widens_bound_fixture.sh
+fixture-blob-sha256: 98ab8d19096500c8b325f2a29a563e771cca8983e884fddfd31545332fcefa7b
+launcher-blob-sha256: 08dc97ec297852eae3dfe4b556d0ecc46d6eac5ae2edc9e4e808b62c78063050  (= HEAD:scripts/launch_worker.sh, unrepaired)
+
+The first red of ADR-022's falsifier register, observed against the launcher
+AS IT STANDS AT BASIS and with the fixture file exactly as it is committed --
+the same bytes that go green once D1/D2/D3 land. Literal stdout+stderr:
+---
+== FT-2 the allowlist can name a tool the bound does not contain ==
+     control 1: allowed_tools ["Read"] inside tools ["Read","Grep"] -> LAUNCHED (rc=0)
+     control 2: tools:[] is REFUSED before spawn (rc=1) -- STOP spec.tools missing/empty for S-ft2 (expected a non-empty list from next)
+     control 3: the same marker was written by control 1 and not by control 2, so its absence below is an observation and not an omission
+     control 4: allowed_tools absent -> LAUNCHED (rc=0); the field is optional and defaults to the bound
+     control 5: against a fabricated launcher that checks the allowlist against the bound, the same decide() returns GREEN (exit=0)
+     control 5 > GREEN [FT-2] an allowlist name outside spec.tools STOPs the launcher before spawn
+     control 5 >      spec.tools                : Read,Grep
+     control 5 >      spec.allowed_tools        : Read,Bash
+     control 5 >      outcome                   : REFUSED before spawn (rc=1)
+     control 5 >      reason given              : STOP spec.allowed_tools names tools absent from spec.tools: Bash (the allowlist runs inside the bound, it never widens it)
+     control 6: the same stand-in still LAUNCHES a legal allowlist (rc=0), so control 5's GREEN is a gate and not a refusal of everything
+RED [FT-2] the allowlist widens the bound: a spec naming 'Bash' in its allowlist and not in spec.tools was LAUNCHED
+     spec.tools                : Read,Grep
+     spec.allowed_tools        : Read,Bash
+     outcome                   : spawned (rc=0), no refusal anywhere on the path
+     the allowlist is the one flag ADR-022's Context measures as removing
+     nothing, so a name admitted through it is admitted by the layer that
+     cannot bound anything, and --permission-mode dontAsk at :359 answers
+     the only prompt it could have raised
+     green when a spec whose allowlist names a tool outside spec.tools is
+     refused BEFORE the spawn, with a STOP that names the offending tool --
+     while a legal allowlist, and an absent one, both still launch; a silent
+     intersection that drops the name and runs anyway is a widening resolved
+     downward and is refused here as loudly as no check at all
+FT-2 BYPASS FIXTURE: RED
+---

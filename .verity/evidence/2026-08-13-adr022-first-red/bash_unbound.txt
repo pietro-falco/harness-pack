@@ -1,0 +1,49 @@
+basis: ef78ad8cf57f23132d1181bd7522bf59aeba2e1c
+branch: main
+fixture: tests/bypass_ft_bash_unbound_fixture.sh
+fixture-blob-sha256: 2d3f84367410079ea673cd561f96da1814a3271ecc81aeb895ec04c1fa6f0297
+launcher-blob-sha256: 08dc97ec297852eae3dfe4b556d0ecc46d6eac5ae2edc9e4e808b62c78063050  (= HEAD:scripts/launch_worker.sh, unrepaired)
+
+The first red of ADR-022's falsifier register, observed against the launcher
+AS IT STANDS AT BASIS and with the fixture file exactly as it is committed --
+the same bytes that go green once D1/D2/D3 land. Literal stdout+stderr:
+---
+== FT-4 a spec declaring Bash buys an unbounded run, whatever the tool bound says ==
+     control 1: the template still declares scope REQUIRED in mode B, as a non-empty list of repo-relative prefixes
+     control 2: the Mode B template's default tool list still contains Bash, so the modal spec is the one this row is about
+     control 3: every instrument finds its positive control -- emits(tools)=yes, takes(TOOLS)=yes, guard field-reads of 'command'=1, settings mentions of 'permissions'=1
+     control 4: the guard still BLOCKS a destructive verb (rc=2), so a permit below is a judgment and not an absence of judgment
+     control 5: the shape gate is LIVE -- scope [/etc, ../../.ssh] is refused (rc=1), a legal scope reaches the decision line (rc=0)
+                 STOP spec.scope not repo-relative for S-ft4: /etc ../../.ssh (no leading / and no '..' component)
+                 so the four obligations below are read against a tree in which shape validation demonstrably works, and no repair to it can close this row
+     control 6: against a fabricated quartet carrying the perimeter end to end, the same decide() returns GREEN (exit=0)
+     control 6 > GREEN [FT-4] the declared write perimeter is carried and enforced: all four layers hold a predicate over the write target
+     control 6 >      A  decision line emits scope              : yes
+     control 6 >      B  shell read binds it                    : yes
+     control 6 >      C  guard field-reads of 'scope'           : 1 (word-anchored mentions: 4)
+     control 6 >      C  guard on a write OUTSIDE the perimeter : rc=2 BLOCKED
+     control 6 >      C  guard on a write INSIDE the perimeter  : rc=0 PERMITTED
+     control 6 >      D  settings.mode-b.json names scope       : 1 occurrence(s)
+RED [FT-4] a spec declaring Bash buys an unbounded run: no layer holds a predicate over the write target
+     A  decision line emits scope              : no
+     B  shell read binds it                    : no
+     C  guard field-reads of 'scope'           : 0 (word-anchored mentions: 0)
+     C  guard on a write OUTSIDE the perimeter : rc=0 PERMITTED
+     C  guard on a write INSIDE the perimeter  : rc=0 PERMITTED
+     D  settings.mode-b.json names scope       : 0 occurrence(s)
+     the spec's scope is validated in SHAPE at :176-183 and then dropped: the
+     decision line emits six fields and scope is not among them, the read binds
+     six and scope is not among them, and neither permission layer is ever
+     handed the list
+     so a spec declaring tools: [Bash] is bounded by ADR-022 D1 to one built-in
+     and unbounded in what that built-in reaches -- and Bash is in the Mode B
+     template's own default list, which is what makes this the modal spec and
+     not a contrived one
+     THIS ROW IS EXPECTED RED. ADR-022 D5 declares it the residue and does not
+     undertake to close it: 'this ADR retires the allowlist as an excuse,
+     nothing more'. Its green requires a decision nobody has taken -- carrying
+     the perimeter to a layer that can act on it -- and until that decision
+     exists, this row is the standing measurement of what the tool bound does
+     not buy
+FT-4 BYPASS FIXTURE: RED
+---

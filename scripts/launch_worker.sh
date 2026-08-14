@@ -163,6 +163,32 @@ if maxturns == "0" and wallsec == "0":
 tools = spec.get("tools")
 if not isinstance(tools, list) or not tools or any((not isinstance(t, str) or t == "") for t in tools):
     print(f"STOP spec.tools missing/empty for {rid} (expected a non-empty list from next)"); sys.exit()
+# spec.allowed_tools = the subset of spec.tools that runs WITHOUT a permission
+# prompt (ADR-022 D2). spec.tools is the bound (D1, emitted as --tools below);
+# this is the convenience inside it, and the two are separate fields precisely
+# so they can be written in contradiction -- which is the case D2 decides.
+#
+# OPTIONAL, and its absence means "the whole bound". That is exactly what the
+# single-field launcher meant before D1 separated the two, so a spec built from
+# templates/spec.mode-b.template.md keeps the meaning it has today and no
+# existing spec is invalidated by this decision.
+#
+# A name in the allowlist and outside the bound is a STOP, never a widening and
+# never a silent intersection. ADR-022's Context is why: --allowedTools does not
+# remove anything (35 tool names reached the child under --allowedTools Read,
+# against 3 under --tools Read), so honouring such a name would admit it through
+# the one layer that cannot bound anything -- and --permission-mode dontAsk
+# below answers the only prompt it could ever have raised. Dropping the name
+# quietly would resolve the operator's contradiction downward, out of sight, in
+# a run they believed they had declared.
+allowed = spec.get("allowed_tools")
+if allowed is None:
+    allowed = tools
+if not isinstance(allowed, list) or any((not isinstance(a, str) or a == "") for a in allowed):
+    print(f"STOP spec.allowed_tools malformed for {rid} (expected a list of non-empty strings, or the field absent to mean all of spec.tools)"); sys.exit()
+widening = [a for a in allowed if a not in tools]
+if widening:
+    print(f"STOP spec.allowed_tools names tools absent from spec.tools for {rid}: {' '.join(widening)} (the allowlist runs inside the bound, it never widens it)"); sys.exit()
 # spec.criteria = the claim IDs this slice asserts (ADR-004 D7 gate scope). Note the
 # collision: this is spec.criteria, NOT the top-level `criteria` next --json returns (which is harness.json).
 criteria = spec.get("criteria")
@@ -181,7 +207,7 @@ if not scope or any((not isinstance(p, str) or p == "") for p in scope):
 outside = [p for p in scope if p.startswith("/") or ".." in p.split("/")]
 if outside:
     print(f"STOP spec.scope not repo-relative for {rid}: {' '.join(outside)} (no leading / and no '..' component)"); sys.exit()
-print("OK", rid, model, maxturns, wallsec, ",".join(tools), ",".join(criteria))
+print("OK", rid, model, maxturns, wallsec, ",".join(tools), ",".join(criteria), ",".join(allowed))
 PYEOF
 )"
 read -r VERDICT REST <<<"$DECISION"
@@ -189,7 +215,7 @@ if [ "$VERDICT" != "OK" ]; then
   echo "$DECISION" >&2
   exit 1
 fi
-read -r RESOLVED_ID MODEL_STRING MAXTURNS WALLSEC TOOLS CRITERIA <<<"$REST"
+read -r RESOLVED_ID MODEL_STRING MAXTURNS WALLSEC TOOLS CRITERIA ALLOWED_TOOLS <<<"$REST"
 
 # Resolve the opaque model-string to a concrete model, pack-side, via the manifest
 # (ADR-005 D4): spec.model -> model_tiers[model] -> tiers[T].chain[0]. Fail-closed: a
@@ -206,7 +232,7 @@ read -r TIER_RESOLVED MODEL MVER <<<"$RREST"
 # Preview + test affordance: everything above is the real gate path. Stop here before
 # touching the constitution or invoking claude, and write nothing.
 if [ "${LAUNCH_DRYRUN:-}" = "1" ]; then
-  echo "DRYRUN ok id=$RESOLVED_ID model_string=$MODEL_STRING tier=$TIER_RESOLVED model=$MODEL manifest=$MVER max_turns=$MAXTURNS wall_sec=$WALLSEC tools=$TOOLS"
+  echo "DRYRUN ok id=$RESOLVED_ID model_string=$MODEL_STRING tier=$TIER_RESOLVED model=$MODEL manifest=$MVER max_turns=$MAXTURNS wall_sec=$WALLSEC tools=$TOOLS allowed_tools=$ALLOWED_TOOLS"
   exit 0
 fi
 
@@ -351,11 +377,44 @@ fi
 
 # Budget -> flags (ADR-005 D6): a declared dimension produces its flag; an undeclared
 # dimension (sentinel 0) produces NO flag. The old silent 15/20 defaults are gone.
+#
+# The tool surface (ADR-022). Three flags, and the order of the argument list is
+# not the order of the reasoning:
+#
+#   --tools               THE BOUND (D1). A tool absent from spec.tools is
+#                         absent from the child's surface. This flag is what the
+#                         field was always named for; until ADR-022 the launcher
+#                         did not pass it, and the field bought a pre-approval
+#                         over a surface nobody had narrowed. Measured on claude
+#                         2.1.231, one prompt, everything else held: --tools Read
+#                         returned 3 tool names and --allowedTools Read returned
+#                         35.
+#   --allowedTools        THE CONVENIENCE INSIDE IT (D2), narrowed to what its
+#                         name says: the subset that runs without a permission
+#                         prompt. It is validated above to be a subset of the
+#                         bound; it can no longer be a ceiling.
+#   --strict-mcp-config   THE OTHER DOOR (D3). --tools bounds the built-ins and
+#                         does not reach the MCP namespace: with the bound in
+#                         force, the probe above still returned two
+#                         mcp__plugin_context7_* tools. This flag restricts the
+#                         child to the MCP configuration given on the command
+#                         line, and NO --mcp-config is given, so that set is
+#                         empty and no server loads. A Mode B run that wants one
+#                         declares it in the spec, or does not get one.
+#
+# What none of this buys is stated where it can be read beside what it does:
+# a bounded tool can still be unbounded in what it reaches. spec.scope is
+# validated in shape at :176-183 and acted on by no layer, so a spec declaring
+# Bash -- which the Mode B template's default list does -- is narrowed here and
+# unbounded there. ADR-022 D5 calls that the residue and leaves it open;
+# tests/bypass_ft_bash_unbound_fixture.sh is the standing red that measures it.
 CMD=(claude -p
   --model "$MODEL"
   --append-system-prompt "$(cat "$CONST")"
   --settings "$HARNESS_HOME/templates/settings.mode-b.json"
-  --allowedTools "$TOOLS"
+  --tools "$TOOLS"
+  --allowedTools "$ALLOWED_TOOLS"
+  --strict-mcp-config
   --permission-mode dontAsk
   --output-format json)
 if [ "$MAXTURNS" != "0" ]; then CMD+=(--max-turns "$MAXTURNS"); fi

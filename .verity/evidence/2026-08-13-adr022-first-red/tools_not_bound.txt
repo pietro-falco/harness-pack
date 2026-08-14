@@ -1,0 +1,31 @@
+basis: ef78ad8cf57f23132d1181bd7522bf59aeba2e1c
+branch: main
+fixture: tests/bypass_ft_tools_not_bound_fixture.sh
+fixture-blob-sha256: 8e564f5fb7dc5229c97cb1cc4ae78237741827a69633cfdc7cff9436bf7057e5
+launcher-blob-sha256: 08dc97ec297852eae3dfe4b556d0ecc46d6eac5ae2edc9e4e808b62c78063050  (= HEAD:scripts/launch_worker.sh, unrepaired)
+
+The first red of ADR-022's falsifier register, observed against the launcher
+AS IT STANDS AT BASIS and with the fixture file exactly as it is committed --
+the same bytes that go green once D1/D2/D3 land. Literal stdout+stderr:
+---
+== FT-1 spec.tools is spent on --allowedTools, which pre-approves and removes nothing ==
+     control 1: the launcher still assembles its child command around --allowedTools
+     control 2: the stub captured 78 arguments and --allowedTools carries exactly the declared list, so the argv is the launcher's and the declared list is agreed
+     control 3: against a launcher patched to emit --tools "$TOOLS", the same decide() returns GREEN (exit=0)
+     control 3 > GREEN [FT-1] spec.tools is a bound: the spawned command carries --tools with exactly the declared list
+     control 3 >      declared by the spec          : Read,Grep
+     control 3 >      --tools                       : Read,Grep
+     control 3 >      --allowedTools                : Read,Grep
+     control 4: a --tools carrying 'Write,WebFetch' is RED against a spec declaring 'Read,Grep' (exit=1), so this row reads the bound and not merely the flag
+RED [FT-1] spec.tools is not a bound: the spawned command carries no --tools flag
+     --tools                       : ABSENT from the spawned argv
+     --allowedTools                : Read,Grep
+     the field is spent entirely on the flag that pre-approves, and ADR-022's
+     Context measures that flag removing nothing: 35 tool names reached the
+     child under --allowedTools Read, against 3 under --tools Read
+     green when the spawned command carries --tools whose value is exactly the
+     comma-joined spec.tools the decision block resolved at :184 -- neither the
+     flag alone nor some other list, because a bound the operator did not
+     declare is a different defect and not a repair
+FT-1 BYPASS FIXTURE: RED
+---

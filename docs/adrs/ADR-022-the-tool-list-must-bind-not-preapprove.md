@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 title: "The tool list must bind, not merely pre-approve"
 basis: harness-pack@0d65945
 date: 2026-08-13
@@ -110,12 +110,21 @@ template.
 
 ## Falsifier register
 
-No row in this register exists at basis, and none has been observed. That is the
-state, stated rather than implied: `git ls-files -- 'tests/bypass_ft_*'` is empty and
-`grep -n 'FT-' tests/run_tests.sh` returns nothing. Each row must be **written and
-observed RED before the implementing commit exists**, with its red captured under
-`.verity/evidence/2026-08-13-adr022-first-red/`. Ratification without those four
-observations is a ratification against a register that decides nothing (ADR-017 D5).
+At basis no row in this register existed and none had been observed:
+`git ls-files -- 'tests/bypass_ft_*'` was empty and `grep -n 'FT-' tests/run_tests.sh`
+returned nothing. Each row had to be **written and observed RED before the
+implementing commit exists**, with its red captured under
+`.verity/evidence/2026-08-13-adr022-first-red/`, because ratification without those
+four observations is a ratification against a register that decides nothing
+(ADR-017 D5).
+
+**All four were so observed, on 2026-08-13, and this ADR is ratified on that
+record.** Each was run against `scripts/launch_worker.sh` at
+sha256 `08dc97ec297852eae3dfe4b556d0ecc46d6eac5ae2edc9e4e808b62c78063050`, which is
+`HEAD:scripts/launch_worker.sh` unrepaired, and each red is captured in the evidence
+directory above with that digest recorded beside it. The fixture bytes measured there
+are the bytes committed: the reds and the greens are the same files, not a red file
+edited into a green one.
 
 Every row is hermetic. The live semantics of `--tools` cannot be a CI row: it needs a
 real child, and ADR-002 requires launch checks that a fresh clone can run offline.
@@ -123,12 +132,12 @@ Rows drive the real launcher with a `claude` stub first on `PATH` that prints it
 argv and exits — the same mechanism ADR-010's fixtures use to feed a constructed
 input to a writer reachable only through the launcher.
 
-| id | fixture | asserts | at basis |
-|---|---|---|---|
-| FT-1 | `tests/bypass_ft_tools_not_bound_fixture.sh` | the launcher's spawned command carries `--tools` with exactly `spec.tools`; absent flag or divergent list is RED | RED, unobserved |
-| FT-2 | `tests/bypass_ft_allowlist_widens_bound_fixture.sh` | an allowlist name absent from `spec.tools` STOPs the launcher before spawn | RED, unobserved |
-| FT-3 | `tests/bypass_ft_mcp_survives_bound_fixture.sh` | the spawned command carries `--strict-mcp-config` and no `--mcp-config` | RED, unobserved |
-| FT-4 | `tests/bypass_ft_bash_unbound_fixture.sh` | with `tools: [Bash]`, no layer holds a predicate over the write target: the decision line at `:184` emits no scope, the read at `:192` takes none, and neither `guard_pretooluse.py` nor `settings.mode-b.json` names the field | RED, and stays RED under this ADR by design — D5's residue, not this ADR's obligation |
+| id | fixture | asserts | at basis | at ratification |
+|---|---|---|---|---|
+| FT-1 | `tests/bypass_ft_tools_not_bound_fixture.sh` | the launcher's spawned command carries `--tools` with exactly `spec.tools`; absent flag, divergent list, or the flag emitted twice is RED | RED, observed | GREEN on D1 |
+| FT-2 | `tests/bypass_ft_allowlist_widens_bound_fixture.sh` | an allowlist name absent from `spec.tools` STOPs the launcher before spawn | RED, observed | GREEN on D2 |
+| FT-3 | `tests/bypass_ft_mcp_survives_bound_fixture.sh` | the spawned command carries `--strict-mcp-config` and no `--mcp-config` | RED, observed | GREEN on D3 |
+| FT-4 | `tests/bypass_ft_bash_unbound_fixture.sh` | with `tools: [Bash]`, no layer holds a predicate over the write target: the decision line at `:184` emits no scope, the read at `:192` takes none, and neither `guard_pretooluse.py` nor `settings.mode-b.json` names the field | RED, observed | **RED, and stays RED under this ADR by design** — D5's residue, not this ADR's obligation |
 
 FT-4's subject overlaps `tests/bypass_fc_scope_unread_fixture.sh`, which is GREEN
 since `c846887` and measures the *shape* refusal. FT-4 measures the *absence of an

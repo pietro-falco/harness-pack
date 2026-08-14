@@ -1,0 +1,31 @@
+basis: ef78ad8cf57f23132d1181bd7522bf59aeba2e1c
+branch: main
+fixture: tests/bypass_ft_mcp_survives_bound_fixture.sh
+fixture-blob-sha256: 266a0d452e0e3615ab734ce64965834acab869170d16ed8a5ca2facb489faae5
+launcher-blob-sha256: 08dc97ec297852eae3dfe4b556d0ecc46d6eac5ae2edc9e4e808b62c78063050  (= HEAD:scripts/launch_worker.sh, unrepaired)
+
+The first red of ADR-022's falsifier register, observed against the launcher
+AS IT STANDS AT BASIS and with the fixture file exactly as it is committed --
+the same bytes that go green once D1/D2/D3 land. Literal stdout+stderr:
+---
+== FT-3 the bound does not reach MCP tools, and the spawned command does not close that door ==
+     control 1: the launcher still assembles its child command around --allowedTools
+     control 2: the stub captured 78 arguments carrying --allowedTools and --permission-mode, so an absent flag below is the launcher's silence and not the instrument's
+     control 3: against a launcher patched to emit --strict-mcp-config, the same decide() returns GREEN (exit=0)
+     control 3 > GREEN [FT-3] the MCP door is shut: --strict-mcp-config is present and no --mcp-config is given
+     control 3 >      --strict-mcp-config     : present
+     control 3 >      --mcp-config            : absent, so the strict set is empty
+     control 4: --strict-mcp-config TOGETHER WITH --mcp-config is RED (exit=1), so both halves of D3 are measured
+RED [FT-3] the MCP door is open: the spawned command carries no --strict-mcp-config
+     --strict-mcp-config     : ABSENT from the spawned argv
+     --mcp-config            : absent
+     without it the child resolves MCP servers from the ambient configuration,
+     and ADR-022's Context measures --tools leaving two mcp__ tools on the
+     surface with the bound in force: the bound does not reach that namespace
+     green when the spawned command carries --strict-mcp-config AND names no
+     --mcp-config -- strict with a config file loads that file's servers, and
+     no config without strict falls back to the ambient resolution the flag
+     exists to suppress; a Mode B run that loads an MCP server does so by an
+     explicit declaration in the spec, or not at all
+FT-3 BYPASS FIXTURE: RED
+---
