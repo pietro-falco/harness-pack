@@ -1,0 +1,81 @@
+--- a/80-governance/harness/harness-threads-gate.py	2026-08-13 21:52:55
++++ b/80-governance/harness/harness-threads-gate.py	2026-08-13 21:52:55
+@@ -648,7 +648,7 @@
+     return rows, notes
+ 
+ 
+-def run(tracker, roots):
++def run(tracker, roots, scoped=False):
+     """Recompute every fact, measure every target, collect every receipt.
+ 
+     Returns `(diverged, unmeasured, executed, threads, progress)`. The last two
+@@ -760,14 +760,20 @@
+             "receipts_notes": notes,
+         })
+ 
+-    if executed != DECLARED_FACTS:
+-        diverged.append("STRUCTURE/fact-count — the tracker declares %d cited facts, "
+-                        "%d were executed" % (DECLARED_FACTS, executed))
+-    if progress_executed != DECLARED_PROGRESS_FACTS:
+-        diverged.append("STRUCTURE/progress-fact-count — the tracker declares %d "
+-                        "progress facts, %d were executed"
+-                        % (DECLARED_PROGRESS_FACTS, progress_executed))
+-    diverged.extend("%s" % f for f in structural_findings(tracker))
++    # Scoped runs skip the whole-tracker shape checks: the declared totals
++    # and the structural rules are properties of the tracker, not of one
++    # thread, and a filtered thread list would accuse the tracker of
++    # dropping facts it still carries. done_findings stays in scope: a DONE
++    # thread below target is the scoped thread's own incoherence.
++    if not scoped:
++        if executed != DECLARED_FACTS:
++            diverged.append("STRUCTURE/fact-count — the tracker declares %d cited facts, "
++                            "%d were executed" % (DECLARED_FACTS, executed))
++        if progress_executed != DECLARED_PROGRESS_FACTS:
++            diverged.append("STRUCTURE/progress-fact-count — the tracker declares %d "
++                            "progress facts, %d were executed"
++                            % (DECLARED_PROGRESS_FACTS, progress_executed))
++        diverged.extend("%s" % f for f in structural_findings(tracker))
+     # The one structural rule that needs the run to have happened: it reads the
+     # thread states above, not the tracker, because the tracker cannot know which
+     # targets were reached. See done_findings for why that placement is the rule.
+@@ -983,6 +989,12 @@
+     ap.add_argument("--now", default=None,
+                     help="fixed UTC stamp (YYYY-MM-DDTHH:MMZ) for a deterministic run")
+     ap.add_argument("--no-state", action="store_true", help="do not write the state file")
++    ap.add_argument("--scope", metavar="THREAD-ID", default=None,
++                    help="recompute only the named thread's cited facts; "
++                         "a divergence outside the scope cannot red this "
++                         "run. Implies --no-state: a partial recomputation "
++                         "must never overwrite the whole-tracker state "
++                         "files")
+     args = ap.parse_args(argv)
+ 
+     try:
+@@ -1000,6 +1012,18 @@
+         sys.stdout.write("rendered %s (%d lines)\n" % (shorten(args.render), n))
+         return 0
+ 
++    if args.scope:
++        chosen = [t for t in tracker["threads"] if t["id"] == args.scope]
++        if not chosen:
++            sys.stderr.write("UNMEASURED: --scope %r names no thread in "
++                             "the tracker\n" % args.scope)
++            return 2
++        # A scoped run answers one thread's question. The state files keep
++        # answering the whole-world question, so a partial recomputation
++        # never writes them.
++        tracker = dict(tracker, threads=chosen)
++        args.no_state = True
++
+     overrides = {}
+     for item in args.repo:
+         if "=" not in item:
+@@ -1009,7 +1033,7 @@
+         overrides[name] = path
+ 
+     roots = resolve_repos(tracker, overrides)
+-    diverged, unmeasured, executed, threads, progress = run(tracker, roots)
++    diverged, unmeasured, executed, threads, progress = run(tracker, roots, scoped=bool(args.scope))
+     heads = head_shas(roots)
+     stamp = args.now or time.strftime("%Y-%m-%dT%H:%MZ", time.gmtime())
+ 
