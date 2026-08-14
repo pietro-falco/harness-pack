@@ -1,0 +1,32 @@
+$ python3 <vault>/80-governance/harness/harness-threads-gate.py
+RED — 6 fact(s) diverged:
+  THR-GATE/GATE-3 — harness-pack main is 0 commits ahead of origin/main
+    expected: 0
+    observed: 2
+    target 0: the CLAIM reaches it, the OBSERVATION does not — this fact is seeded as done
+  THR-WIRING/WIR-1 — twelve bypass fixtures are tracked in harness-pack
+    expected: 24
+    observed: 28
+  THR-WIRING/WIR-2 — twelve bypass fixtures exist on disk
+    expected: 24
+    observed: 43
+  THR-WIRING/WIR-5 — run_tests.sh names a tracked bypass fixture on sixteen lines
+    expected: 28
+    observed: 47
+  THR-WIRING/WIR-6 — the register is twelve literal bypass_row lines in tests/run_tests.sh
+    expected: 24
+    observed: 43
+  STRUCTURE/status-done — THR-GATE is DONE with 0 of 1 progress fact(s) at target; GATE-3 below target. DONE is a measure here, not a label: close it by moving the observation, never by editing the status
+state: GUARD-SCOPE | RED 36/42 | tgt 2/8 | hp ef78ad8 hw 1aaf794 rsr - vlt ce4bc76 | 2026-08-14T00:23Z
+EXIT_CODE=1
+
+$ claude --version
+2.1.232 (Claude Code)
+
+Classification of the exit-1 RED (per directive, not an abort):
+out-of-scope for THR-CONFORMANCE — GATE-3 (2 unpushed doc commits; push is
+an operator act), WIR-1/2/5/6 (yesterday's THR-SUBAGENT work-products
+awaiting the operator's emitted commit sequence), STRUCTURE/status-done
+(derived from GATE-3). In-scope effect: this thread adds 8 fixtures and 8
+register rows, widening WIR-2/WIR-6 observations further; the tracker
+delta emitted with this run accounts for both arcs at once.

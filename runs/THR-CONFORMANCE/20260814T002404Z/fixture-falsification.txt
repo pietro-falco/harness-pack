@@ -1,0 +1,10 @@
+# Fixture falsification pass — each fixture observed failing once
+# Stub A: vacuous verifier (always exit 0). Stub B: per-invocation-varying verifier. Stub C: blind watch.
+stubA rc=1 bypass_ft_out_of_surface_call_undetected_fixture.sh :: RED: out-of-surface execution verified exit 0, expected 1
+stubA rc=1 bypass_ft_record_without_declaration_fixture.sh :: RED: record without declaration evidence verified 0; absence of declaration read as conformity
+stubA rc=1 bypass_ft_depth_collapse_fixture.sh :: RED: depth-collapsed exercised list verified exit 0, expected 1
+stubA rc=1 bypass_ft_narration_only_evidence_fixture.sh :: RED: prose beside the facts verified 0; a narrated record passed as evidence
+stubA rc=1 bypass_ft_stream_truncated_fixture.sh :: RED: truncated run verified CONFORMANT; an interrupted stream passed
+stubA rc=1 bypass_ft_unused_authorization_unreported_fixture.sh :: RED: record hiding an unused authorization verified exit 0, expected 1
+stubB rc=1 bypass_ft_replay_nondeterminism_fixture.sh :: RED: conformant record replay outputs differ byte-wise
+stubC rc=1 bypass_ft_monitor_blind_while_running_fixture.sh :: RED: out-of-surface call never shown within 2s; monitor blind

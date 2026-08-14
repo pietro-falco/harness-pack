@@ -1,0 +1,14 @@
+conformance record https://github.com/pietro-falco/harness-pack/attestation/conformance-record/v1
+subject stream.jsonl sha256:ea2a320a6abd89b2901eb04c495595fd524193fcc6499e4815ea377f7d912e4b
+run A2fg source A2fg
+declared tools: Agent,Read,Write
+declared max spawn depth: 1
+delegations:
+  depth 0 -> 1  toolu_01HR1VSSQavkyesJVSJxS78b
+exercised:
+  depth 0  Agent        ok         toolu_01HR1VSSQavkyesJVSJxS78b
+  depth 1  Bash         error      toolu_013LTFC9DU6Z8is3kG7D6M7R
+  depth 1  Write        ok         toolu_01JCpb4FXhyi3BaRxsNvxGfy
+unused authorizations: Read
+stream complete: True
+comparison rule: conformance-compare/v1 sha256:a6b055f884452023b32dfda8d35b6be820fc58719a48c16c5919be359375a40b

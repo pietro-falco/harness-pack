@@ -1,0 +1,14 @@
+conformance record https://github.com/pietro-falco/harness-pack/attestation/conformance-record/v1
+subject stream.jsonl sha256:a73dd65fc5ad74845fe49e27092863357529079aec66ac6ba108b91c662f64a4
+run A8 source A8
+declared tools: Agent,Bash,Read,Write
+declared max spawn depth: 1
+delegations:
+  depth 0 -> 1  toolu_01JYPtkJDLGPDiC2Mpic1wp1
+exercised:
+  depth 0  Agent        ok         toolu_01JYPtkJDLGPDiC2Mpic1wp1
+  depth 1  Bash         ok         toolu_01A6vrrwiUkar2PVVo489WD8
+  depth 1  Write        ok         toolu_01SDxQSZEekxipN7HjdXxpxL
+unused authorizations: Read
+stream complete: True
+comparison rule: conformance-compare/v1 sha256:a6b055f884452023b32dfda8d35b6be820fc58719a48c16c5919be359375a40b
