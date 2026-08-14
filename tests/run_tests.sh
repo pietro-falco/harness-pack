@@ -991,3 +991,23 @@ bypass_row tests/bypass_ft_tools_not_bound_fixture.sh         GREEN     BROKEN
 bypass_row tests/bypass_ft_allowlist_widens_bound_fixture.sh  GREEN     BROKEN
 bypass_row tests/bypass_ft_mcp_survives_bound_fixture.sh      GREEN     BROKEN
 bypass_row tests/bypass_ft_bash_unbound_fixture.sh            RED       BROKEN
+# FT-5..FT-19, the THR-SUBAGENT arc (ADR-023). Rows that read a recorded run
+# under runs/THR-SUBAGENT/ or need a live CLI declare UNMEASURED-2: on a
+# machine without the recording (fresh CI clone) they never reach their own
+# question. Hermetic rows keep the strict BROKEN reading.
+bypass_row tests/bypass_ft_positive_control_bash_in_pool_fixture.sh GREEN UNMEASURED-2
+bypass_row tests/bypass_ft_stale_marker_precedence_fixture.sh GREEN     BROKEN
+bypass_row tests/bypass_ft_appended_prompt_negative_control_fixture.sh GREEN UNMEASURED-2
+bypass_row tests/bypass_ft_write_tool_misattribution_fixture.sh GREEN   BROKEN
+bypass_row tests/bypass_ft_spawn_ledger_depth_blind_fixture.sh RED      UNMEASURED-2
+bypass_row tests/bypass_ft_scope_env_absent_at_depth_fixture.sh GREEN   UNMEASURED-2
+bypass_row tests/bypass_ft_permission_mode_precedence_fixture.sh GREEN  UNMEASURED-2
+bypass_row tests/bypass_ft_scoped_gate_out_of_scope_red_fixture.sh RED  UNMEASURED-2
+bypass_row tests/bypass_ft_emitter_tools_superset_fixture.sh  GREEN     BROKEN
+bypass_row tests/bypass_ft_emitter_unknown_key_fixture.sh     GREEN     BROKEN
+bypass_row tests/bypass_ft_emitter_agent_without_depth_bound_fixture.sh GREEN BROKEN
+bypass_row tests/bypass_ft_emitter_memory_undeclared_fixture.sh GREEN   BROKEN
+bypass_row tests/bypass_ft_emitter_empty_tools_resolution_fixture.sh GREEN BROKEN
+bypass_row tests/bypass_ft_emitter_deny_order_inversion_fixture.sh GREEN BROKEN
+bypass_row tests/bypass_ft_emitter_output_rejected_by_cli_fixture.sh RED UNMEASURED-2
+
