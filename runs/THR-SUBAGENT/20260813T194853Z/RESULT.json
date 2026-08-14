@@ -1,0 +1,198 @@
+{
+ "schema": "thr-subagent-result/v1",
+ "run": "20260813T194853Z",
+ "cli_version": "2.1.231",
+ "arm_model": "sonnet (explicit; operator session model is fable-5)",
+ "central_answer": "the background subagent filter INTERSECTS the inherited --tools pool; it does not replace it. A child tools field is subset-only at depth 1 and 2, foreground and background.",
+ "apparatus_green": true,
+ "arms": {
+  "A1bg": {
+   "arm": "A1bg",
+   "session_id": "903274d4-d98d-4ae8-9e2b-dbe2c551a7d5",
+   "measured": true,
+   "disk_says_child_bash": false,
+   "stream_says_child_bash": false,
+   "detectors_agree": true,
+   "alive_marker": true,
+   "bash_child_denied_or_errored": 1,
+   "question": "inheritance holds for background subagents (filter intersects)",
+   "outcome": "CONFORME"
+  },
+  "A1fg": {
+   "arm": "A1fg",
+   "session_id": "265bd37d-12b3-436c-99c5-d67145a0bb9e",
+   "measured": true,
+   "disk_says_child_bash": false,
+   "stream_says_child_bash": false,
+   "detectors_agree": true,
+   "alive_marker": true,
+   "bash_child_denied_or_errored": 0,
+   "question": "child without tools field inherits the parent pool (restricted)",
+   "outcome": "CONFORME"
+  },
+  "A2bg": {
+   "arm": "A2bg",
+   "session_id": "360f77a0-9dcb-4070-9a88-6375dadfa9ef",
+   "measured": true,
+   "disk_says_child_bash": false,
+   "stream_says_child_bash": false,
+   "detectors_agree": true,
+   "alive_marker": true,
+   "bash_child_denied_or_errored": 1,
+   "question": "no widening in background either (filter intersects, not replaces)",
+   "outcome": "CONFORME"
+  },
+  "A2fg": {
+   "arm": "A2fg",
+   "session_id": "1dce3698-7c77-4203-8e48-0eae600feea9",
+   "measured": true,
+   "disk_says_child_bash": false,
+   "stream_says_child_bash": false,
+   "detectors_agree": true,
+   "alive_marker": true,
+   "bash_child_denied_or_errored": 1,
+   "question": "child tools field cannot widen the inherited pool (subset)",
+   "outcome": "CONFORME"
+  },
+  "A3": {
+   "arm": "A3",
+   "session_id": "a0621a3d-73b6-4911-a17e-23b7b9646a85",
+   "measured": true,
+   "disk_says_child_bash": false,
+   "stream_says_child_bash": false,
+   "detectors_agree": true,
+   "alive_marker": true,
+   "bash_child_denied_or_errored": 1,
+   "question": "no widening at depth 2",
+   "outcome": "CONFORME"
+  },
+  "A4": {
+   "arm": "A4",
+   "session_id": "40b78262-2a52-475e-9486-614715db5866",
+   "measured": true,
+   "disk_says_child_bash": true,
+   "stream_says_child_bash": true,
+   "detectors_agree": true,
+   "alive_marker": true,
+   "bash_child_denied_or_errored": 0,
+   "question": "default config (builtin general-purpose, full pool) exposes Bash",
+   "outcome": "CONFORME"
+  },
+  "A4-tools-empty-string": {
+   "arm": "A4-tools-empty-string",
+   "session_id": "7ca97212-2469-40f0-9e01-2c98a441a143",
+   "measured": false,
+   "disk_says_child_bash": false,
+   "stream_says_child_bash": false,
+   "detectors_agree": true,
+   "alive_marker": false,
+   "bash_child_denied_or_errored": 0,
+   "outcome": "RECORDED \u2014 apparatus authoring error, kept",
+   "note": "--tools \"\" is the documented disable-ALL; it removed Agent itself and the parent could not delegate. Incidental measurement."
+  },
+  "A5": {
+   "arm": "A5",
+   "session_id": "436a3cf9-cfad-45ab-a662-efa37f93ea82",
+   "measured": true,
+   "disk_says_child_bash": false,
+   "stream_says_child_bash": false,
+   "detectors_agree": true,
+   "alive_marker": true,
+   "bash_child_denied_or_errored": 1,
+   "question": "parent permission mode prevails over child permissionMode",
+   "outcome": "CONFORME"
+  },
+  "A6": {
+   "arm": "A6",
+   "session_id": "db62cda0-c918-4007-8512-bd87844b3238",
+   "measured": true,
+   "disk_says_child_bash": false,
+   "stream_says_child_bash": false,
+   "detectors_agree": true,
+   "alive_marker": true,
+   "bash_child_denied_or_errored": 0,
+   "question": "memory 'project' writes only under <cwd>/.claude/agent-memory/<agent>/",
+   "outcome": "CONFORME",
+   "memory_paths_new": [
+    ".claude/agent-memory/probe/MEMORY.md",
+    ".claude/agent-memory/probe/probe_constant.md"
+   ],
+   "note": "cwd-relative; nothing new under ~/.claude"
+  },
+  "A7": {
+   "arm": "A7",
+   "session_id": "cc0bcff5-88e6-4264-bd76-92ee2be143e1",
+   "measured": true,
+   "disk_says_child_bash": false,
+   "stream_says_child_bash": false,
+   "detectors_agree": true,
+   "alive_marker": true,
+   "bash_child_denied_or_errored": 0,
+   "question": "skills field injects full skill content into child context",
+   "outcome": "DIVERGENTE",
+   "note": "child reported CLAIM-SKILL-ABSENT; zero graphify body strings in stream; skills field added no Skill tool to the inherited pool. Premise caveat: no vault symlink exists under ~/.claude/skills \u2014 graphify is a plain user-level directory."
+  },
+  "A8": {
+   "arm": "A8",
+   "session_id": "28038de1-35fe-476f-b19d-72603ed28d8d",
+   "measured": true,
+   "disk_says_child_bash": true,
+   "stream_says_child_bash": true,
+   "detectors_agree": true,
+   "alive_marker": true,
+   "bash_child_denied_or_errored": 0,
+   "question": "positive control: Bash in --tools and --allowedTools -> both markers",
+   "outcome": "CONFORME"
+  },
+  "C2b": {
+   "arm": "C2b",
+   "session_id": "ab91ab19-7604-4088-bcf7-1727f57a17c8",
+   "outcome": "CONFORME",
+   "evidence": [
+    "exit=0",
+    "alive.marker: C2b/20260813T194853Z",
+    "--- pretooluse.jsonl (       3 rows) ---",
+    "{\"scope\":\"THR-SUBAGENT\",\"payload\":{\"session_id\":\"ab91ab19-7604-4088-bcf7-1727f57a17c8\",\"transcript_path\":\"<LOCAL_ROOT>/.claude/projects/-private-tmp-claude-501--Users-pietrofalco-Code-harness-pack-docs-adrs-2aaf3780-0bd4-4236-9622-1c0090a3b5ef-scratchpad-armws-C2b/ab91ab19-7604-4088-bcf7-1727f57a17c8.jsonl\",\"cwd\":\"/private/tmp/claude-501/-Users-pietrofalco-Code-harness-pack-docs-adrs/2aaf3780-0bd4-4236-9622-1c0090a3b5ef/scratchpad/armws/C2b\",\"prompt_id\":\"d415bbb5-bb59-4868-9e7d-a357993163d0\",\"permission_mode\":\"default\",\"effort\":{\"level\":\"high\"},\"hook_event_name\":\"PreToolUse\",\"tool_name\":\"Agent\",\"tool_input\":{\"description\":\"Write alive marker file\",\"prompt\":\"One step. Use the Write tool to create the file /private/tmp/claude-501/-Users-pietrofalco-Code-harness-pack-docs-adrs/2aaf3780-0bd4-4236-9622-1c0090a3b5ef/scratchpad/armws/C2b/alive.marker with exactly this content: C2b/20260813T194853Z. Then reply DONE.\",\"subagent_type\":\"mid\"},\"tool_use_id\":\"toolu_01XSLC6oYjDBykN4D6JUPtsm\"}}",
+    "{\"scope\":\"THR-SUBAGENT\",\"payload\":{\"session_id\":\"ab91ab19-7604-4088-bcf7-1727f57a17c8\",\"transcript_path\":\"<LOCAL_ROOT>/.claude/projects/-private-tmp-claude-501--Users-pietrofalco-Code-harness-pack-docs-adrs-2aaf3780-0bd4-4236-9622-1c0090a3b5ef-scratchpad-armws-C2b/ab91ab19-7604-4088-bcf7-1727f57a17c8.jsonl\",\"cwd\":\"/private/tmp/claude-501/-Users-pietrofalco-Code-harness-pack-docs-adrs/2aaf3780-0bd4-4236-9622-1c0090a3b5ef/scratchpad/armws/C2b\",\"prompt_id\":\"d415bbb5-bb59-4868-9e7d-a357993163d0\",\"permission_mode\":\"default\",\"agent_id\":\"a8300c55f7f7e4e4d\",\"agent_type\":\"mid\",\"effort\":{\"level\":\"high\"},\"hook_event_name\":\"PreToolUse\",\"tool_name\":\"Agent\",\"tool_input\":{\"description\":\"Create alive marker file\",\"prompt\":\"One step. Use the Write tool to create the file /private/tmp/claude-501/-Users-pietrofalco-Code-harness-pack-docs-adrs/2aaf3780-0bd4-4236-9622-1c0090a3b5ef/scratchpad/armws/C2b/alive.marker with exactly this content: C2b/20260813T194853Z. Then reply DONE.\",\"subagent_type\":\"leaf\"},\"tool_use_id\":\"toolu_019RCn5oZYquPGwMHF4k4k2p\"}}",
+    "{\"scope\":\"THR-SUBAGENT\",\"payload\":{\"session_id\":\"ab91ab19-7604-4088-bcf7-1727f57a17c8\",\"transcript_path\":\"<LOCAL_ROOT>/.claude/projects/-private-tmp-claude-501--Users-pietrofalco-Code-harness-pack-docs-adrs-2aaf3780-0bd4-4236-9622-1c0090a3b5ef-scratchpad-armws-C2b/ab91ab19-7604-4088-bcf7-1727f57a17c8.jsonl\",\"cwd\":\"/private/tmp/claude-501/-Users-pietrofalco-Code-harness-pack-docs-adrs/2aaf3780-0bd4-4236-9622-1c0090a3b5ef/scratchpad/armws/C2b\",\"prompt_id\":\"d415bbb5-bb59-4868-9e7d-a357993163d0\",\"permission_mode\":\"default\",\"agent_id\":\"af6b12d9813b89854\",\"agent_type\":\"leaf\",\"effort\":{\"level\":\"high\"},\"hook_event_name\":\"PreToolUse\",\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"/private/tmp/claude-501/-Users-pietrofalco-Code-harness-pack-docs-adrs/2aaf3780-0bd4-4236-9622-1c0090a3b5ef/scratchpad/armws/C2b/alive.marker\",\"content\":\"C2b/20260813T194853Z\"},\"tool_use_id\":\"toolu_01V2Jv5r3PNbuA7ePcWj83He\"}}",
+    "--- spawn.jsonl (       4 rows) ---",
+    "{\"at\":\"2026-08-13T20:09:26Z\",\"payload\":{\"session_id\":\"ab91ab19-7604-4088-bcf7-1727f57a17c8\",\"transcript_path\":\"<LOCAL_ROOT>/.claude/projects/-private-tmp-claude-501--Users-pietrofalco-Code-harness-pack-docs-adrs-2aaf3780-0bd4-4236-9622-1c0090a3b5ef-scratchpad-armws-C2b/ab91ab19-7604-4088-bcf7-1727f57a17c8.jsonl\",\"cwd\":\"/private/tmp/claude-501/-Users-pietrofalco-Code-harness-pack-docs-adrs/2aaf3780-0bd4-4236-9622-1c0090a3b5ef/scratchpad/armws/C2b\",\"prompt_id\":\"d415bbb5-bb59-4868-9e7d-a357993163d0\",\"agent_id\":\"a8300c55f7f7e4e4d\",\"agent_type\":\"mid\",\"hook_event_name\":\"SubagentStart\"}}",
+    "{\"at\":\"2026-08-13T20:09:29Z\",\"payload\":{\"session_id\":\"ab91ab19-7604-4088-bcf7-1727f57a17c8\",\"transcript_path\":\"<LOCAL_ROOT>/.claude/projects/-private-tmp-claude-501--Users-pietrofalco-Code-harness-pack-docs-adrs-2aaf3780-0bd4-4236-9622-1c0090a3b5ef-scratchpad-armws-C2b/ab91ab19-7604-4088-bcf7-1727f57a17c8.jsonl\",\"cwd\":\"/private/tmp/claude-501/-Users-pietrofalco-Code-harness-pack-docs-adrs/2aaf3780-0bd4-4236-9622-1c0090a3b5ef/scratchpad/armws/C2b\",\"prompt_id\":\"d415bbb5-bb59-4868-9e7d-a357993163d0\",\"agent_id\":\"af6b12d9813b89854\",\"agent_type\":\"leaf\",\"hook_event_name\":\"SubagentStart\"}}",
+    "{\"at\":\"2026-08-13T20:09:34Z\",\"payload\":{\"session_id\":\"ab91ab19-7604-4088-bcf7-1727f57a17c8\",\"transcript_path\":\"<LOCAL_ROOT>/.claude/projects/-private-tmp-claude-501--Users-pietrofalco-Code-harness-pack-docs-adrs-2aaf3780-0bd4-4236-9622-1c0090a3b5ef-scratchpad-armws-C2b/ab91ab19-7604-4088-bcf7-1727f57a17c8.jsonl\",\"cwd\":\"/private/tmp/claude-501/-Users-pietrofalco-Code-harness-pack-docs-adrs/2aaf3780-0bd4-4236-9622-1c0090a3b5ef/scratchpad/armws/C2b\",\"prompt_id\":\"d415bbb5-bb59-4868-9e7d-a357993163d0\",\"permission_mode\":\"default\",\"agent_id\":\"af6b12d9813b89854\",\"agent_type\":\"leaf\",\"effort\":{\"level\":\"high\"},\"hook_event_name\":\"SubagentStop\",\"stop_hook_active\":false,\"agent_transcript_path\":\"<LOCAL_ROOT>/.claude/projects/-private-tmp-claude-501--Users-pietrofalco-Code-harness-pack-docs-adrs-2aaf3780-0bd4-4236-9622-1c0090a3b5ef-scratchpad-armws-C2b/ab91ab19-7604-4088-bcf7-1727f57a17c8/subagents/agent-af6b12d9813b89854.jsonl\",\"last_assistant_message\":\"DONE\\n\\nFile created: /private/tmp/claude-501/-Users-pietrofalco-Code-harness-pack-docs-adrs/2aaf3780-0bd4-4236-9622-1c0090a3b5ef/scratchpad/armws/C2b/alive.marker\",\"background_tasks\":[],\"session_crons\":[]}}",
+    "{\"at\":\"2026-08-13T20:09:35Z\",\"payload\":{\"session_id\":\"ab91ab19-7604-4088-bcf7-1727f57a17c8\",\"transcript_path\":\"<LOCAL_ROOT>/.claude/projects/-private-tmp-claude-501--Users-pietrofalco-Code-harness-pack-docs-adrs-2aaf3780-0bd4-4236-9622-1c0090a3b5ef-scratchpad-armws-C2b/ab91ab19-7604-4088-bcf7-1727f57a17c8.jsonl\",\"cwd\":\"/private/tmp/claude-501/-Users-pietrofalco-Code-harness-pack-docs-adrs/2aaf3780-0bd4-4236-9622-1c0090a3b5ef/scratchpad/armws/C2b\",\"prompt_id\":\"d415bbb5-bb59-4868-9e7d-a357993163d0\",\"permission_mode\":\"default\",\"agent_id\":\"a8300c55f7f7e4e4d\",\"agent_type\":\"mid\",\"effort\":{\"level\":\"high\"},\"hook_event_name\":\"SubagentStop\",\"stop_hook_active\":false,\"agent_transcript_path\":\"<LOCAL_ROOT>/.claude/projects/-private-tmp-claude-501--Users-pietrofalco-Code-harness-pack-docs-adrs-2aaf3780-0bd4-4236-9622-1c0090a3b5ef-scratchpad-armws-C2b/ab91ab19-7604-4088-bcf7-1727f57a17c8/subagents/agent-a8300c55f7f7e4e4d.jsonl\",\"last_assistant_message\":\"DONE\\n\\nFile created: /private/tmp/claude-501/-Users-pietrofalco-Code-harness-pack-docs-adrs/2aaf3780-0bd4-4236-9622-1c0090a3b5ef/scratchpad/armws/C2b/alive.marker\",\"background_tasks\":[],\"session_crons\":[]}}"
+   ],
+   "question": "HARNESS_SCOPE survives into hooks at depth 1 and 2; SubagentStart ledger >=2 rows on a depth-2 run; report marker recorded as signal",
+   "spawn_ledger_depth_field": false
+  },
+  "C2neg": {
+   "arm": "C2neg",
+   "session_id": "df30ff5e-aab6-4fe7-82fd-853a826f018c",
+   "outcome": "CONFORME",
+   "evidence": [
+    "exit=0",
+    "ws listing:",
+    "control.marker",
+    "token marker: ABSENT",
+    "control marker: PRESENT content=C2neg/20260813T194853Z",
+    "token in stream.jsonl: 0 occurrence(s)",
+    "token in ~/.claude/projects transcripts: 0 file(s)"
+   ],
+   "question": "negative control: token absent everywhere"
+  },
+  "C2pos": {
+   "arm": "C2pos",
+   "session_id": "ffe08d0e-8052-4c3f-bec7-d6fcc608d74b",
+   "outcome": "CONFORME",
+   "evidence": [
+    "exit=0",
+    "ws listing:",
+    "c34e557bb6d8ab0d.marker",
+    "token marker: PRESENT content=C2pos/20260813T194853Z",
+    "control marker: ABSENT",
+    "token in stream.jsonl: 6 occurrence(s)",
+    "token in ~/.claude/projects transcripts: 0 file(s)"
+   ],
+   "question": "--append-subagent-system-prompt reaches depth-2 subagents (doc floor v2.1.205)"
+  }
+ }
+}
