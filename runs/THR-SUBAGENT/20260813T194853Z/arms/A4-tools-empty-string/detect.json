@@ -1,0 +1,31 @@
+{
+ "arm": "A4",
+ "session_id": "7ca97212-2469-40f0-9e01-2c98a441a143",
+ "pin": "A4/20260813T194853Z",
+ "measured": false,
+ "disk": {
+  "alive": {
+   "present": false,
+   "stale": false,
+   "content": null
+  },
+  "bash": {
+   "present": false,
+   "stale": false,
+   "content": null
+  }
+ },
+ "stream": {
+  "transcript_files": [],
+  "tool_use_names": [],
+  "bash_tool_use_total": 0,
+  "bash_tool_use_child": 0,
+  "bash_child_executed": 0,
+  "bash_child_denied_or_errored": 0,
+  "child_bash_detail": []
+ },
+ "disk_says_child_bash": false,
+ "stream_says_child_bash": false,
+ "detectors_agree": true,
+ "note": null
+}

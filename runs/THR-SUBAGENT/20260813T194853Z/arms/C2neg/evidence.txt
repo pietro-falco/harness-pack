@@ -1,0 +1,7 @@
+exit=0
+ws listing:
+control.marker
+token marker: ABSENT
+control marker: PRESENT content=C2neg/20260813T194853Z
+token in stream.jsonl: 0 occurrence(s)
+token in ~/.claude/projects transcripts: 0 file(s)
