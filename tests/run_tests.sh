@@ -1030,6 +1030,31 @@ bypass_row tests/bypass_ft_replay_nondeterminism_fixture.sh   GREEN     BROKEN
 bypass_row tests/bypass_ft_unused_authorization_unreported_fixture.sh GREEN BROKEN
 bypass_row tests/bypass_ft_monitor_blind_while_running_fixture.sh GREEN UNMEASURED-2
 
+# FT-28, and it is DECLARED RED because it was OBSERVED RED against this
+# repository's own tracked tree at f1e2f47 before this row was written: 40 files
+# carrying 396 occurrences of the operator's home path in the spelling
+# privacy-lint-user-paths does not look for. Nothing was synthesized to produce
+# that red and nothing needs to be -- the fixture that fails is the tree.
+#
+# The state is declared rather than repaired because the repair is not this
+# suite's to take. Rewriting those 40 files changes 40 tracked blob digests, and
+# three of them are cited by sha256 from conformance records under
+# runs/THR-CONFORMANCE/ that resolve today; the order of the redaction and the
+# re-pinning of those citations is an operator decision, and a row that went
+# quietly green by having someone edit the tree underneath it would have hidden
+# exactly the coupling that decision turns on.
+#
+# What this row is NOT is a permanent exemption. D3 above cuts both ways here as
+# it does for bypass_ft_bash_unbound: if this goes GREEN, the tracked tree stopped
+# carrying the material and somebody redacted it, which is a decision that gets
+# recorded on this line rather than absorbed by amending the literal to match a
+# run. The fixture's own four control arms -- a negative control, a counted
+# positive control, the blindness of the separator spelling against planted
+# flattened material, and exclusion parity with the claim's four pathspecs --
+# are what keep the RED from being a slogan: the same detector was observed
+# GREEN on a clean scratch tree and RED again one planted line later.
+bypass_row tests/bypass_ft_flattened_home_form_undetected_fixture.sh RED BROKEN
+
 # COMPLETENESS IS MEMBERSHIP, NOT CARDINALITY (D5), and it runs before the
 # fixtures because it is the cheap half. The set of registered paths must EQUAL
 # the set `git ls-files` tracks, and the two directions are accused separately
