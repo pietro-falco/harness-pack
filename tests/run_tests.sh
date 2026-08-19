@@ -1053,7 +1053,19 @@ bypass_row tests/bypass_ft_monitor_blind_while_running_fixture.sh GREEN UNMEASUR
 # flattened material, and exclusion parity with the claim's four pathspecs --
 # are what keep the RED from being a slogan: the same detector was observed
 # GREEN on a clean scratch tree and RED again one planted line later.
-bypass_row tests/bypass_ft_flattened_home_form_undetected_fixture.sh RED BROKEN
+#
+# 2026-08-19: RED -> GREEN, and this is the decision the paragraph above said
+# would be recorded here rather than absorbed. The operator directed the
+# redaction: the flattened spelling was substituted with the placeholder the
+# v1 path transformation already uses, across all 40 tracked files carrying it
+# (396 occurrences), in the same commit that moves this literal. The three
+# conformance records that cited transformed bytes were re-pinned to the
+# post-substitution digests and now declare the transformation and its
+# completeness -- placeholder counts a reader can recount, zero residues in
+# either spelling as this fixture measures them -- and the pre-transformation
+# digests left the published artifacts. The detector is unchanged: the tree
+# moved, and this line records why.
+bypass_row tests/bypass_ft_flattened_home_form_undetected_fixture.sh GREEN BROKEN
 
 # COMPLETENESS IS MEMBERSHIP, NOT CARDINALITY (D5), and it runs before the
 # fixtures because it is the cheap half. The set of registered paths must EQUAL

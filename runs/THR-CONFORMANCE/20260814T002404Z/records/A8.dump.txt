@@ -1,5 +1,5 @@
 conformance record https://github.com/pietro-falco/harness-pack/attestation/conformance-record/v1
-subject stream.jsonl sha256:a73dd65fc5ad74845fe49e27092863357529079aec66ac6ba108b91c662f64a4
+subject stream.jsonl sha256:f71998846bd7541431d21de5a1c82bc4d95b2383e56b29a7d878a8374f9cf6a6
 run A8 source A8
 declared tools: Agent,Bash,Read,Write
 declared max spawn depth: 1
