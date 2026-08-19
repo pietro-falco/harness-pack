@@ -18,8 +18,8 @@
     {
       "id": "privacy-lint-operator-uid-phrase",
       "type": "command",
-      "description": "No tracked file references the operator's literal uid via the 'uid 501' phrasing.",
-      "run": "! git grep -qiE '\\buid 501\\b' -- ':!docs/adrs/' ':!*.example.json' ':!workers.local.json' ':!.verity/claims.json'",
+      "description": "No tracked file (outside this manifest's four pathspec exclusions) references the operator's numeric uid in the phrase spelling -- the three-letter id-word immediately followed by the token. The token is computed from the running process (id -u) and never written here: a detector that must state the identifier it hunts publishes that identifier in the tracked file that exists to keep it out -- the same asymmetry as its bare-token sibling and the computed classes in scripts/statement_lint.py. Until 2026-08-19 the pattern was anchored with the word-boundary escape under git grep -E, whose ERE engine does not implement that escape: the predicate matched zero lines by construction and could not fail. Corrected to -P and measured at correction time on the tracked tree: zero lines on the surface -- the underlying fact is true, so this claim stays GREEN and, unlike its sibling, declares no exposure. The phrase's occurrences outside the surface (5 lines in 2 files under docs/adrs/ at correction time) sit in the locus the claim's own pathspecs exclude by design.",
+      "run": "! git grep -qiP \"\\buid $(id -u)\\b\" -- ':!docs/adrs/' ':!*.example.json' ':!workers.local.json' ':!.verity/claims.json'",
       "expect": { "exitCode": 0 }
     },
     {
