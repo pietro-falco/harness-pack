@@ -42,7 +42,31 @@ print(hashlib.sha1(('blob %d\0' % len(data)).encode() + data).hexdigest())
 ")"
 
 mkdir -p "$WORK/repo/scripts"
-RULE_JSON='{"id":"path-transform/v1","mechanism":"literal-substring-replace","pattern":"/Users/nobody","replacement":"<LOCAL_ROOT>"}'
+
+# THE RULE'S PATTERN IS DERIVED, NEVER SPELLED. path-transform/v1 substitutes a
+# home-path prefix, so a scratch rule that had to quote one would publish that
+# prefix in the tracked file whose own suite exists to keep it out -- and this
+# fixture is tracked, on the surface the home-path claim presides over. The same
+# asymmetry keeps `homepath` a computed class in scripts/statement_lint.py and
+# keeps both spellings computed in FT-28: a detector may not be the exposure.
+# Nothing the arms measure depends on the value. They separate UNDECLARED,
+# RULE-DRIFT and DECLARED by the rule file's sha256 alone; the verifier reads
+# `pattern` for exactly one purpose, the residue check at
+# path_transform_verify.py:121, which needs the pattern ABSENT from the evidence
+# bytes -- a property the two controls below establish rather than assume.
+HOME_ROOT="$(dirname "${HOME:-/nonexistent}")"
+PATTERN="$HOME_ROOT/nobody"
+case "$PATTERN" in
+  *\"*|*\\*)
+    echo "BROKEN: the derived pattern carries a quote or backslash and cannot be embedded in the scratch rule verbatim" >&2
+    exit 2 ;;
+esac
+case "$ORIGINAL_BYTES" in
+  *"$PATTERN"*)
+    echo "BROKEN: the derived pattern occurs in the evidence bytes, so arm C could not reach exit 0 for a reason that is not the mechanism under test" >&2
+    exit 2 ;;
+esac
+RULE_JSON="{\"id\":\"path-transform/v1\",\"mechanism\":\"literal-substring-replace\",\"pattern\":\"$PATTERN\",\"replacement\":\"<LOCAL_ROOT>\"}"
 printf '%s' "$RULE_JSON" > "$WORK/repo/scripts/path_transform_rule_v1.json"
 TRUE_RULE_SHA="$(python3 -c "
 import hashlib
@@ -72,7 +96,7 @@ fi
 mv "$WORK/rule.aside" "$WORK/repo/scripts/path_transform_rule_v1.json"
 
 # Arm B: rule file present, digest does not match the record's pin.
-printf '%s' '{"id":"path-transform/v1","pattern":"/Users/someone-else"}' \
+printf '%s' "{\"id\":\"path-transform/v1\",\"pattern\":\"$PATTERN\"}" \
   > "$WORK/repo/scripts/path_transform_rule_v1.json"
 python3 "$VERIFY" "$WORK/record.json" --repo-root "$WORK/repo" >"$WORK/out.b" 2>&1
 rc_b=$?
