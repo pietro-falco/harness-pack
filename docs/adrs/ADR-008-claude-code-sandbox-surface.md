@@ -26,12 +26,12 @@ Nothing here is implemented. Under harness-pack/ADR-006 no code may be written a
 
 Every claim below is scoped to this basis. Outside it, the claims are unverified, not false.
 
-- Claude Code 2.1.220, binary at /Users/pietrofalco/.local/bin/claude
+- Claude Code 2.1.220, binary at ~/.local/bin/claude
 - macOS 26.3.1, build 25D771280a; Darwin 25.3.0, arm64
 - Strict profile: .claude/strict.settings.json, 1250 bytes, sha256 82aa230e55ef5a7192030775f329e56e1b55dcee9e2154f4ab70bd73478dc100, untracked, loaded only via --settings
 - Profile contents that are load-bearing: sandbox.enabled true, failIfUnavailable true, allowUnsandboxedCommands false, autoAllowBashIfSandboxed true, filesystem.allowWrite = repository root plus ~/.npm, network.strictAllowlist true with five allowedDomains, credential denies for ~/.zshenv, ~/.ssh and ~/.claude/.credentials.json, and six permission deny rules
 - User-level settings: ~/.claude/settings.json, 3137 bytes, untracked by any repository, defaultMode auto, additionalDirectories containing the Obsidian vault
-- Live PreToolUse hook: /Users/pietrofalco/Obsidian-Vault/.claude/hooks/pre-bash-guard.py, 10255 bytes, mode 755, blob f88831a, registered at ~/.claude/settings.json lines 59-71 with matcher Bash
+- Live PreToolUse hook: ~/Obsidian-Vault/.claude/hooks/pre-bash-guard.py, 10255 bytes, mode 755, blob f88831a, registered at ~/.claude/settings.json lines 59-71 with matcher Bash
 - Global git configuration in effect: commit.gpgsign true, tag.gpgsign true, gpg.format ssh, and a signing key path under ~/.ssh — a directory the profile's credential deny covers
 
 ## D1 — A boundary claim without a pinned basis is void

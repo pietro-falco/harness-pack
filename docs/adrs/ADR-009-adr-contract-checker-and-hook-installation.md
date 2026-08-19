@@ -30,7 +30,7 @@ Every claim below is scoped to this basis. Outside it the claims are unverified,
 
 - harness-pack `main` at `f74a8ab57c8d43c415b2abd570ee75ddc06d8410`, working tree clean but for one untracked path, `.probe-repo/`, which is deliberately not staged by this commit and is the same untracked probe repository harness-pack/ADR-008 C3 has an open requirement about.
 - vault `main` at `44871a47489f0cdd09660738fde558ff59b94b13`. `80-governance/adrs/ADR-080-the-cross-repo-adr-artifact-contract.md` is 768 lines, `status: accepted`, and carries `## Amendment 1` at line 468 and `## Amendment 2` at line 625.
-- harnesswright `main` at `9320294a9ac251c031efb6d504919e05ca43cd19`; verity `main` at `4dc016b354f3a6eb953590167b46bc29eacf3fcb`; lanewright `main` at `f32aa62b2bf3f58d6565f8edbb7277e966fe07a2` — the bases of the hook census at `/Users/pietrofalco/Code/_recon/claude-perms/hooks-census.md`, sha256 `d9937948b4c1c11cacafc886252a17bfb8d654c356850f3c48b952216a05ccc7` as pinned by ADR-080 Amendment 2.
+- harnesswright `main` at `9320294a9ac251c031efb6d504919e05ca43cd19`; verity `main` at `4dc016b354f3a6eb953590167b46bc29eacf3fcb`; lanewright `main` at `f32aa62b2bf3f58d6565f8edbb7277e966fe07a2` — the bases of the hook census at `~/Code/_recon/claude-perms/hooks-census.md`, sha256 `d9937948b4c1c11cacafc886252a17bfb8d654c356850f3c48b952216a05ccc7` as pinned by ADR-080 Amendment 2.
 - Both live hooks were read in full in this pass, from the working tree, not from the census transcription. They are **not** identical and the difference is load-bearing:
 
 ```sh
