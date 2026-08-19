@@ -44,9 +44,19 @@ USAGE
     statement_lint.py --sweep [ROOT ...]      lint every *.intoto.json found
     statement_lint.py FILE [FILE ...]         lint the named artifacts
 
+    statement_lint.py --surface --selftest    discriminate on built-in repositories
+    statement_lint.py --surface [--repo DIR] [--baseline REV]
+                                [--class NAME=FLAGS:LITERAL ...] [--declaration PATH]
+                                [--declare NAME=FILES:OCCURRENCES ...]
+
 Exit 0 when every artifact examined conforms, 1 when any is refused, 2 when the
 linter could not run at all. `--sweep` over zero artifacts is exit 0 and says so
 on stdout: the vacuity is reported, never disguised as a measurement.
+
+`--surface` is the same boundary asked at the other place material leaves the
+machine -- the tracked tree, which is exactly what a push carries. Its rule and
+the defect it replaces are documented at the section marked THE SECOND BOUNDARY
+below.
 """
 import json
 import os
@@ -386,12 +396,510 @@ def _sweep_roots(roots):
     return sorted(found)
 
 
+# ---------------------------------------------------------------------------
+# THE SECOND BOUNDARY: --surface, over the TRACKED TREE.
+#
+# WHY A SECOND MODE AND NOT A SECOND FILE. The mode above presides over what a
+# run EMITS. This one presides over what a push CARRIES. They are the same
+# question -- may this leave the machine? -- asked at the two places material
+# leaves it, and they share the vocabulary below: the same literal detector,
+# the same specimen discipline, the same rule that a measurement which could
+# not have failed is reported as vacuous rather than as green.
+#
+# WHAT WAS WRONG WITH THE CLAIM THIS REPLACES. `privacy-lint-*` in
+# .verity/claims.json demands zero occurrences over the whole tracked tree,
+# minus four hand-written pathspec exclusions. That claim is unsatisfiable
+# twice over and unverified once:
+#
+#   - The rule that removes a string must state the string.
+#     scripts/path_transform_rule_v1.json cannot exist without carrying the
+#     path it replaces, so any landing that tracks it turns the claim red.
+#   - Evidence is fixed by a digest. A machine fact inside a stream cannot be
+#     edited away without breaking the digest that fixes it, which is the
+#     whole point of fixing it.
+#   - Nothing checks that an exclusion is ENTITLED to be one. `docs/adrs/` is
+#     excluded wholesale, and it is where nearly the entire real exposure
+#     lives. An exclusion nobody verifies is not a boundary; it is a habit.
+#
+# THE REFORMULATION. Zero on the surface a change ADDS; exactly the declared
+# count on the surface that already EXISTS; two machine-checkable exemption
+# reasons and no third; and every count carrying its own non-vacuity guard.
+#
+#   DECLARES  the file is a rule that names what it replaces -- it parses as
+#             JSON, carries `pattern` and `replacement`, and every hit inside
+#             it falls inside one of those two values. Reason 1.
+#   PINNED    the file is evidence fixed by a digest -- its sha256 appears
+#             verbatim in another tracked file, so rewriting it breaks the pin.
+#             Reason 2.
+#
+# A file in neither is not an exemption.
+#
+# DECLARED VERSUS COMPUTED CLASSES, and why the asymmetry is the point. The
+# quotable classes -- the home-path token, the vault name, a model-id prefix,
+# the private repo names -- are passed in by the caller, so this file -- itself on the public
+# surface -- never becomes an instance of what it detects. The classes that
+# identify THIS machine are never passed in and never written down: they are
+# computed from the running process (`homepath`, `hostname`). A computed class
+# therefore cannot be laundered by quoting it in a declaration, because no
+# declaration can name it. It remains exemptible under DECLARES only through
+# the rule shape, which is exactly the file that has to state it.
+# ---------------------------------------------------------------------------
+RE_SHA256_TOKEN = re.compile(r"\b[0-9a-f]{64}\b")
+
+# A class is a LITERAL, never a regex, and the reason is the guard below. The
+# non-vacuity check has to build a specimen that the detector must fire on; for
+# a literal the specimen IS the literal, derived at run time and costing this
+# file no spelled-out private string. For a regex it would have to be supplied
+# as text, and that text would be the private string, spelled, in whatever file
+# supplied it. Several literals may share one class name; they accumulate.
+CLASS_PROBE_NEGATIVE = b"a line with nothing of the kind anywhere in it"
+
+
+class SurfaceError(Exception):
+    """The mode could not run at all -- exit 2, never a verdict."""
+
+
+def _git(repo, *args):
+    import subprocess
+
+    p = subprocess.run(("git", "-C", repo) + args, capture_output=True)
+    return p.returncode, p.stdout
+
+
+def _tracked_worktree(repo):
+    """path -> bytes, for every file git tracks. This is the public surface:
+    exactly what a push carries, and nothing a push leaves behind."""
+    rc, out = _git(repo, "ls-files", "-z")
+    if rc != 0:
+        raise SurfaceError("git ls-files failed in %s" % repo)
+    files = {}
+    for name in out.split(b"\0"):
+        if not name:
+            continue
+        rel = name.decode("utf-8", "replace")
+        try:
+            with open(os.path.join(repo, rel), "rb") as fh:
+                files[rel] = fh.read()
+        except (IOError, OSError):
+            continue  # tracked but absent from the worktree; nothing to judge
+    return files
+
+
+def _tracked_at(repo, rev):
+    """path -> bytes, for the tree of `rev`. The already-published surface."""
+    rc, _ = _git(repo, "rev-parse", "--verify", "%s^{tree}" % rev)
+    if rc != 0:
+        raise SurfaceError("baseline %r does not resolve in %s" % (rev, repo))
+    rc, out = _git(repo, "ls-tree", "-r", "-z", rev)
+    if rc != 0:
+        raise SurfaceError("git ls-tree failed for %r" % rev)
+    files = {}
+    for row in out.split(b"\0"):
+        if not row:
+            continue
+        meta, _, path = row.partition(b"\t")
+        parts = meta.split()
+        if len(parts) < 3 or parts[1] != b"blob":
+            continue
+        rc2, blob = _git(repo, "cat-file", "blob", parts[2].decode())
+        if rc2 == 0:
+            files[path.decode("utf-8", "replace")] = blob
+    return files
+
+
+def _classes(declared):
+    """name -> (kind, [(literal_bytes, case_insensitive), ...]).
+
+    The quotable classes arrive from the caller. The two that identify THIS
+    machine are computed from the running process and are never written down
+    anywhere, which is what makes them unlaunderable: a declaration cannot
+    exempt what no declaration can name."""
+    out = {}
+    for spec in declared:
+        name, _, rest = spec.partition("=")
+        flags, _, literal = rest.partition(":")
+        if not name or not literal:
+            raise SurfaceError("--class wants NAME=FLAGS:LITERAL, got %r" % spec)
+        out.setdefault(name, ("declared", []))[1].append(
+            (literal.encode(), "I" in flags))
+    home = os.path.expanduser("~")
+    if home and home != "~" and len(home) >= 4:
+        out["homepath"] = ("computed", [(home.encode(), False)])
+    import socket
+
+    short = socket.gethostname().split(".")[0]
+    if short and len(short) >= 4:
+        out["hostname"] = ("computed", [(short.encode(), True)])
+    if not out:
+        raise SurfaceError("no classes: a boundary with nothing to look for is not green")
+    return out
+
+
+def _find(blob, literal, ci):
+    hay = blob.lower() if ci else blob
+    needle = literal.lower() if ci else literal
+    at, out = 0, []
+    while True:
+        i = hay.find(needle, at)
+        if i < 0:
+            return out
+        out.append(i)
+        at = i + 1
+
+
+def _hits(blob, classes):
+    """class -> [(offset, literal), ...] for every occurrence, all classes."""
+    found = {}
+    for name, (_kind, lits) in classes.items():
+        for lit, ci in lits:
+            for off in _find(blob, lit, ci):
+                found.setdefault(name, []).append((off, lit))
+    return found
+
+
+def _exempt_rule(blob, hits):
+    """Reason 1, first shape: the rule that removes a string must state the
+    string -- and may state it only in the slots whose declared job is to quote
+    it. A rule carrying it in a `note` beside them is not a rule; it is a leak
+    wearing a rule's shape."""
+    try:
+        doc = json.loads(blob.decode("utf-8"))
+    except Exception:
+        return False
+    if not isinstance(doc, dict):
+        return False
+    slots = [doc.get("pattern"), doc.get("replacement")]
+    if not any(isinstance(s, str) for s in slots):
+        return False
+    spans = []
+    for s in slots:
+        if isinstance(s, str):
+            for off in _find(blob, s.encode(), False):
+                spans.append((off, off + len(s.encode())))
+    for _name, occurrences in hits.items():
+        for off, lit in occurrences:
+            if not any(a <= off and off + len(lit) <= b for a, b in spans):
+                return False
+    return True
+
+
+def _exempt_declaration(blob, hits, classes):
+    """Reason 1, second shape: the file that NAMES the classes cannot avoid
+    carrying them. It is exempt only where each occurrence is exactly a
+    declared literal and nothing wider -- so a real machine fact pasted into
+    it is still refused, and a computed class, which no declaration can name,
+    is never exempt here at all."""
+    for name, (kind, lits) in classes.items():
+        if kind != "declared":
+            continue
+        for lit, ci in lits:
+            if not _find(blob, lit, ci):
+                # It does not in fact declare what the invocation says it does.
+                return False
+    for name, occurrences in hits.items():
+        kind, lits = classes[name]
+        if kind != "declared":
+            return False
+        exact = set(lit for lit, _ci in lits)
+        for _off, lit in occurrences:
+            if lit not in exact:
+                return False
+    return True
+
+
+def _pin_index(files, skip):
+    tokens = set()
+    for path, blob in files.items():
+        if path == skip:
+            continue
+        for m in RE_SHA256_TOKEN.finditer(blob.decode("latin-1")):
+            tokens.add(m.group(0))
+    return tokens
+
+
+def _exemption(path, blob, hits, files, classes, declaration):
+    if _exempt_rule(blob, hits):
+        return "DECLARES/rule"
+    if path == declaration and _exempt_declaration(blob, hits, classes):
+        return "DECLARES/self"
+    import hashlib
+
+    if hashlib.sha256(blob).hexdigest() in _pin_index(files, path):
+        return "PINNED"
+    return None
+
+
+def _guard(classes):
+    """Non-vacuity, on every invocation, through the same code path the verdict
+    uses. Every class's own literal is planted in a synthetic file; the walk
+    must find each class in it and must refuse it, and must find nothing in a
+    file built to carry nothing. A count this check cannot produce is reported
+    UNMEASURED, never as zero."""
+    problems = []
+    probe = b"\n".join(lits[0][0] for _k, lits in classes.values())
+    seen = _hits(probe, classes)
+    for name in classes:
+        if name not in seen:
+            problems.append("%s: the detector did not fire on a specimen built from its own "
+                            "literal -- this class measured nothing" % name)
+    if _exemption("<probe>", probe, seen, {"<probe>": probe}, classes, None) is not None:
+        problems.append("the probe was exempted; the exemption path cannot be trusted to "
+                        "refuse anything")
+    if _hits(CLASS_PROBE_NEGATIVE, classes):
+        problems.append("the detector fired on a specimen built to carry nothing")
+    return problems
+
+
+def _remotes(repo):
+    rc, out = _git(repo, "remote")
+    if rc != 0:
+        raise SurfaceError("git remote failed in %s" % repo)
+    return [r.decode() for r in out.split() if r]
+
+
+def surface(repo, baseline, declared_classes, declarations, declaration=None):
+    classes = _classes(declared_classes)
+    unmeasured = _guard(classes)
+    for u in unmeasured:
+        print("UNMEASURED %s" % u)
+
+    # THE SEPARATION, AND WHY IT IS THIS FACT AND NOT A PATH LIST. A repository
+    # with no remote has no public surface: there is nowhere for a push to go.
+    # That is a fact about the repository, read from it, not a promise anyone
+    # made about it -- which is the whole difference between a separation and a
+    # habit. The internal surface is complete and not presentable, and it stays
+    # legible precisely because the day someone gives it a remote, this claim
+    # stops being satisfied by the emptiness and starts measuring the tree.
+    remotes = _remotes(repo)
+    if not remotes:
+        print("no remote configured: nothing can be pushed from %s, so the public "
+              "surface is empty. This is the internal surface. Give this repository "
+              "a remote and the same claim measures the whole tree against the "
+              "declared baseline instead." % os.path.abspath(repo))
+        return 1 if unmeasured else 0
+    print("remotes: %s -- this repository publishes; the tracked set is the public surface"
+          % ", ".join(remotes))
+
+    now = _tracked_worktree(repo)
+    if not now:
+        raise SurfaceError("the tracked set is empty; a boundary over nothing is not green")
+    base = _tracked_at(repo, baseline)
+
+    # --- the surface that already exists: exactly as declared, not at most ---
+    base_counts = {}
+    for _path, blob in base.items():
+        for name, occ in _hits(blob, classes).items():
+            f, o = base_counts.get(name, (0, 0))
+            base_counts[name] = (f + 1, o + len(occ))
+    print("baseline %s: %d tracked file(s)" % (baseline, len(base)))
+    moved = 0
+    for name in sorted(classes):
+        kind = classes[name][0]
+        got = base_counts.get(name, (0, 0))
+        want = declarations.get(name)
+        if want is None:
+            state = "undeclared"
+        elif want == got:
+            state = "as declared"
+        else:
+            state = "MOVED (declared %d file(s), %d occurrence(s))" % want
+            moved += 1
+        print("  baseline %-10s %-8s %d file(s), %d occurrence(s)  -- %s"
+              % (name, kind, got[0], got[1], state))
+    for name in declarations:
+        if name not in classes:
+            print("  baseline %-10s declared, but no such class in this invocation" % name)
+            moved += 1
+
+    # --- the surface this change adds: zero, unless a reason says otherwise ---
+    added = sorted(p for p, b in now.items() if base.get(p) != b)
+    print("delta vs %s: %d added or changed tracked file(s)" % (baseline, len(added)))
+    refused = exempted = 0
+    for path in added:
+        hits = _hits(now[path], classes)
+        if not hits:
+            continue
+        reason = _exemption(path, now[path], hits, now, classes, declaration)
+        detail = ", ".join("%s x%d" % (k, len(v)) for k, v in sorted(hits.items()))
+        if reason:
+            exempted += 1
+            print("  EXEMPT   %-62s %s  [%s]" % (path, detail, reason))
+        else:
+            refused += 1
+            print("  REFUSED  %-62s %s  [no stated reason: neither the rule that names "
+                  "what it replaces nor evidence fixed by a digest]" % (path, detail))
+    print("surface: %d refused, %d exempt, %d class(es) moved on the baseline, %d unmeasured"
+          % (refused, exempted, moved, len(unmeasured)))
+    return 1 if (refused or moved or unmeasured) else 0
+
+
+# The specimens for --surface --selftest, built as real repositories so that the
+# boundary is exercised end to end -- ls-files, the baseline tree, both shapes
+# of reason 1, reason 2 -- and not only in its inner functions. The literal
+# planted here is a home path that is NOT this operator's: a control that had to
+# spell the thing it guards would be an instance of what it refuses.
+def surface_selftest():
+    import hashlib
+    import shutil
+    import subprocess
+    import tempfile
+
+    home = "/" + "Users" + "/nobody/Code/thing"
+    cls = ["userpath=F:" + LITERAL_USERS]
+    failures = []
+    root = tempfile.mkdtemp(prefix="surface-selftest.")
+    try:
+        def repo(name):
+            d = os.path.join(root, name)
+            os.makedirs(d)
+            for cmd in (("init", "-q"), ("config", "user.email", "f@example.invalid"),
+                        ("config", "user.name", "selftest"),
+                        ("config", "commit.gpgsign", "false")):
+                subprocess.run(("git", "-C", d) + cmd, capture_output=True)
+            add(d, "README.md", "nothing private\n")
+            subprocess.run(("git", "-C", d, "branch", "-f", "baseline", "HEAD"),
+                           capture_output=True)
+            # Every arm below measures a PUBLISHING repository; the two arms at
+            # the end are the pair that measures the separation itself.
+            subprocess.run(("git", "-C", d, "remote", "add", "origin",
+                            "https://example.invalid/x.git"), capture_output=True)
+            return d
+
+        def add(d, rel, text):
+            full = os.path.join(d, rel)
+            if os.path.dirname(full):
+                os.makedirs(os.path.dirname(full), exist_ok=True)
+            with open(full, "w") as fh:
+                fh.write(text)
+            subprocess.run(("git", "-C", d, "add", "--", rel), capture_output=True)
+            subprocess.run(("git", "-C", d, "commit", "-q", "-m", "added"), capture_output=True)
+
+        def arm(label, d, want, decls=None, declaration=None):
+            try:
+                rc = surface(d, "baseline", cls, decls or {}, declaration)
+            except SurfaceError as e:
+                failures.append("%s: the boundary could not run (%s)" % (label, e))
+                return
+            if rc != want:
+                failures.append("%s: wanted exit %d, got %d" % (label, want, rc))
+
+        d = repo("plain")
+        add(d, "runs/note.md", "the run wrote into %s/out\n" % home)
+        arm("a plain added file carrying a home path", d, 1)
+
+        d = repo("rule")
+        add(d, "scripts/rule.json",
+            '{"id":"path-transform/v1","pattern":"%s","replacement":"<LOCAL_ROOT>"}' % home)
+        arm("a rule that names what it replaces", d, 0)
+
+        d = repo("rule-leaky")
+        add(d, "scripts/rule.json",
+            '{"id":"x","pattern":"%s/a","replacement":"<L>","note":"also seen at %s/b"}'
+            % (home, home))
+        arm("a rule carrying the string outside its own slots", d, 1)
+
+        body = "ps row: 4711 1 8192 00:03 %s/bin/worker\n" % home
+        sha = hashlib.sha256(body.encode()).hexdigest()
+        d = repo("pinned")
+        add(d, "runs/stream.jsonl", body)
+        add(d, "runs/record.json",
+            '{"subject":[{"name":"stream.jsonl","digest":{"sha256":"%s"}}]}\n' % sha)
+        arm("evidence fixed by a digest", d, 0)
+
+        d = repo("unpinned")
+        add(d, "runs/stream.jsonl", body)
+        add(d, "runs/record.json",
+            '{"subject":[{"name":"stream.jsonl","digest":{"sha256":"%s"}}]}\n' % ("0" * 64))
+        arm("the same evidence, unpinned", d, 1)
+
+        d = repo("declaration")
+        add(d, "claims.json", '{"run":"grep -F %s"}\n' % LITERAL_USERS)
+        arm("the file that names the class, carrying it exactly", d, 0,
+            None, "claims.json")
+
+        # The strongest arm: the declaration exemption must not launder a fact
+        # about THIS machine. `homepath` is computed, so no declaration can name
+        # it, so the same file that is exempt above is refused here.
+        d = repo("declaration-wider")
+        add(d, "claims.json", '{"run":"grep -F %s","seen":"%s/out"}\n'
+            % (LITERAL_USERS, os.path.expanduser("~")))
+        arm("the declaration carrying a fact about this machine", d, 1, None, "claims.json")
+
+        d = repo("clean")
+        add(d, "docs/x.md", "a document naming nothing\n")
+        arm("the positive control: an added file carrying nothing", d, 0)
+
+        d = repo("declared-wrong")
+        add(d, "README.md", "nothing private\nthe census ran under %s\n" % home)
+        subprocess.run(("git", "-C", d, "branch", "-f", "baseline", "HEAD"), capture_output=True)
+        add(d, "other.md", "still nothing\n")
+        arm("a baseline count declared wrong by one", d, 1, {"userpath": (1, 2)})
+
+        # The separation itself, as one repository measured twice. Nothing about
+        # the tree changes between the two arms; only whether it can be pushed.
+        d = repo("internal")
+        add(d, "runs/note.md", "the run wrote into %s/out\n" % home)
+        subprocess.run(("git", "-C", d, "remote", "remove", "origin"), capture_output=True)
+        arm("internal material in a repository with no remote", d, 0)
+        subprocess.run(("git", "-C", d, "remote", "add", "origin",
+                        "https://example.invalid/x.git"), capture_output=True)
+        arm("the same tree the moment it gains a remote", d, 1)
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+    for f in failures:
+        print("surface selftest FAILED: " + f, file=sys.stderr)
+    if not failures:
+        print("surface selftest: eleven specimens, each judged as intended")
+    return 1 if failures else 0
+
+
 def main(argv):
     args = argv[1:]
     if not args:
         print(__doc__.strip().splitlines()[0], file=sys.stderr)
-        print("usage: statement_lint.py [--selftest|--sweep [ROOT ...]|FILE ...]", file=sys.stderr)
+        print("usage: statement_lint.py [--selftest|--sweep [ROOT ...]|--surface ...|FILE ...]",
+              file=sys.stderr)
         return 2
+
+    if args[0] == "--surface":
+        rest = args[1:]
+        if rest and rest[0] == "--selftest":
+            return surface_selftest()
+        repo, baseline, cls, decl, declaration = ".", "origin/main", [], {}, None
+        i = 0
+        while i < len(rest):
+            a = rest[i]
+            if a in ("--repo", "--baseline", "--class", "--declare", "--declaration"):
+                if i + 1 >= len(rest):
+                    print("--surface: %s needs a value" % a, file=sys.stderr)
+                    return 2
+                v = rest[i + 1]
+                if a == "--repo":
+                    repo = v
+                elif a == "--baseline":
+                    baseline = v
+                elif a == "--declaration":
+                    declaration = v
+                elif a == "--class":
+                    cls.append(v)
+                else:
+                    name, _, nums = v.partition("=")
+                    f, _, o = nums.partition(":")
+                    try:
+                        decl[name] = (int(f), int(o))
+                    except ValueError:
+                        print("--declare wants NAME=FILES:OCCURRENCES, got %r" % v, file=sys.stderr)
+                        return 2
+                i += 2
+                continue
+            print("--surface: unknown argument %r" % a, file=sys.stderr)
+            return 2
+        try:
+            return surface(repo, baseline, cls, decl, declaration)
+        except SurfaceError as e:
+            print("UNMEASURED: %s" % e, file=sys.stderr)
+            return 2
 
     if args[0] == "--selftest":
         return selftest()
