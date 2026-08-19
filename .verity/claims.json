@@ -25,8 +25,8 @@
     {
       "id": "privacy-lint-operator-uid-bare",
       "type": "command",
-      "description": "No tracked file references the operator's literal uid as a bare '501' id token.",
-      "run": "! git grep -qE '\\b501\\b' -- ':!docs/adrs/' ':!*.example.json' ':!workers.local.json' ':!.verity/claims.json'",
+      "description": "No tracked file (outside this manifest's four pathspec exclusions) references the operator's numeric uid as a bare id token. The token is computed from the running process (id -u) and never written here: a detector that must state the identifier it hunts publishes that identifier in the tracked file that exists to keep it out -- the asymmetry that makes the home path a computed class in scripts/statement_lint.py and in FT-28. Until 2026-08-19 the pattern was anchored with the word-boundary escape under git grep -E, whose ERE engine does not implement that escape: the predicate matched zero lines by construction and could not fail. Corrected to -P and measured at correction time on the tracked tree: RED, 212 lines across 41 files -- 211 lines in 40 files under runs/THR-SUBAGENT/, 1 line in 1 file under .verity/evidence/. Declared RED as observed, the same discipline the falsifier register applies to a known red (the bypass_ft_bash_unbound and FT-28 rows): this claim is expected to stay RED until the operator records a decision on the exposure it now measures, and a GREEN here means the exposure left the tracked surface. It is declared and not repaired because the repair is not this claim's to take: three of the carrying files are cited by sha256 from tracked conformance records that resolve today, and the order of redaction and re-pinning is an operator decision.",
+      "run": "! git grep -qP \"\\b$(id -u)\\b\" -- ':!docs/adrs/' ':!*.example.json' ':!workers.local.json' ':!.verity/claims.json'",
       "expect": { "exitCode": 0 }
     },
     {
