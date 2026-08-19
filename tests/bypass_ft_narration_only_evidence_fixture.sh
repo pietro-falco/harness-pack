@@ -12,15 +12,17 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CORPUS="${CONFORMANCE_CORPUS:-$ROOT/tests/fixtures/conformance_corpus.py}"
 RECORD="${CONFORMANCE_RECORD:-$ROOT/scripts/conformance_record.py}"
 VERIFY="${CONFORMANCE_VERIFY:-$ROOT/scripts/conformance_verify.py}"
-for f in "$CORPUS" "$RECORD" "$VERIFY"; do
+ANCHORS="${SCRATCH_LEDGER:-$ROOT/tests/fixtures/scratch_ledger.sh}"
+for f in "$CORPUS" "$RECORD" "$VERIFY" "$ANCHORS"; do
   [ -f "$f" ] || { echo "UNMEASURED: $f absent" >&2; exit 2; }
 done
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/ft23.XXXXXX")"; trap 'rm -rf "$WORK"' EXIT
 if ! python3 "$CORPUS" green "$WORK/green" \
+   || ! bash "$ANCHORS" "$WORK/green" "$WORK/ledger" green >/dev/null \
    || ! python3 "$RECORD" "$WORK/green" "$WORK/green/statement.json" >/dev/null; then
   echo "UNMEASURED: green corpus or builder failed" >&2; exit 2
 fi
-python3 "$VERIFY" "$WORK/green/statement.json" >/dev/null; rc=$?
+python3 "$VERIFY" "$WORK/green/statement.json" --ledger-repo "$WORK/ledger" >/dev/null; rc=$?
 [ "$rc" -eq 0 ] || { echo "UNMEASURED: positive control not CONFORMANT (exit $rc)" >&2; exit 2; }
 narrate() {
   python3 - "$WORK/green/statement.json" "$1" "$2" <<'PY'
@@ -41,7 +43,7 @@ open(dst, "wb").write(data)
 PY
 }
 check_refused() {
-  out="$(python3 "$VERIFY" "$1" 2>&1)"; rc=$?
+  out="$(python3 "$VERIFY" "$1" --ledger-repo "$WORK/ledger" 2>&1)"; rc=$?
   if [ "$rc" -eq 0 ]; then
     echo "RED: $2 verified 0; a narrated record passed as evidence" >&2; exit 1
   fi

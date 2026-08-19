@@ -12,19 +12,22 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CORPUS="${CONFORMANCE_CORPUS:-$ROOT/tests/fixtures/conformance_corpus.py}"
 RECORD="${CONFORMANCE_RECORD:-$ROOT/scripts/conformance_record.py}"
 VERIFY="${CONFORMANCE_VERIFY:-$ROOT/scripts/conformance_verify.py}"
-for f in "$CORPUS" "$RECORD" "$VERIFY"; do
+ANCHORS="${SCRATCH_LEDGER:-$ROOT/tests/fixtures/scratch_ledger.sh}"
+for f in "$CORPUS" "$RECORD" "$VERIFY" "$ANCHORS"; do
   [ -f "$f" ] || { echo "UNMEASURED: $f absent" >&2; exit 2; }
 done
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/ft25.XXXXXX")"; trap 'rm -rf "$WORK"' EXIT
 if ! python3 "$CORPUS" green "$WORK/green" \
+   || ! bash "$ANCHORS" "$WORK/green" "$WORK/ledger" green >/dev/null \
    || ! python3 "$RECORD" "$WORK/green" "$WORK/green/statement.json" >/dev/null \
    || ! python3 "$CORPUS" oos-run "$WORK/oos" \
+   || ! bash "$ANCHORS" "$WORK/oos" "$WORK/ledger" oos >/dev/null \
    || ! python3 "$RECORD" "$WORK/oos" "$WORK/oos/statement.json" >/dev/null; then
   echo "UNMEASURED: corpus or builder failed" >&2; exit 2
 fi
 replay() {
-  python3 "$VERIFY" "$1" > "$2.out1" 2>&1; rc1=$?
-  python3 "$VERIFY" "$1" > "$2.out2" 2>&1; rc2=$?
+  python3 "$VERIFY" "$1" --ledger-repo "$WORK/ledger" > "$2.out1" 2>&1; rc1=$?
+  python3 "$VERIFY" "$1" --ledger-repo "$WORK/ledger" > "$2.out2" 2>&1; rc2=$?
   [ "$rc1" -eq "$rc2" ] || { echo "RED: $3 replay exits differ ($rc1 vs $rc2)" >&2; exit 1; }
   cmp -s "$2.out1" "$2.out2" \
     || { echo "RED: $3 replay outputs differ byte-wise" >&2; exit 1; }

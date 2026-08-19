@@ -16,6 +16,15 @@ RUN_DIR must contain the two evidence files the record is computed from:
                    `parent_tool_use_id` chains, never from the hook ledger:
                    SubagentStart fires but its payload carries no depth
                    (measured 2026-08-13, ADR-023 C2b).
+  anchors.json     the two observation-ledger entry ids under which the
+                   apparatus anchored the declaration digest (at t0) and the
+                   stream digest (at close), written by
+                   conformance_anchor.sh BEFORE this builder runs:
+                   {"declarationEntry": <oid>, "streamEntry": <oid>}. A run
+                   whose digests were never anchored produces no record --
+                   an unanchored record would be self-certifying (THR-COVER
+                   C6/C8: internal coherence is exactly what a mutant can
+                   manufacture).
 
 The predicate vocabulary is CLOSED: every key this writer emits is a literal
 spelled in this file, and the verifier refuses any key outside that set. No
@@ -175,9 +184,25 @@ def main():
     run_dir, out_path = sys.argv[1], sys.argv[2]
     decl_path = os.path.join(run_dir, "invocation.txt")
     stream_path = os.path.join(run_dir, "stream.jsonl")
+    anchors_path = os.path.join(run_dir, "anchors.json")
     for path in (decl_path, stream_path, RULE_FILE):
         if not os.path.isfile(path):
             die("missing %s" % path)
+    if not os.path.isfile(anchors_path):
+        die("run is not anchored: %s absent -- anchor the declaration and "
+            "stream digests in the observation ledger "
+            "(conformance_anchor.sh) before building the record"
+            % anchors_path)
+    try:
+        with open(anchors_path, encoding="utf-8") as fh:
+            anchors = json.load(fh)
+    except (OSError, json.JSONDecodeError) as exc:
+        die("anchors.json unreadable: %s" % exc)
+    for key in ("declarationEntry", "streamEntry"):
+        oid = anchors.get(key)
+        if not (isinstance(oid, str) and len(oid) == 40
+                and all(c in "0123456789abcdef" for c in oid)):
+            die("anchors.json %s is not a 40-hex object id" % key)
 
     declared, source = parse_declaration(decl_path)
     exercised, delegations, stream_complete = analyze(
@@ -188,6 +213,8 @@ def main():
     unused = sorted(set(declared["tools"]) - set(executed_tools))
 
     predicate = {
+        "anchor": {"declarationEntry": anchors["declarationEntry"],
+                   "streamEntry": anchors["streamEntry"]},
         "comparisonRule": {"id": RULE_ID,
                            "sha256": sha256_file(RULE_FILE)},
         "completeness": {"streamResultEvent": stream_complete},
@@ -206,6 +233,7 @@ def main():
             "run": os.path.basename(os.path.abspath(run_dir)),
             "source": source,
         },
+        "transformation": None,
         "unusedAuthorizations": unused,
     }
     statement = {

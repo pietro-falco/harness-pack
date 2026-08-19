@@ -1068,6 +1068,12 @@ bypass_row tests/bypass_ft_monitor_blind_while_running_fixture.sh GREEN UNMEASUR
 bypass_row tests/bypass_ft_flattened_home_form_undetected_fixture.sh GREEN BROKEN
 bypass_row tests/bypass_ft_path_transform_undeclared_fixture.sh GREEN BROKEN
 bypass_row tests/bypass_ft_dossier_fabricated_source_fixture.sh GREEN BROKEN
+bypass_row tests/bypass_ft_typed_equality_bool_int_fixture.sh GREEN BROKEN
+bypass_row tests/bypass_ft_evidence_role_shadowing_fixture.sh GREEN BROKEN
+bypass_row tests/bypass_ft_ledger_anchor_repin_fixture.sh GREEN BROKEN
+bypass_row tests/bypass_ft_transform_citation_unbound_fixture.sh GREEN BROKEN
+bypass_row tests/bypass_ft_anchor_order_inverted_fixture.sh GREEN BROKEN
+bypass_row tests/bypass_ft_stream_echo_absent_fixture.sh GREEN BROKEN
 
 # COMPLETENESS IS MEMBERSHIP, NOT CARDINALITY (D5), and it runs before the
 # fixtures because it is the cheap half. The set of registered paths must EQUAL

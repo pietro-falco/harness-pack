@@ -12,21 +12,24 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CORPUS="${CONFORMANCE_CORPUS:-$ROOT/tests/fixtures/conformance_corpus.py}"
 RECORD="${CONFORMANCE_RECORD:-$ROOT/scripts/conformance_record.py}"
 VERIFY="${CONFORMANCE_VERIFY:-$ROOT/scripts/conformance_verify.py}"
-for f in "$CORPUS" "$RECORD" "$VERIFY"; do
+ANCHORS="${SCRATCH_LEDGER:-$ROOT/tests/fixtures/scratch_ledger.sh}"
+for f in "$CORPUS" "$RECORD" "$VERIFY" "$ANCHORS"; do
   [ -f "$f" ] || { echo "UNMEASURED: $f absent" >&2; exit 2; }
 done
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/ft24.XXXXXX")"; trap 'rm -rf "$WORK"' EXIT
 if ! python3 "$CORPUS" green "$WORK/green" \
+   || ! bash "$ANCHORS" "$WORK/green" "$WORK/ledger" green >/dev/null \
    || ! python3 "$RECORD" "$WORK/green" "$WORK/green/statement.json" >/dev/null; then
   echo "UNMEASURED: green corpus or builder failed" >&2; exit 2
 fi
-python3 "$VERIFY" "$WORK/green/statement.json" >/dev/null; rc=$?
+python3 "$VERIFY" "$WORK/green/statement.json" --ledger-repo "$WORK/ledger" >/dev/null; rc=$?
 [ "$rc" -eq 0 ] || { echo "UNMEASURED: positive control not CONFORMANT (exit $rc)" >&2; exit 2; }
 if ! python3 "$CORPUS" truncated "$WORK/cut" \
+   || ! bash "$ANCHORS" "$WORK/cut" "$WORK/ledger" cut >/dev/null \
    || ! python3 "$RECORD" "$WORK/cut" "$WORK/cut/statement.json" >/dev/null; then
   echo "UNMEASURED: truncated corpus or builder failed" >&2; exit 2
 fi
-out="$(python3 "$VERIFY" "$WORK/cut/statement.json" 2>&1)"; rc=$?
+out="$(python3 "$VERIFY" "$WORK/cut/statement.json" --ledger-repo "$WORK/ledger" 2>&1)"; rc=$?
 if [ "$rc" -eq 0 ]; then
   echo "RED: truncated run verified CONFORMANT; an interrupted stream passed" >&2; exit 1
 fi

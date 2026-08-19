@@ -12,22 +12,25 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CORPUS="${CONFORMANCE_CORPUS:-$ROOT/tests/fixtures/conformance_corpus.py}"
 RECORD="${CONFORMANCE_RECORD:-$ROOT/scripts/conformance_record.py}"
 VERIFY="${CONFORMANCE_VERIFY:-$ROOT/scripts/conformance_verify.py}"
-for f in "$CORPUS" "$RECORD" "$VERIFY"; do
+ANCHORS="${SCRATCH_LEDGER:-$ROOT/tests/fixtures/scratch_ledger.sh}"
+for f in "$CORPUS" "$RECORD" "$VERIFY" "$ANCHORS"; do
   [ -f "$f" ] || { echo "UNMEASURED: $f absent" >&2; exit 2; }
 done
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/ft20.XXXXXX")"; trap 'rm -rf "$WORK"' EXIT
 if ! python3 "$CORPUS" green "$WORK/green" \
+   || ! bash "$ANCHORS" "$WORK/green" "$WORK/ledger" green >/dev/null \
    || ! python3 "$RECORD" "$WORK/green" "$WORK/green/statement.json" >/dev/null; then
   echo "UNMEASURED: green corpus or builder failed" >&2; exit 2
 fi
-python3 "$VERIFY" "$WORK/green/statement.json" >/dev/null; rc=$?
+python3 "$VERIFY" "$WORK/green/statement.json" --ledger-repo "$WORK/ledger" >/dev/null; rc=$?
 [ "$rc" -eq 0 ] || { echo "UNMEASURED: positive control not CONFORMANT (exit $rc)" >&2; exit 2; }
 # (a) honest record of a run whose depth-2 Bash executed outside the surface
 if ! python3 "$CORPUS" oos-run "$WORK/oos" \
+   || ! bash "$ANCHORS" "$WORK/oos" "$WORK/ledger" oos >/dev/null \
    || ! python3 "$RECORD" "$WORK/oos" "$WORK/oos/statement.json" >/dev/null; then
   echo "UNMEASURED: oos corpus or builder failed" >&2; exit 2
 fi
-python3 "$VERIFY" "$WORK/oos/statement.json" >/dev/null; rc=$?
+python3 "$VERIFY" "$WORK/oos/statement.json" --ledger-repo "$WORK/ledger" >/dev/null; rc=$?
 [ "$rc" -eq 1 ] || { echo "RED: out-of-surface execution verified exit $rc, expected 1" >&2; exit 1; }
 # (b) doctored record: the rejected Bash flipped to an executed call
 python3 - "$WORK/green/statement.json" <<'PY'
@@ -41,6 +44,6 @@ data = json.dumps(st, sort_keys=True, separators=(",", ":"),
                   ensure_ascii=False).encode("utf-8")
 open(path, "wb").write(data)
 PY
-python3 "$VERIFY" "$WORK/green/statement.json" >/dev/null; rc=$?
+python3 "$VERIFY" "$WORK/green/statement.json" --ledger-repo "$WORK/ledger" >/dev/null; rc=$?
 [ "$rc" -ne 0 ] || { echo "RED: doctored record verified 0; the record carries nothing" >&2; exit 1; }
 echo "GREEN: out-of-surface execution and doctored facts both refused"
