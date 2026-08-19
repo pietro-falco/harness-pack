@@ -66,6 +66,18 @@ process that opened the descriptor, and the process that runs this module is a
 short-lived subprocess of the launcher. Holding it across the run would mean keeping
 the fd open in the launcher's shell, and `flock(1)` is not present on macOS. Hence
 `--pid`: the caller records ITSELF as the holder, and liveness is asked of that pid.
+
+SWEEP -- staleness applied where eligibility is read. `sweep --root R` breaks
+aside every stale lease under R (holder pid gone on this host, or expires_at
+passed), naming key, run_id, pid and why; a live holder's lease and a record
+that does not parse are left untouched, exactly as at acquire. It exists
+because harnesswright's next judges a slice by lock PRESENCE (next.ts:127,
+existsSync) while the only reclaim lived in acquire -- past the refusal, never
+reached -- so a SIGKILLed run's lease cost two manual releases (THR-RUN E2).
+The launcher sweeps immediately before each `next --json` it consumes. Exit 0,
+including nothing-to-do and no locks dir; 1 only if the locks dir exists and
+cannot be read. (Documented here at the tail: tests/lease_expiry_fixture.sh
+pins the DEATH lines above by line number.)
 """
 import argparse
 import errno
@@ -270,6 +282,40 @@ def cmd_status(args):
     return 0
 
 
+def cmd_sweep(args):
+    d = _locks_dir(args.root)
+    try:
+        names = sorted(os.listdir(d))
+    except FileNotFoundError:
+        return 0
+    except OSError as e:
+        print("STOP: locks dir not readable at %s: %s" % (d, e), file=sys.stderr)
+        return 1
+    now = time.time()
+    for name in names:
+        # `.staging-*` and `.stale-*` residue are not locks: only `<key>.lock`
+        # is ever read as one, so only that shape is a candidate.
+        if not name.endswith(".lock"):
+            continue
+        path = os.path.join(d, name)
+        rec = _read(path)
+        why = _staleness(rec, now)
+        if why is None:
+            # A live holder's lease, or a record that does not parse (it
+            # names no holder to outlive -- not ours to break, exactly as at
+            # acquire). Left byte-identical.
+            continue
+        # The same atomic break-aside acquire uses: exactly one breaker wins
+        # the rename; a loser finds the lock gone or retaken and moves on.
+        try:
+            os.rename(path, "%s.stale-%d-sweep" % (path, os.getpid()))
+        except OSError:
+            continue
+        print("SWEPT %s run_id=%s pid=%s (%s)"
+              % (name[: -len(".lock")], rec.get("run_id"), rec.get("pid"), why))
+    return 0
+
+
 def _iso(ts):
     if not isinstance(ts, (int, float)):
         return "?"
@@ -297,6 +343,10 @@ def main(argv):
         s.add_argument("--pid", type=int, default=None,
                        help="record this pid as the holder instead of our own")
         s.set_defaults(fn=fn)
+    s = sub.add_parser("sweep")
+    s.add_argument("--root", required=True,
+                   help="workspace root; locks live at <root>/.harness/locks/")
+    s.set_defaults(fn=cmd_sweep)
     args = p.parse_args(argv)
     args.root = os.path.abspath(args.root)
     return args.fn(args)

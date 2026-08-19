@@ -34,13 +34,44 @@ notify_telegram() {
   return 0
 }
 
-usage() { echo "usage: launch_worker.sh SPEC.md" >&2; exit 2; }
-[ $# -eq 1 ] || usage
-SPEC="$1"
-[ -f "$SPEC" ] || { echo "STOP: spec file not found: $SPEC" >&2; exit 1; }
+usage() { echo "usage: launch_worker.sh SPEC.md | launch_worker.sh --sequence [DIR]" >&2; exit 2; }
+# Sequence mode (THR-RUN ESITO 1): one command takes a grafted repo to the
+# end. Parsed here, executed after the shared fail-closed resolution below --
+# the sequence and the single launch resolve their environment through the
+# SAME lines, so there is no second copy to drift. $0 is made absolute
+# BEFORE the cd: the per-slice launches re-enter this file, and a relative
+# $0 would break the moment the sequence changes cwd.
+SEQ_MODE=0 SEQ_ROOT="" SELF_ABS=""
+if [ "${1:-}" = "--sequence" ]; then
+  [ $# -le 2 ] || usage
+  SEQ_MODE=1
+  SELF_ABS="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
+  SEQ_DIR="${2:-.}"
+  [ -d "$SEQ_DIR" ] || { echo "STOP: sequence target is not a directory: $SEQ_DIR" >&2; exit 1; }
+  SEQ_ROOT="$(cd "$SEQ_DIR" && git rev-parse --show-toplevel 2>/dev/null)" \
+    || { echo "STOP: sequence target is not inside a git repository: $SEQ_DIR" >&2; exit 1; }
+  [ -f "$SEQ_ROOT/.harness/harness.json" ] \
+    || { echo "STOP: no .harness/harness.json at $SEQ_ROOT; a sequence runs on a grafted repo" >&2; exit 1; }
+  cd "$SEQ_ROOT"
+  SPEC=""
+else
+  [ $# -eq 1 ] || usage
+  SPEC="$1"
+  [ -f "$SPEC" ] || { echo "STOP: spec file not found: $SPEC" >&2; exit 1; }
+fi
 
 HARNESS_HOME="${HARNESS_HOME:-$(cd "$(dirname "$0")/.." && pwd)}"
-MANIFEST="${HARNESS_MANIFEST:-$HARNESS_HOME/templates/manifest.example.json}"
+# The manifest, read before pasted (THR-RUN ESITO 1): an env override wins
+# as always; else, in sequence mode only, the target's own graft-written
+# .harness/manifest.local.json -- the repo can say its manifest; else the
+# pack template, exactly the single-launch default of today.
+if [ -n "${HARNESS_MANIFEST:-}" ]; then
+  MANIFEST="$HARNESS_MANIFEST" MANIFEST_SOURCE="env HARNESS_MANIFEST"
+elif [ "$SEQ_MODE" -eq 1 ] && [ -f "$SEQ_ROOT/.harness/manifest.local.json" ]; then
+  MANIFEST="$SEQ_ROOT/.harness/manifest.local.json" MANIFEST_SOURCE="repo .harness/manifest.local.json"
+else
+  MANIFEST="$HARNESS_HOME/templates/manifest.example.json" MANIFEST_SOURCE="pack default"
+fi
 CONST="$HARNESS_HOME/CONSTITUTION.md"
 RECEIPTS_DIR="${RECEIPTS_DIR:-./.harness/receipts}"
 
@@ -59,9 +90,9 @@ fi
 # `harnesswright` binary on PATH; else STOP with actionable guidance. No literal home
 # path is a tracked default -- the operator's install location is theirs to choose.
 if [ -n "${HARNESSWRIGHT_CLI:-}" ]; then
-  HW_CLI="$HARNESSWRIGHT_CLI"
+  HW_CLI="$HARNESSWRIGHT_CLI" HW_SOURCE="env HARNESSWRIGHT_CLI"
 elif command -v harnesswright >/dev/null 2>&1; then
-  HW_CLI="$(command -v harnesswright)"
+  HW_CLI="$(command -v harnesswright)" HW_SOURCE="installed on PATH"
 else
   echo "STOP: harnesswright CLI not resolvable; install harnesswright or set HARNESSWRIGHT_CLI" >&2
   exit 1
@@ -73,9 +104,9 @@ fi
 # D2): VERITY_CLI env override first; else an installed `verity` binary on PATH; else
 # STOP with actionable guidance.
 if [ -n "${VERITY_CLI:-}" ]; then
-  :
+  VY_SOURCE="env VERITY_CLI"
 elif command -v verity >/dev/null 2>&1; then
-  VERITY_CLI="$(command -v verity)"
+  VERITY_CLI="$(command -v verity)" VY_SOURCE="installed on PATH"
 else
   echo "STOP: verity CLI not resolvable; install verity or set VERITY_CLI" >&2
   exit 1
@@ -88,6 +119,157 @@ fi
 SELF_DIR="$(cd "$(dirname "$0")" && pwd)"
 CHECKS="$SELF_DIR/launch_checks.py"
 [ -f "$CHECKS" ] || { echo "STOP: launch_checks.py not resolvable at $CHECKS" >&2; exit 1; }
+
+# ---- Sequence mode (THR-RUN ESITO 1). The loop that was an operator shell
+# line in THR-SEQ (e2-sequence.txt; its ASSUMPTIONS #11 left the promotion
+# to the operator, and THR-RUN is that call) is now the launcher's own.
+# From a grafted repo to the end: `next --json` picks the slice, this file
+# launches it (re-entered per slice, so every per-launch gate -- HALT,
+# validate-passed, lease, t0, conformance, mark -- runs unchanged), a
+# non-zero exit stops the sequence THERE (a failed slice is never skipped,
+# a red gate is never continued past), and the no-progress guard stops a
+# slice that passes its gate but cannot be marked, instead of spinning.
+# Between slices the sequence names out-of-scope writes before the next
+# slice builds on them (THR-RUN ESITO 3): detection from git evidence, not
+# enforcement during the run -- ADR-022 D5's residue stands for the run
+# itself, and the check's blind spots (paths already dirty at the slice's
+# start, writes outside the worktree, a contaminating slice whose genuine
+# gate+record evidence already earned its mark) are declared in the THR-RUN
+# preregistration, not papered over here.
+# The environment is read, not pasted: home from this script, manifest from
+# the repo (above), CLIs env->PATH->STOP (above). The ONE thing asked is
+# the observation ledger: marks exist only against a ledger, and no tracked
+# default may name an operator location (ADR-004 D2) -- unset is a STOP
+# before anything launches, naming exactly what to set.
+if [ "$SEQ_MODE" -eq 1 ]; then
+  if [ -z "${CONFORMANCE_LEDGER_REPO:-}" ]; then
+    echo "STOP: CONFORMANCE_LEDGER_REPO is unset; a sequence progresses only through evidenced marks, and the observation ledger is the operator's to point (ADR-004 D2). Set CONFORMANCE_LEDGER_REPO and rerun." >&2
+    exit 1
+  fi
+  echo "SEQUENCE at $SEQ_ROOT"
+  echo "  manifest:      $MANIFEST ($MANIFEST_SOURCE)"
+  echo "  harnesswright: $HW_CLI ($HW_SOURCE)"
+  echo "  verity:        $VERITY_CLI ($VY_SOURCE)"
+  echo "  harness home:  $HARNESS_HOME (this script's parent)"
+  echo "  ledger:        $CONFORMANCE_LEDGER_REPO (operator)"
+  PREV_ID=""
+  SEQ_LAUNCHED=0
+  while :; do
+    # Staleness applied where eligibility is READ (THR-DOSSIER ESITO 1):
+    # next judges a slice by lock PRESENCE (next.ts:127 existsSync), so a
+    # dead run's lease must be gone before next answers -- acquire's own
+    # reclaim sits past that refusal and was never reached (THR-RUN E2:
+    # resume took two manual releases). A live holder's lease is left
+    # untouched: exclusion that works is not traded for resume.
+    python3 "$SELF_DIR/slice_lease.py" sweep --root "$SEQ_ROOT" \
+      || { echo "SEQUENCE STOPPED: lease sweep failed at $SEQ_ROOT/.harness/locks" >&2; exit 1; }
+    SEQ_ERR="${TMPDIR:-/tmp}/hw_seq.$$.err"
+    set +e
+    SEQ_JSON="$(node "$HW_CLI" next --json 2>"$SEQ_ERR")"
+    SEQ_EXIT=$?
+    set -e
+    if [ "$SEQ_EXIT" -ne 0 ]; then
+      echo "SEQUENCE STOPPED: 'next --json' exited $SEQ_EXIT" >&2
+      sed 's/^/  next: /' "$SEQ_ERR" >&2 2>/dev/null || true
+      rm -f "$SEQ_ERR"; exit 1
+    fi
+    rm -f "$SEQ_ERR"
+    SEQ_PICK="$(SEQ_JSON="$SEQ_JSON" python3 -c '
+import json, os
+try:
+    r = json.loads(os.environ["SEQ_JSON"])
+except ValueError:
+    r = {}
+spec = r.get("spec") or {}
+scope = [s for s in (spec.get("scope") or []) if isinstance(s, str)]
+print(r.get("kind") or "-", r.get("id") or "-", ",".join(scope) or "-")')"
+    read -r SEQ_KIND SEQ_ID SEQ_SCOPE <<<"$SEQ_PICK"
+    if [ "$SEQ_KIND" = "all-passed" ]; then
+      echo "SEQUENCE COMPLETE: all slices passed ($SEQ_LAUNCHED launched this invocation)"
+      exit 0
+    fi
+    if [ "$SEQ_KIND" != "unlocked" ]; then
+      echo "SEQUENCE STOPPED: next answered kind=$SEQ_KIND (nothing launchable)" >&2
+      exit 1
+    fi
+    if [ "$SEQ_ID" = "$PREV_ID" ]; then
+      echo "SEQUENCE STOPPED: no progress -- $SEQ_ID resolved twice; its gate passed without an evidenced mark (or the mark was refused), and a sequence never spins on one slice" >&2
+      exit 1
+    fi
+    SEQ_SPEC=".harness/specs/$SEQ_ID.md"
+    if [ ! -f "$SEQ_ROOT/$SEQ_SPEC" ]; then
+      echo "SEQUENCE STOPPED: spec not found at $SEQ_SPEC for slice $SEQ_ID" >&2
+      exit 1
+    fi
+    SEQ_PRE="$(git -C "$SEQ_ROOT" status --porcelain -uall)"
+    echo "SEQUENCE slice $SEQ_ID: launching $SEQ_SPEC"
+    set +e
+    HARNESS_MANIFEST="$MANIFEST" HARNESSWRIGHT_CLI="$HW_CLI" \
+      VERITY_CLI="$VERITY_CLI" HARNESS_HOME="$HARNESS_HOME" \
+      bash "$SELF_ABS" "$SEQ_SPEC"
+    SEQ_SLICE_EXIT=$?
+    set -e
+    SEQ_LAUNCHED=$((SEQ_LAUNCHED + 1))
+    if [ "$SEQ_SLICE_EXIT" -ne 0 ]; then
+      echo "SEQUENCE STOPPED at $SEQ_ID (exit $SEQ_SLICE_EXIT): a failed slice is never skipped, a red gate is never continued past" >&2
+      exit "$SEQ_SLICE_EXIT"
+    fi
+    SEQ_POST="$(git -C "$SEQ_ROOT" status --porcelain -uall)"
+    SEQ_PRE="$SEQ_PRE" SEQ_POST="$SEQ_POST" SEQ_ID="$SEQ_ID" \
+      SEQ_SCOPE="$SEQ_SCOPE" python3 <<'PYEOF' \
+      || { echo "SEQUENCE STOPPED after $SEQ_ID: out-of-scope write(s) named above; the next slice is not built on a contaminated tree" >&2; exit 1; }
+import os, time
+t0 = time.monotonic()
+def paths(block):
+    out = set()
+    for line in block.splitlines():
+        if len(line) < 4:
+            continue
+        p = line[3:]
+        if " -> " in p:
+            p = p.split(" -> ", 1)[1]
+        out.add(p.strip('"'))
+    return out
+new = paths(os.environ["SEQ_POST"]) - paths(os.environ["SEQ_PRE"])
+apparatus = (".harness/receipts/", ".harness/harness.json",
+             ".harness/locks/", ".verity/reports/")
+scope = [s for s in os.environ["SEQ_SCOPE"].split(",") if s and s != "-"]
+outside = sorted(
+    p for p in new
+    if not any(p == a.rstrip("/") or p.startswith(a) for a in apparatus)
+    and not any(p == s or p.startswith(s + "/") for s in scope))
+ms = (time.monotonic() - t0) * 1000
+if outside:
+    print("SEQUENCE scope-check after %s: OUT-OF-SCOPE %s (%.1fms)"
+          % (os.environ["SEQ_ID"], ",".join(outside), ms))
+    raise SystemExit(1)
+print("SEQUENCE scope-check after %s: ok, %d new path(s) in scope (%.1fms)"
+      % (os.environ["SEQ_ID"], len(new), ms))
+PYEOF
+    echo "SEQUENCE slice $SEQ_ID: done (exit 0)"
+    PREV_ID="$SEQ_ID"
+  done
+fi
+
+# Completion is a consequence of evidence (THR-SEQ ESITO 1). `next --json`
+# below resolves the launchable slice by skipping every slice harness.json
+# marks status=passed, so before that answer is consumed each such mark must
+# be SUPPORTED: bound in .harness/receipts/completions.json to a receipt
+# whose gate verdict is PASS and to a conformance record that re-verifies
+# CONFORMANT against the operator's observation ledger, byte-for-byte
+# (launch_checks.py validate-passed holds the whole rule). A status flag is
+# writable by anyone; the evidence behind it is not -- a mark with nothing
+# behind it is a STOP here, before anything is built on top of it.
+# Fail-closed on the dry-run path too: the gate logic above LAUNCH_DRYRUN
+# stays identical to the live path by design.
+python3 "$CHECKS" validate-passed "$HALT_ROOT" || exit 1
+
+# Staleness applied where eligibility is READ, single-launch side (THR-DOSSIER
+# ESITO 1): the `next --json` consumed below carries eligible_mode_b from lock
+# PRESENCE, so a direct relaunch of a SIGKILLed slice was refused for a dead
+# run's lease too. Same sweep, same doctrine, root anchored like the locks.
+python3 "$SELF_DIR/slice_lease.py" sweep --root "$HALT_ROOT" \
+  || { echo "STOP: lease sweep failed at $HALT_ROOT/.harness/locks" >&2; exit 1; }
 
 # The slice the operator requested, derived from the spec FILENAME only, never by
 # parsing the spec (ADR-005 D1: one dialect, and the launcher is not its second reader).
@@ -375,6 +557,55 @@ if [ "$BASELINE_VERDICT" = "NO-VERDICT" ]; then
   exit 1
 fi
 
+# The conformance wiring (ADR-025, the anchor arc's OR-3): when the operator
+# names an observation-ledger repository, THIS launcher deposits the two
+# evidence digests itself -- the resolved declaration HERE, before the child
+# spawns, and the stream at close -- via conformance_anchor.sh, and then
+# builds the run's conformance record. The guarantee is about the record,
+# never the run: a run without a ledger still runs and still writes every
+# per-run output it writes today, but no conformance record can exist for
+# it, because scripts/conformance_record.py refuses a run dir without
+# anchors.json and nothing on this path ever fabricates one. With the
+# variable unset this whole path is inert and the launcher behaves as
+# before. No tracked default names an operator's ledger location, for
+# ADR-004 D2's reason; the ledger is the operator's to point at.
+CONFORMANCE_LEDGER_REPO="${CONFORMANCE_LEDGER_REPO:-}"
+CONF_RUN_DIR=""
+CONF_DECL_ENTRY=""
+if [ -n "$CONFORMANCE_LEDGER_REPO" ]; then
+  CONF_ANCHOR="$SELF_DIR/conformance_anchor.sh"
+  CONF_BUILDER="$SELF_DIR/conformance_record.py"
+  [ -f "$CONF_ANCHOR" ] || { echo "STOP: conformance_anchor.sh not resolvable at $CONF_ANCHOR" >&2; exit 1; }
+  [ -f "$CONF_BUILDER" ] || { echo "STOP: conformance_record.py not resolvable at $CONF_BUILDER" >&2; exit 1; }
+  CONF_RUN_DIR="$RECEIPTS_DIR/$RUN_ID"
+  mkdir -p "$CONF_RUN_DIR"
+  # The resolved declaration, exactly as THIS launcher resolved it: the
+  # bound, the allowlist inside it, the permission mode passed below, and
+  # the spawn-depth bound read from spec.max_spawn_depth. depth=0 when the
+  # spec declares none: an undeclared dimension licenses nothing (ADR-023's
+  # posture), so a run that delegates under an undeclared depth reads as
+  # DIVERGENT rather than inheriting a bound nobody wrote.
+  CONF_DEPTH="$(NEXT_JSON="$NEXT_JSON" python3 -c '
+import json, os
+spec = json.loads(os.environ["NEXT_JSON"]).get("spec") or {}
+d = spec.get("max_spawn_depth")
+print(d if isinstance(d, int) and not isinstance(d, bool) and d >= 0 else 0)')"
+  # streamecho=v1 (ADR-026 D1): the declaration names the protocol it is
+  # deposited under, BEFORE hashing, so the marker sits under the anchored
+  # digest -- an author can neither add it nor strip it without diverging
+  # from an input they cannot write. The verifier reads it from the
+  # declaration evidence and requires the stream's first line to carry the
+  # declaration entry id written below.
+  printf 'arm=%s depth=%s pmode=dontAsk tools=%s allowed=%s streamecho=v1\n' \
+    "$RESOLVED_ID" "$CONF_DEPTH" "$TOOLS" "$ALLOWED_TOOLS" > "$CONF_RUN_DIR/invocation.txt"
+  CONF_DECL_SHA="$(python3 -c 'import hashlib,sys;print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' "$CONF_RUN_DIR/invocation.txt")"
+  # Deposited BEFORE the spawn, fail-closed: a run the operator asked to be
+  # anchored does not start against a ledger that cannot take the deposit.
+  CONF_DECL_ENTRY="$(bash "$CONF_ANCHOR" --ledger-repo "$CONFORMANCE_LEDGER_REPO" \
+    --run "$RUN_ID" --role declaration --digest "$CONF_DECL_SHA")" \
+    || { echo "STOP: declaration digest could not be anchored in $CONFORMANCE_LEDGER_REPO; refusing to spawn a run whose anchor cannot open." >&2; exit 1; }
+fi
+
 # Budget -> flags (ADR-005 D6): a declared dimension produces its flag; an undeclared
 # dimension (sentinel 0) produces NO flag. The old silent 15/20 defaults are gone.
 #
@@ -408,6 +639,28 @@ fi
 # Bash -- which the Mode B template's default list does -- is narrowed here and
 # unbounded there. ADR-022 D5 calls that the residue and leaves it open;
 # tests/bypass_ft_bash_unbound_fixture.sh is the standing red that measures it.
+# The output format is json -- one terminal result object -- except on the
+# conformance path, where the transcript the record is computed from is the
+# stream-json event stream (tool_use/tool_result blocks, event-level
+# parent_tool_use_id: the facts conformance_verify.py recomputes). The
+# single result object still exists there as the stream's terminal event
+# and is lifted back out below, so every downstream reader keeps its shape.
+OUTPUT_FORMAT=json
+TRANSCRIPT="$OUT"
+if [ -n "$CONF_RUN_DIR" ]; then
+  OUTPUT_FORMAT=stream-json
+  TRANSCRIPT="$CONF_RUN_DIR/stream.jsonl"
+  # The opening line (ADR-026 D2): the declaration entry id, in the stream
+  # file, BEFORE the child's first byte -- the spawn below APPENDS on this
+  # path. The close-side deposit covers these bytes, so a stream that
+  # carries the id was finalized no earlier than the chain state the entry
+  # extends; a stream anchored a posteriori cannot carry it. Written by
+  # the apparatus, never by the child: a prompt-borne id would reach the
+  # stream only through model compliance, which is narration, and
+  # narration is not a binding (ADR-025's doctrine).
+  printf '{"type":"conformance_anchor","run":"%s","declarationEntry":"%s"}\n' \
+    "$RUN_ID" "$CONF_DECL_ENTRY" > "$TRANSCRIPT"
+fi
 CMD=(claude -p
   --model "$MODEL"
   --append-system-prompt "$(cat "$CONST")"
@@ -416,7 +669,8 @@ CMD=(claude -p
   --allowedTools "$ALLOWED_TOOLS"
   --strict-mcp-config
   --permission-mode dontAsk
-  --output-format json)
+  --output-format "$OUTPUT_FORMAT")
+if [ "$OUTPUT_FORMAT" = "stream-json" ]; then CMD+=(--verbose); fi
 if [ "$MAXTURNS" != "0" ]; then CMD+=(--max-turns "$MAXTURNS"); fi
 # Wall-clock -> kill after N seconds, prefer gtimeout (coreutils) then timeout.
 if [ "$WALLSEC" != "0" ]; then
@@ -426,7 +680,13 @@ if [ "$WALLSEC" != "0" ]; then
 fi
 
 set +e
-"${CMD[@]}" < "$SPEC" > "$OUT"
+if [ -n "$CONF_RUN_DIR" ]; then
+  # Append: the opening line above is already the file's first byte, and
+  # the child's stream lands after it (ADR-026 D2).
+  "${CMD[@]}" < "$SPEC" >> "$TRANSCRIPT"
+else
+  "${CMD[@]}" < "$SPEC" > "$TRANSCRIPT"
+fi
 CC_EXIT=$?
 set -e
 ENDED="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -450,9 +710,62 @@ ENDED="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 # variable stays empty and the launcher does not stop: ADR-019 D7 owns that
 # branch, the receipt is written exactly as always, and write_statement.py emits
 # no side-car at all. The absence of the file is the signal.
+# On the conformance path the transcript is the stream, and the single
+# result object the composition below reads is the stream's terminal event,
+# lifted out into $OUT here -- same shape, same reader. An interrupted
+# stream has no result event and leaves $OUT absent, which the writer
+# already treats as a decided state (empty is a decided state, above).
+if [ -n "$CONF_RUN_DIR" ]; then
+  python3 - "$TRANSCRIPT" "$OUT" <<'PYEOF' || true
+import json, sys
+src, dst = sys.argv[1], sys.argv[2]
+last = None
+try:
+    with open(src, "rb") as fh:
+        for line in fh:
+            s = line.strip()
+            if not s:
+                continue
+            try:
+                if json.loads(s).get("type") == "result":
+                    last = s
+            except ValueError:
+                continue
+except OSError:
+    last = None
+if last is not None:
+    with open(dst, "wb") as fh:
+        fh.write(last)
+PYEOF
+fi
 OUT_SHA256=""
-if [ -r "$OUT" ]; then
-  OUT_SHA256="$(python3 -c 'import hashlib,sys;print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' "$OUT" 2>/dev/null || true)"
+if [ -r "$TRANSCRIPT" ]; then
+  OUT_SHA256="$(python3 -c 'import hashlib,sys;print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' "$TRANSCRIPT" 2>/dev/null || true)"
+fi
+
+# The close half of the conformance wiring: the stream digest is deposited
+# the moment it exists, then the builder is reached UNCONDITIONALLY on this
+# path -- with no anchors.json it refuses on its own line
+# (conformance_record.py:191) and no record exists; nothing here pre-checks
+# for the file or fabricates one, so the builder's refusal is the gate the
+# real path actually crosses. A close-side deposit failure cannot un-run
+# the run: it is loud on stderr, no anchors.json is written, and the
+# absence of the record is the signal a reader can check.
+if [ -n "$CONF_RUN_DIR" ]; then
+  CONF_STREAM_ENTRY=""
+  if [ -n "$OUT_SHA256" ]; then
+    CONF_STREAM_ENTRY="$(bash "$CONF_ANCHOR" --ledger-repo "$CONFORMANCE_LEDGER_REPO" \
+      --run "$RUN_ID" --role stream --digest "$OUT_SHA256")" \
+      || { CONF_STREAM_ENTRY=""; echo "note: stream digest for $RUN_ID could not be anchored; no anchors.json will be written" >&2; }
+  else
+    echo "note: transcript unreadable at close for $RUN_ID; no stream digest to anchor" >&2
+  fi
+  if [ -n "$CONF_STREAM_ENTRY" ]; then
+    printf '{"declarationEntry":"%s","streamEntry":"%s"}\n' \
+      "$CONF_DECL_ENTRY" "$CONF_STREAM_ENTRY" > "$CONF_RUN_DIR/anchors.json"
+  fi
+  python3 "$CONF_BUILDER" "$CONF_RUN_DIR" "$CONF_RUN_DIR/statement.json" \
+    || echo "note: no conformance record for $RUN_ID (the builder refused; its reason is above)" >&2
 fi
 
 # Gate (ADR-004 D7): a Mode B run's "done" is a claim, not a fact. When CC exited 0, run
@@ -552,7 +865,7 @@ CC_EXIT="$CC_EXIT" GATE_JSON="$GATE_JSON" BASELINE_JSON="$BASELINE_JSON" \
 STATEMENT_WRITER="$SELF_DIR/write_statement.py"
 STATEMENT="$RECEIPTS_DIR/$RUN_ID.intoto.json"
 if [ -f "$STATEMENT_WRITER" ]; then
-  OUT_PATH="$OUT" OUT_SHA256="$OUT_SHA256" HARNESS_MANIFEST="$MANIFEST" \
+  OUT_PATH="$TRANSCRIPT" OUT_SHA256="$OUT_SHA256" HARNESS_MANIFEST="$MANIFEST" \
   CLAIMS_SHA256="$CLAIMS_SHA256" \
     python3 "$STATEMENT_WRITER" "$RECEIPT" "$STATEMENT" || true
 else
@@ -588,3 +901,27 @@ if [ "$CC_EXIT" -ne 0 ]; then
 fi
 GATE_VERDICT="$(printf '%s' "$GATE_JSON" | python3 -c 'import json,sys;print(json.load(sys.stdin).get("verdict","NO-VERDICT"))')"
 [ "$GATE_VERDICT" = "PASS" ] || { echo "STOP: gate verdict=$GATE_VERDICT (run not accepted)" >&2; exit 1; }
+
+# The close half of THR-SEQ ESITO 1: the gate passed, and if this run's
+# conformance record re-verifies CONFORMANT against the operator's ledger
+# the slice is marked passed -- harness.json gains the only two fields its
+# reader accepts (status, passedOn) and completions.json binds the slice to
+# the receipt and record that earned it (launch_checks.py mark-passed, the
+# single writer, which re-reads both before writing). No ledger, no record,
+# or a non-CONFORMANT verdict: NO mark, loudly on stderr -- completion is a
+# consequence of evidence, never a flag this launcher sets on its own say-so.
+# The exit contract (ADR-004 D3/D7) does not move here: a gate-PASS run
+# whose record cannot support a mark still exits 0; the sequence above it
+# stops on no-progress instead, and validate-passed refuses the repo's next
+# launch if a mark ever loses its evidence.
+if [ -n "$CONF_RUN_DIR" ] && [ -f "$CONF_RUN_DIR/statement.json" ]; then
+  CONF_VERIFY="$SELF_DIR/conformance_verify.py"
+  if MARK_VOUT="$(python3 "$CONF_VERIFY" "$CONF_RUN_DIR/statement.json" "$CONF_RUN_DIR" --ledger-repo "$CONFORMANCE_LEDGER_REPO" 2>&1)"; then
+    python3 "$CHECKS" mark-passed "$HALT_ROOT" "$RESOLVED_ID" "$RUN_ID" "$RECEIPT" "$CONF_RUN_DIR/statement.json" \
+      || echo "note: gate passed but the completion mark was refused (reason above); $RESOLVED_ID stays unmarked" >&2
+  else
+    echo "note: gate passed but the record does not verify CONFORMANT ($MARK_VOUT); completion is a consequence of evidence and $RESOLVED_ID stays unmarked" >&2
+  fi
+else
+  echo "note: gate passed with no anchored record (no observation ledger named, or the builder refused); completion is a consequence of evidence and $RESOLVED_ID stays unmarked" >&2
+fi

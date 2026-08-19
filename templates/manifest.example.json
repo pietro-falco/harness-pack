@@ -1,6 +1,5 @@
 {
   "manifest_version": 1,
-  "verified_on": "2026-07-11",
   "_comment": "Config, not governance. Copy to your private location, edit freely; receipts record manifest_version. Model strings are opaque values.",
   "constitution_hash_expected": "00a92e1544ba9dd55591388830a7f86bf1a8d555e22f455f05b5eb267ecaf97d",
   "_comment_constitution_hash_expected": "Pins the exact governance bytes; launcher fail-closed on mismatch.",
@@ -14,8 +13,5 @@
     "T2": { "name": "execution", "chain": ["SONNET_CLASS_MODEL"] },
     "T3": { "name": "subagent", "chain": ["HAIKU_CLASS_MODEL", "SONNET_CLASS_MODEL"] }
   },
-  "rules": {
-    "resolution": "first entry in chain; empty chain + resolves_to = single hop DOWNWARD only (T0->T1 legal, T2->T1 never); empty chain without resolves_to = STOP",
-    "staleness_days": 30
-  }
+  "_comment_tiers": "Resolution (launch_checks.py): first entry in chain; empty chain + resolves_to = single hop DOWNWARD only (T0->T1 legal, T2->T1 never); empty chain without resolves_to = STOP. The old `rules` block and `verified_on` were read by nothing (THR-INIT ESITO 1 finding 2) and were removed by THR-USE; a staleness field returns only as a field something reads."
 }
