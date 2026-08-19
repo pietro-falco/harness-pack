@@ -19,12 +19,40 @@
 # STATES. RED (exit 1): the deployed gate has no --scope argument, or has one
 # with inverted semantics -- the defect this row exists to hold visible. GREEN
 # (exit 0): the deployed gate answers all three questions correctly. UNMEASURED
-# (exit 2): the vault gate is not on this machine (fresh CI clone) -- the row
-# never reached its question. Observed RED against vault@ce4bc76 on 2026-08-13,
-# where `--scope` is an unrecognized argument.
+# (exit 2): the deployed gate is not on this machine (fresh CI clone), or this
+# host carries more than one and the fixture cannot choose -- the row never
+# reached its question. Observed RED against vault@ce4bc76 on 2026-08-13, where
+# `--scope` is an unrecognized argument.
 set -u
 
-GATE="${HARNESS_GATE:-$HOME/Obsidian-Vault/80-governance/harness/harness-threads-gate.py}"
+# THE SUBJECT IS LOCATED, NEVER NAMED. Spelling the note archive's directory
+# here would carry the operator's private container name in a tracked and
+# published file -- the exposure privacy-lint-vault-name exists to refuse -- and
+# a fixture that has to be redacted before anyone may publish it is a fixture
+# nobody can re-run. What is dropped is the container name alone: the governance
+# path below is the archive's own internal structure and this header already
+# states it twice, so nothing about WHAT is measured becomes less legible.
+#
+# Located by exactly one match under $HOME, and EXACTLY ONE is the condition,
+# not a convenience. Zero matches (fresh CI clone, or an archive kept elsewhere)
+# and more than one (two checkouts, and this fixture has no ground to prefer
+# either) are both UNMEASURED -- the same door a missing gate already used --
+# because a subject chosen by guess would make this row's verdict depend on
+# which copy the glob happened to reach first. $HARNESS_GATE still wins when it
+# is set, unchanged, and remains how any other layout names its own subject.
+GATE="${HARNESS_GATE:-}"
+if [ -z "$GATE" ]; then
+  found=0
+  for cand in "$HOME"/*/80-governance/harness/harness-threads-gate.py; do
+    [ -f "$cand" ] || continue
+    found=$((found + 1))
+    GATE="$cand"
+  done
+  if [ "$found" -ne 1 ]; then
+    echo "UNMEASURED: want exactly one deployed gate under \$HOME, found $found; set \$HARNESS_GATE" >&2
+    exit 2
+  fi
+fi
 if [ ! -f "$GATE" ]; then
   echo "UNMEASURED: gate not found at $GATE" >&2
   exit 2
