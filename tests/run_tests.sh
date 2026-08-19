@@ -1066,6 +1066,7 @@ bypass_row tests/bypass_ft_monitor_blind_while_running_fixture.sh GREEN UNMEASUR
 # digests left the published artifacts. The detector is unchanged: the tree
 # moved, and this line records why.
 bypass_row tests/bypass_ft_flattened_home_form_undetected_fixture.sh GREEN BROKEN
+bypass_row tests/bypass_ft_path_transform_undeclared_fixture.sh GREEN BROKEN
 
 # COMPLETENESS IS MEMBERSHIP, NOT CARDINALITY (D5), and it runs before the
 # fixtures because it is the cheap half. The set of registered paths must EQUAL
