@@ -127,6 +127,22 @@ Every red is a lesson candidate. If the failure exposed a guard gap, the gap bec
 
 The manifest carries `verified_on` and a staleness rule of 30 days. Available models change without notice; revisit the tier chains on that cadence or when your provider announces changes, bump `verified_on`, and let receipts carry the new `manifest_version`.
 
+The same chains seed a fresh repository. `scripts/graft_init.sh` no longer
+carries model strings of its own: it reads them from one tracked map,
+`scripts/tier_map.json`, and stops when that map is absent, unparseable, or
+missing a chain — a chain nothing can resolve is never written into a
+manifest. The map's sha256 is pinned here, and this line is the pin:
+
+```
+22ca2ba6d9271c8503c47e63a8b406e0c60fe09c258c9a8a010ec5936a895eb8
+```
+
+Edit the map and update that digest in the same change. The pin is what the
+public-surface boundary reads: bytes that no longer match it stop being
+evidence fixed by a digest, and the map is refused instead of drifting
+quietly. Revisiting the map is part of the cadence above — the pin fixes the
+boundary, not the parameter, and the model strings still age on their own.
+
 Any edit to `CONSTITUTION.md` requires recomputing its sha256 and updating `constitution_hash_expected` in the same change, or every subsequent launch stops at the pin.
 
 The Claude Code CLI and hooks contract can drift. Three files are the only seams: `scripts/launch_worker.sh` for flags, `templates/settings.mode-b.json` for hook wiring, `scripts/guard_pretooluse.py` for the guard itself. Verify flag and field names against current docs whenever you touch a seam.

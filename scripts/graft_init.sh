@@ -368,6 +368,36 @@ CONST="$HARNESS_HOME/CONSTITUTION.md"
 CONST_SHA="$(python3 -c 'import hashlib,sys;print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' "$CONST")"
 PROJECT="$(basename "$TOP")"
 
+# The tier chains are DATA and live in one tracked file, not in this
+# generator (audit of 2026-08-20, finding 7). A concrete model id compiled
+# into a tracked script is a parameter that ages alone: when it stops
+# resolving nothing here goes red -- the graft writes a manifest naming a
+# model that no longer exists, and launch_worker.sh hands that name to
+# `claude --model` unvalidated. The map's sha256 is pinned by
+# docs/OPERATOR-GUIDE.md, so an edit that does not re-pin loses the map's
+# exemption at the surface boundary and is refused instead of drifting
+# quietly. Absent, unparseable or incomplete is a STOP and never a
+# placeholder chain: a graft that writes a chain nothing can resolve emits a
+# manifest that reads like a decision and is not one. Validated here, before
+# the first write, with every other input. --add never reaches this: it does
+# not touch manifest.local.json, so it gains no precondition.
+TIER_MAP="${TIER_MAP:-$HARNESS_HOME/scripts/tier_map.json}"
+[ -r "$TIER_MAP" ] || stop "tier map not readable at $TIER_MAP (set HARNESS_HOME to the pack root, or TIER_MAP to the map itself)"
+TIER_MAP="$TIER_MAP" python3 - <<'PY' || stop "tier map at $TIER_MAP carries no non-empty chain of model strings for T1, T2 and T3"
+import json, os, sys
+try:
+    tiers = json.load(open(os.environ["TIER_MAP"]))["tiers"]
+except Exception:
+    sys.exit(1)
+if not isinstance(tiers, dict):
+    sys.exit(1)
+for t in ("T1", "T2", "T3"):
+    chain = (tiers.get(t) or {}).get("chain")
+    if not (isinstance(chain, list) and chain
+            and all(isinstance(m, str) and m for m in chain)):
+        sys.exit(1)
+PY
+
 # A graft file that already exists is a refusal, never a replacement.
 F_HARNESS=".harness/harness.json"
 F_MANIFEST=".harness/manifest.local.json"
@@ -392,6 +422,7 @@ rollback() {
 REPO_TOP="$TOP" SLICE="$SLICE" TITLE="$TITLE" TASK_FILE="$TASK" TOOLS="$TOOLS" \
 TURNS="$TURNS" WALL="$WALL" SCOPE="$SCOPE" CRITERIA="$CRITERIA" \
 VERIFIER_ID="$VERIFIER_ID" TIER="$TIER" PROJECT="$PROJECT" CONST_SHA="$CONST_SHA" \
+TIER_MAP="$TIER_MAP" \
 python3 - <<'PY' || { rollback; stop "internal writer failed; rolled back"; }
 import json, os
 top = os.environ["REPO_TOP"]; s = os.environ["SLICE"]
@@ -413,11 +444,7 @@ w(".harness/manifest.local.json", json.dumps({
     "constitution_hash_expected": os.environ["CONST_SHA"],
     "verifier_id": os.environ["VERIFIER_ID"],
     "model_tiers": {"worker": os.environ["TIER"]},
-    "tiers": {
-        "T1": {"name": "trust-anchor", "chain": ["claude-opus-5"]},
-        "T2": {"name": "execution", "chain": ["claude-sonnet-5"]},
-        "T3": {"name": "subagent", "chain": ["claude-haiku-4-5-20251001"]},
-    },
+    "tiers": json.load(open(os.environ["TIER_MAP"]))["tiers"],
 }, indent=2) + "\n")
 
 fm = ["---", "type: chore", "mode: B", "status: accepted", "effort: low",

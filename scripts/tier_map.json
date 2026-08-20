@@ -1,0 +1,8 @@
+{
+  "_comment": "The tier chains graft_init.sh writes into a fresh repository's .harness/manifest.local.json. Data, not source: a concrete model id compiled into a tracked generator is a parameter that ages alone -- when it stops resolving the generator does not go red, it writes a manifest naming a model that no longer exists, and the launcher passes that name to `claude --model` unvalidated. Held here, the boundary is machine-checked: this file's sha256 is pinned by docs/OPERATOR-GUIDE.md (Routine maintenance), so an edit that does not re-pin loses the surface exemption and is refused instead of drifting quietly. Resolution is unchanged and lives in scripts/launch_checks.py: spec.model -> model_tiers[spec.model] -> tiers[T].chain[0]. The pin fixes the boundary, not the parameter; the ids themselves still age, and the cadence for revisiting them is in the same section that carries the pin.",
+  "tiers": {
+    "T1": { "name": "trust-anchor", "chain": ["claude-opus-5"] },
+    "T2": { "name": "execution", "chain": ["claude-sonnet-5"] },
+    "T3": { "name": "subagent", "chain": ["claude-haiku-4-5-20251001"] }
+  }
+}
