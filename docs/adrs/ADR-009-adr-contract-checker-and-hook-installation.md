@@ -57,7 +57,7 @@ exit $?
 
 ## Numbering — the reservation sweep, and its outcome
 
-`grep -rn 'ADR-009'` over the whole of harness-pack at `f74a8ab`, excluding `.git/`, returns **zero hits**. The same sweep over `~/Obsidian-Vault/80-governance` and `~/Obsidian-Vault/00-inbox` returns hits of two distinct kinds, and the distinction is the whole outcome:
+`grep -rn 'ADR-009'` over the whole of harness-pack at `f74a8ab`, excluding `.git/`, returns **zero hits**. The same sweep over the vault's `80-governance` and `00-inbox` -- the vault working tree pinned in Basis above by its `main` commit -- returns hits of two distinct kinds, and the distinction is the whole outcome:
 
 - **The vault's own ADR-009** — `80-governance/adrs/ADR-009-phase-8-scouting-and-security-foundation.md`, Accepted, plus the twenty-odd documents citing it. This is a different namespace. vault/ADR-051 D3 settles it: counters remain independent per namespace and no existing ADR is renamed or renumbered. It is not a collision and it does not consume this number.
 - **`harness-pack/ADR-009`, named five times in vault/ADR-080** — at lines 236, 292, 319, 339 and 719, as the ADR that OR-1 gates, that OR-5 resolves in, and that Amendment 2 declines to open. The number is not merely free; it is reserved by an Accepted vault ADR **for exactly this artifact**.
@@ -245,9 +245,14 @@ The last three of the original six are negative controls and are not optional: a
 ## Verification
 
 ```bash
+# VAULT is the vault working tree pinned in Basis above by its `main` commit. It
+# is supplied, never defaulted: no tracked file names an operator location
+# (harness-pack/ADR-004 D2), which is also what D1 below requires of the checker.
+VAULT=${VAULT:?set VAULT to the vault working tree}
+
 # The reservation sweep, both halves (this document's Numbering section)
 grep -rn 'ADR-009' . | grep -v '^./.git/'                    # harness-pack -> zero hits at f74a8ab
-grep -rn 'harness-pack/ADR-009' ~/Obsidian-Vault/80-governance # -> five hits, all in ADR-080
+grep -rn 'harness-pack/ADR-009' "$VAULT"/80-governance      # -> five hits, all in ADR-080
 
 # M3, the measurement D3 rests on. Expected: rc=1 and no output for a
 # Form-H-only record; exactly one line, the Form Y line, for a both-forms record.
@@ -255,7 +260,7 @@ grep -n 'status:' docs/adrs/ADR-001-enforced-deploy-topology.md; echo $?
 grep -n 'status:' docs/adrs/ADR-008-claude-code-sandbox-surface.md; echo $?
 
 # M1 and M2, the two measurements that shaped D1 and D5.
-sed -n '523p;536p' ~/Obsidian-Vault/80-governance/vault-health/vault_health.py
+sed -n '523p;536p' "$VAULT"/80-governance/vault-health/vault_health.py
 
 # The three both-forms records D3's negative control depends on. Expected: each
 # file yields one Form Y status line and one Form H status line, in agreement.
