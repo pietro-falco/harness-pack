@@ -807,6 +807,18 @@ echo "== session transcript renderer =="
 # as successful work.
 bash tests/render_session_fixture.sh || fail=1
 
+# A FLAT row, not the three-state form the rows above use, and that is a
+# property of the fixture rather than a relaxation of the gate. Every case it
+# registers is measurable in every environment by construction: the agent family
+# is driven by a stub ssh-add on $PATH, not by a socket a sandbox may refuse to
+# let ssh-agent bind, and the one arm that does need a live agent is opt-in and
+# off. Nothing is added to UNMEASURED_REGISTER either: that register compares in
+# both directions, so a row whose measurability depends on the environment reads
+# stale on the shell where it measures and inconclusive on the shell where it
+# does not.
+echo "== gate preamble: GREEN/RED/UNMEASURED per le ragioni che dichiara (THR-GATE-2 1b-C) =="
+bash tests/gate_preamble_fixture.sh || fail=1
+
 echo "== bypass falsifier register: every tracked falsifier, in its declared state (ADR-017 D1) =="
 # Until this block existed the tests/bypass_* falsifiers were linted by the gate
 # below and executed by nothing. They sat inside the perimeter of the tooling
