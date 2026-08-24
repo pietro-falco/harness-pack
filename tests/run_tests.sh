@@ -6,7 +6,12 @@ fail=0
 # owns them could not attribute the run to the mechanism under test. Distinct
 # from `fail` on purpose: an unmeasured invariant accuses nothing, but it must
 # not be reported as a pass either. See the parallel-claim section below.
-unmeasured=0
+# Recorded BY NAME, never counted: the register at the tail declares which
+# names this tree expects, and the comparison there is what decides the exit
+# code. A total cannot say WHICH, so it cannot tell today's set from a
+# different set of the same size.
+unmeasured_observed=""
+record_unmeasured() { unmeasured_observed="$(printf '%s\n%s' "$unmeasured_observed" "$1")"; }
 
 # Every scratch dir is templated under $TMPDIR. BSD `mktemp -d` with no
 # template ignores $TMPDIR and reaches for the Darwin per-user temp dir, which
@@ -653,7 +658,7 @@ rc=$?
 set -e
 case "$rc" in
   0) ;;
-  2) unmeasured=$((unmeasured + 1))
+  2) record_unmeasured parallel_claim_lease
      echo "unattrib [parallel claim, lease mode]: the isolation invariants went unmeasured this run (above); not a pass, not a fail" ;;
   *) fail=1 ;;
 esac
@@ -663,7 +668,7 @@ rc=$?
 set -e
 case "$rc" in
   0) echo "FAIL [legacy claimer must stay red]: presence-check-only admitted one claimer"; fail=1 ;;
-  2) unmeasured=$((unmeasured + 1))
+  2) record_unmeasured parallel_claim_legacy
      echo "unattrib [legacy claimer]: the fixture could not attribute the legacy run, so its red was not re-observed" ;;
   *) echo "ok [legacy claimer still red: presence-check-only admits every claimer]" ;;
 esac
@@ -791,7 +796,7 @@ echo "== harness-pack ADR-010: a refusal is visible in the receipt (two rows) ==
 bash tests/adr010_refusal_fixture.sh
 adr010_rc=$?
 if [ "$adr010_rc" -eq 2 ]; then
-  unmeasured=$((unmeasured + 1))
+  record_unmeasured adr010_refusal
 elif [ "$adr010_rc" -ne 0 ]; then
   fail=1
 fi
@@ -1142,7 +1147,11 @@ while read -r bp_path bp_declared bp_exit2; do
   # strict door is the default, so a row that declares nothing gets accused.
   if [ "$bp_rc" -eq 2 ]; then
     if [ "$bp_exit2" = "UNMEASURED-2" ]; then
-      unmeasured=$((unmeasured + 1))
+      # The row's own basename, minus the suffix every row carries, is the
+      # name the register at the tail declares. Derived and never spelled
+      # twice: a register keyed on a hand-copied string drifts from the file
+      # it excuses the first time one of them is renamed.
+      record_unmeasured "$(basename "$bp_path" _fixture.sh)"
       echo "unattrib [bypass $bp_path]: exit 2, and this row declares UNMEASURED-2 -- its header defines exit 2 as a refusal it cannot attribute to the mechanism under test, so the row never reached its own question. Not a pass, not a fail; the suite does not certify this run"
     else
       fail=1
@@ -1192,12 +1201,12 @@ SC_PIN_VERSION="$(sed -n 's/^SHELLCHECK_VERSION=//p' .shellcheck-version)"
 SC_PIN_SEVERITY="$(sed -n 's/^SHELLCHECK_SEVERITY=//p' .shellcheck-version)"
 SC_BIN="${SHELLCHECK:-shellcheck}"
 if ! command -v "$SC_BIN" >/dev/null 2>&1; then
-  unmeasured=$((unmeasured + 1))
+  record_unmeasured shellcheck
   echo "unattrib [shellcheck]: '$SC_BIN' is not installed, so the shell sources went unchecked this run; not a pass, not a fail. The gate pins shellcheck $SC_PIN_VERSION -- install it, or set \$SHELLCHECK to a $SC_PIN_VERSION binary"
 else
   SC_HAVE="$("$SC_BIN" --version | sed -n 's/^version: //p')"
   if [ "$SC_HAVE" != "$SC_PIN_VERSION" ]; then
-    unmeasured=$((unmeasured + 1))
+    record_unmeasured shellcheck
     echo "unattrib [shellcheck]: '$SC_BIN' is $SC_HAVE and the gate pins $SC_PIN_VERSION, so the shell sources went unchecked by this gate this run; not a pass, not a fail. Set \$SHELLCHECK to a $SC_PIN_VERSION binary"
   else
     "$SC_BIN" --severity="$SC_PIN_SEVERITY" scripts/*.sh tests/*.sh || fail=1
@@ -1207,19 +1216,79 @@ fi
 echo "== compile check =="
 python3 -m py_compile scripts/*.py || fail=1
 
-# Three verdicts, because the suite now has a fixture with three outcomes. A
-# violation outranks an unmeasured invariant. An unmeasured invariant does NOT
-# print ALL TESTS PASSED and does NOT exit 0: the whole point of the third state
-# is that it cannot be a quiet pass, and a caller that gates on the documented
-# string or on the exit code sees the difference either way. Exit 2 says nothing
-# was broken and something was not looked at; exit 1 says something was broken.
+# WHICH invariants are allowed to go unmeasured, declared by name.
+#
+# Until now this suite counted them and refused to exit 0 while the count was
+# non-zero. On a tree that carries rows waiting on evidence a different step
+# owes them, the count is never zero, the exit code is permanently 2, and an
+# exit code that never changes reports nothing: a regression arriving under it
+# is invisible, because the verdict it would have moved was already spent.
+#
+# The count is also blind in a second way. It answers "how many were not
+# looked at" and cannot answer "which", so a row that stops attributing its
+# run and a row whose evidence finally lands cancel out in a total: something
+# moved in both directions and the number stayed put.
+#
+# So the set is declared here by name, and compared with the set this run
+# observed, IN BOTH DIRECTIONS -- the same membership-not-cardinality
+# discipline the bypass register applies above:
+#
+#   observed and NOT declared   something stopped being measurable and nobody
+#                               said so. Exit non-zero; the run is not
+#                               certified.
+#   declared and NOT observed   a row this register still excuses answered its
+#                               own question. That is good news and it is still
+#                               a failure of this gate: the excuse outlived its
+#                               reason and must be struck by hand. Without this
+#                               direction the register only ever grows, and a
+#                               permanent list of excuses is indistinguishable
+#                               from no gate at all.
+#
+# Not a threshold and not a count: five declared rows are not satisfied by five
+# observed rows, only by the same five.
+#
+# The second column is the reason the row cannot measure, verbatim from the
+# fixture's own UNMEASURED line. Only the first column is compared; the reason
+# is here so the register cannot be read without reading what it is waiting on.
+# Every row below waits on recorded evidence from a THR-SUBAGENT run. Recording
+# one to make a row pass is not this gate's business and is not a repair: a row
+# leaves this register when the evidence it needs exists for its own reasons.
+UNMEASURED_REGISTER='
+bypass_ft_positive_control_bash_in_pool        no THR-SUBAGENT run with RESULT.json
+bypass_ft_appended_prompt_negative_control     C2pos/C2neg evidence not recorded
+bypass_ft_spawn_ledger_depth_blind             no recorded spawn ledger
+bypass_ft_scope_env_absent_at_depth            no recorded PreToolUse ledger
+bypass_ft_permission_mode_precedence           A5 not recorded
+'
+unmeasured_declared="$(printf '%s' "$UNMEASURED_REGISTER" | awk 'NF {print $1}' | LC_ALL=C sort)"
+unmeasured_names="$(printf '%s' "$unmeasured_observed" | awk 'NF {print $1}' | LC_ALL=C sort)"
+# -13 keeps what only the observed side has; -23 what only the register has.
+unmeasured_undeclared="$(LC_ALL=C comm -13 <(printf '%s\n' "$unmeasured_declared") <(printf '%s\n' "$unmeasured_names"))"
+unmeasured_stale="$(LC_ALL=C comm -23 <(printf '%s\n' "$unmeasured_declared") <(printf '%s\n' "$unmeasured_names"))"
+
+# Three verdicts, because the suite has fixtures with three outcomes. A
+# violation outranks a disagreement about the unmeasured set. Exit 1 says
+# something was broken; exit 2 says the set of invariants nobody looked at is
+# not the set this tree declares; exit 0 says both are as declared -- and the
+# unattrib lines above still print, so exit 0 never means nothing went
+# unmeasured, only that nothing went unmeasured unexpectedly.
 if [ "$fail" -ne 0 ]; then
   echo "TESTS FAILED"
   exit 1
 fi
-if [ "$unmeasured" -ne 0 ]; then
-  echo "TESTS INCONCLUSIVE: nothing failed, $unmeasured invariant(s) went unmeasured (see the unattrib lines above); re-run on an unloaded machine"
+if [ -n "$unmeasured_undeclared" ] || [ -n "$unmeasured_stale" ]; then
+  if [ -n "$unmeasured_undeclared" ]; then
+    echo "TESTS INCONCLUSIVE [unmeasured register]: observed and NOT declared -- $(printf '%s' "$unmeasured_undeclared" | tr '\n' ' ')"
+    echo "      Something stopped being measurable and nothing said so. Read its unattrib line above and repair what stopped attributing. Declaring it here is the last move, never the first, and it is only honest when the row genuinely cannot measure yet and the reason can be named"
+  fi
+  if [ -n "$unmeasured_stale" ]; then
+    echo "TESTS INCONCLUSIVE [unmeasured register]: declared and NOT observed -- $(printf '%s' "$unmeasured_stale" | tr '\n' ' ')"
+    echo "      This row answered its own question this run and the register still excuses it. Strike it from UNMEASURED_REGISTER: an excuse that outlives its reason turns the register into a list nothing ever leaves"
+  fi
   exit 2
+fi
+if [ -n "$unmeasured_names" ]; then
+  echo "ok [unmeasured register]: $(printf '%s\n' "$unmeasured_names" | wc -l | tr -d ' ') invariant(s) went unmeasured and the set is exactly the one declared -- $(printf '%s' "$unmeasured_names" | tr '\n' ' ')"
 fi
 echo "ALL TESTS PASSED"
 exit 0

@@ -19,10 +19,22 @@ GRAFT="${GRAFT_CMD:-$ROOT/scripts/graft_init.sh}"
 [ -f "$GRAFT" ] || { echo "UNMEASURED: command under test absent at $GRAFT" >&2; exit 2; }
 command -v git >/dev/null || { echo "UNMEASURED: git absent" >&2; exit 2; }
 command -v node >/dev/null || { echo "UNMEASURED: node absent" >&2; exit 2; }
-if [ -n "${HARNESSWRIGHT_CLI:-}" ]; then HW="$HARNESSWRIGHT_CLI"
-elif command -v harnesswright >/dev/null 2>&1; then HW="$(command -v harnesswright)"
-else echo "UNMEASURED: harnesswright CLI not resolvable (set HARNESSWRIGHT_CLI)" >&2; exit 2; fi
+# tests/sibling_cli.sh adds a third way to find the CLIs -- a sibling checkout,
+# named by a relative constant -- after the environment variable and $PATH,
+# neither of which it displaces. Without it this row exits 2 on a tree where
+# the stack is checked out but neither package is installed.
+[ -f "$ROOT/tests/sibling_cli.sh" ] \
+  || { echo "UNMEASURED: tests/sibling_cli.sh absent" >&2; exit 2; }
+# shellcheck source=/dev/null
+. "$ROOT/tests/sibling_cli.sh"
+HW="$(resolve_harnesswright_cli "$ROOT")" \
+  || { echo "UNMEASURED: harnesswright CLI not resolvable (set HARNESSWRIGHT_CLI)" >&2; exit 2; }
 [ -f "$HW" ] || { echo "UNMEASURED: harnesswright CLI not a file at $HW" >&2; exit 2; }
+# Exported, not kept local: the scripts this fixture drives resolve the CLI
+# themselves, by the same documented seam (ADR-004 D2, env override first). A
+# fixture that resolved a CLI its own subject cannot find would measure the
+# resolver and nothing else.
+export HARNESSWRIGHT_CLI="$HW"
 
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/drv.XXXXXX")"; trap 'rm -rf "$WORK"' EXIT
 printf 'Implement the slice.\n' > "$WORK/task.md"
