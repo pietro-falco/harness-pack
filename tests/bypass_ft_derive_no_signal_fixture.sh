@@ -30,6 +30,13 @@ command -v node >/dev/null || { echo "UNMEASURED: node absent" >&2; exit 2; }
 HW="$(resolve_harnesswright_cli "$ROOT")" \
   || { echo "UNMEASURED: harnesswright CLI not resolvable (set HARNESSWRIGHT_CLI)" >&2; exit 2; }
 [ -f "$HW" ] || { echo "UNMEASURED: harnesswright CLI not a file at $HW" >&2; exit 2; }
+# Resolved and present is not runnable. A checkout carrying dist/cli.js and
+# none of the modules it imports satisfies both checks above and then dies at
+# import inside the run below, where this fixture reads the crash as its
+# subject's verdict and exits RED for a missing build. One process spent here
+# keeps that answer out of the RED column and in the unmeasured one.
+HW_PROBE="$(cli_starts "$HW")" \
+  || { echo "UNMEASURED: harnesswright CLI at $HW does not start -- $HW_PROBE" >&2; exit 2; }
 # Exported, not kept local: the scripts this fixture drives resolve the CLI
 # themselves, by the same documented seam (ADR-004 D2, env override first). A
 # fixture that resolved a CLI its own subject cannot find would measure the
