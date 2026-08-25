@@ -819,6 +819,14 @@ bash tests/render_session_fixture.sh || fail=1
 echo "== gate preamble: GREEN/RED/UNMEASURED per le ragioni che dichiara (THR-GATE-2 1b-C) =="
 bash tests/gate_preamble_fixture.sh || fail=1
 
+# FLAT for the same reason as the row above, and it is the fixture's own
+# property again rather than a relaxation: every mutant is a copy the arm writes
+# under $TMPDIR and drives through GATE_PREAMBLE, and the child runs are the
+# cases above with the real-agent arm forced off. Nothing here can be refused by
+# an environment, so there is no third state to register.
+echo "== gate preamble: ogni mutante muore, e per il caso che lo dichiara (THR-GATE-2 1b-D) =="
+bash tests/gate_preamble_fixture.sh --mutants || fail=1
+
 echo "== bypass falsifier register: every tracked falsifier, in its declared state (ADR-017 D1) =="
 # Until this block existed the tests/bypass_* falsifiers were linted by the gate
 # below and executed by nothing. They sat inside the perimeter of the tooling

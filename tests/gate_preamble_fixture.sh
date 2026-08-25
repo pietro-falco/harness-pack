@@ -57,6 +57,9 @@
 #
 # Run standalone: bash tests/gate_preamble_fixture.sh
 # Point GATE_PREAMBLE at another copy to drive a mutant of the preamble.
+# Run the mutants arm: bash tests/gate_preamble_fixture.sh --mutants -- it builds
+# those copies itself, one declared modification each, and re-execs this file
+# against every one of them. Its own block below says what it measures.
 set -uo pipefail
 cd "$(dirname "$0")/.." || exit 1
 PACK="$PWD"
@@ -68,6 +71,204 @@ unmeasured=0
 if [ ! -r "$PREAMBLE" ]; then
   echo "UNMEASURED: no preamble at $PREAMBLE" >&2
   exit 2
+fi
+
+# ------------------------------------------------------------- the mutants arm
+# WHAT THIS ARM MEASURES, and it is not what the cases below measure. Every case
+# answers "does the preamble say what it claims on this input". None of them
+# answers "would that case have noticed if the preamble stopped doing it". This
+# arm asks the second question the only way it can be asked: it breaks the
+# preamble on purpose, ONE DECLARED MODIFICATION AT A TIME, and requires the
+# fixture to go red -- FOR THE CASE THAT NAMES THAT BEHAVIOUR. A mutant killed by
+# some other case says nothing about the assertion it was built to disarm, so a
+# kill by the wrong case is a failure here, not a pass.
+#
+# IT IS AN ARM OF THIS FILE rather than a session probe, and that is the whole
+# point. A receipt line reading "mutants killed: 6" is a number no clone can
+# re-derive -- the same defect as a claim citing a file that exists in no tree.
+#
+# HOW IT RUNS. With --mutants nothing below this block executes. Each mutant is a
+# COPY of the preamble under $TMPDIR carrying one declared modification, and this
+# fixture RE-EXECS ITSELF without --mutants with GATE_PREAMBLE pointing at that
+# copy. No mutant is ever written into the tree, and the real preamble is only
+# ever read.
+#
+# THE NULL MUTANT is the arm's own anti-vacuity control: an UNMODIFIED copy at a
+# mutant's path, which must still exit 0. Without it, "every mutant died" would
+# read the same whether the modifications were doing the killing or the copy, the
+# re-exec, or the environment were. It runs first, and if it does not hold,
+# nothing after it is measured.
+#
+# EVERY MUTANT ALSO ASSERTS THAT ITS MODIFICATION TOOK. A substitution that
+# matches nothing produces a copy identical to the original; that copy would make
+# the fixture exit 0 and be recorded as a SURVIVOR -- a statement about the
+# preamble -- when what actually happened is that the arm never modified
+# anything. The two are reported apart, by name.
+#
+# THE REAL-AGENT ARM IS FORCED OFF IN THE CHILDREN. Its cases are opt-in and
+# report unattrib, which would exit the child 2 and make every mutant look
+# unkillable for a reason that has nothing to do with the mutation.
+if [ "${1:-}" = "--mutants" ]; then
+  MTMP="$(mktemp -d "${TMPDIR:-/tmp}/gate_preamble_mut.XXXXXX")" || exit 2
+  trap 'rm -rf "$MTMP"' EXIT
+  SELF="$PACK/tests/gate_preamble_fixture.sh"
+  arm_fail=0
+
+  # M6's replacement body, written out rather than synthesised from the original.
+  # It is not a disarm of gate_verify_principal: it is the implementation someone
+  # writing this function from scratch produces, which is why it is the mutant
+  # that decides whether the real one has a reason to exist.
+  cat > "$MTMP/m6_body" <<'M6BODY'
+  # MUTANT M6 -- the naive reading. Run `git verify-commit`, look for the string
+  # "Good" in its output, GREEN if it is there. The exit status is not read, %G?
+  # is not read, %GS is not read.
+  local commitish="${1:-}"
+  local out
+  out=$(git verify-commit "$commitish" 2>&1)
+  case "$out" in
+    Good*) return 0 ;;
+  esac
+  return 1
+M6BODY
+
+  # Each arm writes DEST and returns non-zero when its substitution found no
+  # target -- checked here, at the point where the intent is written down, rather
+  # than inferred downstream from a file that happens to differ.
+  build_mutant() {  # build_mutant NAME DEST
+    case "$1" in
+      MUT-CONTROL-null-mutant)
+        cat "$PREAMBLE" > "$2" || return 1
+        ;;
+      MUT-M1-shape6-disarmed)
+        # SHAPE-6 stops firing. SHAPE-1..5 are untouched.
+        sed "s#^  if printf .*GATE_HOME_SEG_ALT.*then\$#  if false; then#" "$PREAMBLE" > "$2" || return 1
+        grep -Fq "  if false; then" "$2" || return 1
+        ;;
+      MUT-M2-preflight-matches-comment)
+        # Matching moves off the fingerprint and onto the agent comment -- the one
+        # field the holder of the key can choose.
+        sed -e "s#^    fp=.*#    fp=\$(ssh-keygen -lf \"\$f\" 2>/dev/null | awk '{print \$3}')#" \
+            -e "s#^  while read -r _ afp _; do#  while read -r _ _ afp _; do#" \
+            "$PREAMBLE" > "$2" || return 1
+        grep -Fq "awk '{print \$3}'" "$2" || return 1
+        grep -Fq "while read -r _ _ afp _; do" "$2" || return 1
+        ;;
+      MUT-M3-signing-env-counts-from-zero)
+        # The appended pairs start at index 0 instead of continuing the count the
+        # caller already had, silently unsetting whatever it had configured.
+        sed "s#^  local n=.*#  local n=0#" "$PREAMBLE" > "$2" || return 1
+        grep -Fq "  local n=0" "$2" || return 1
+        ;;
+      MUT-M4-signing-env-green-on-unreadable-pub)
+        # An unreadable agent key stops being a reason to withhold a verdict.
+        sed "s#^  if \[ ! -r .*GATE_AGENT_PUB.*then\$#  if false; then#" "$PREAMBLE" > "$2" || return 1
+        grep -Fq "  if false; then" "$2" || return 1
+        ;;
+      MUT-M5-verify-principal-never-red)
+        # All three readings still happen and are still logged. Only the verdict
+        # changes: the function has no way left to answer RED.
+        sed "s#^  \[ \"\$ok\" -eq 1 \] || return \"\$GATE_RED\"\$#  [ \"\$ok\" -eq 1 ] || return \"\$GATE_GREEN\"#" \
+          "$PREAMBLE" > "$2" || return 1
+        grep -Fq "|| return \"\$GATE_GREEN\"" "$2" || return 1
+        ;;
+      MUT-M6-verify-principal-greps-Good)
+        # The whole body is replaced, and the second grep is what says so: the
+        # structural readings must be GONE, not merely outvoted.
+        awk -v body="$MTMP/m6_body" '
+          /^gate_verify_principal\(\) \{/ { print; while ((getline l < body) > 0) print l; close(body); s = 1; next }
+          s && /^\}/                      { print; s = 0; next }
+          s                               { next }
+                                          { print }
+        ' "$PREAMBLE" > "$2" || return 1
+        grep -Fq "MUTANT M6" "$2" || return 1
+        grep -Fq "verify-commit exit" "$2" && return 1
+        ;;
+      *) return 1 ;;
+    esac
+    return 0
+  }
+
+  # EXPECTED_CASE is the case declared to kill this mutant, or "-" for the null
+  # mutant. The child's FIRST red case is the one compared: a mutation that
+  # disarms a whole function takes every case that rests on it, and the earliest
+  # of those in file order is the one named here. Any others are printed beside
+  # it so the receipt carries them.
+  run_mutant() {  # run_mutant NAME EXPECTED_CASE
+    local name="$1" want="$2"
+    local dir="$MTMP/$name" mut out rc=0 killers first rest
+    mut="$dir/gate_preamble.sh"
+    out="$dir/child.out"
+    mkdir -p "$dir" || { printf "FAIL     [%s] no scratch directory for this mutant\n" "$name"; arm_fail=1; return 0; }
+    if ! build_mutant "$name" "$mut"; then
+      printf "FAIL     [%s] la modifica dichiarata non ha attecchito: la sostituzione non ha trovato il suo bersaglio\n" "$name"
+      arm_fail=1; return 0
+    fi
+    if [ "$want" = "-" ]; then
+      if ! cmp -s "$PREAMBLE" "$mut"; then
+        printf "FAIL     [%s] la copia non modificata differisce dall'originale: e' il meccanismo di copia a essere rotto\n" "$name"
+        arm_fail=1; return 0
+      fi
+    elif cmp -s "$PREAMBLE" "$mut"; then
+      printf "FAIL     [%s] la modifica dichiarata non ha attecchito: il mutante e' identico all'originale\n" "$name"
+      arm_fail=1; return 0
+    fi
+
+    ( exec env "GATE_PREAMBLE=$mut" GATE_PREAMBLE_REAL_AGENT=0 bash "$SELF" ) >"$out" 2>&1 || rc=$?
+    killers="$(sed -n 's/^FAIL     \[\([^]]*\)\].*/\1/p; s/^BROKEN   \[\([^]]*\)\].*/\1/p' "$out")"
+    first="$(printf '%s\n' "$killers" | head -n 1)"
+    rest="$(printf '%s\n' "$killers" | sed '1d' | tr '\n' ' ')"
+    rest="${rest% }"
+
+    if [ "$want" = "-" ]; then
+      if [ "$rc" -eq 0 ]; then
+        printf "ok       [%s] la fixture esce 0 sulla copia non modificata\n" "$name"
+      else
+        printf "FAIL     [%s] atteso=0 osservato=%s -- l'arm non misura: senza questo controllo \"tutti uccisi\" non vuole dire nulla\n" "$name" "$rc"
+        sed -n '1,6p' "$out" | sed 's/^/           /'
+        arm_fail=1
+      fi
+      return 0
+    fi
+
+    if [ "$rc" -eq 0 ]; then
+      printf "FAIL     [%s] SOPRAVVISSUTO: la fixture esce 0 sul mutante, quindi nessun caso misura quella modifica\n" "$name"
+      arm_fail=1
+    elif [ "$rc" -ne 1 ]; then
+      printf "FAIL     [%s] la fixture esce %s, atteso 1: il mutante non e' stato ucciso da un caso rosso\n" "$name" "$rc"
+      sed -n '1,6p' "$out" | sed 's/^/           /'
+      arm_fail=1
+    elif [ "$first" != "$want" ]; then
+      printf "FAIL     [%s] ucciso-da=%s atteso=%s -- ucciso dalla ragione sbagliata\n" "$name" "${first:-<nessun caso rosso stampato>}" "$want"
+      arm_fail=1
+    elif [ -n "$rest" ]; then
+      printf "ok       [%s] ucciso-da=%s atteso=%s (anche: %s)\n" "$name" "$first" "$want" "$rest"
+    else
+      printf "ok       [%s] ucciso-da=%s atteso=%s\n" "$name" "$first" "$want"
+    fi
+    return 0
+  }
+
+  echo "== gate_preamble: mutanti -- ogni mutante muore, e per il caso che lo dichiara =="
+
+  run_mutant MUT-CONTROL-null-mutant -
+  if [ "$arm_fail" -ne 0 ]; then
+    echo "GATE PREAMBLE MUTANTS ARM: FAILED -- il controllo nullo non tiene, nessun mutante e' stato misurato"
+    exit 1
+  fi
+
+  run_mutant MUT-M1-shape6-disarmed                     CS-RED-absolute-home-path
+  run_mutant MUT-M2-preflight-matches-comment           PF-RED-denied-key-renamed
+  run_mutant MUT-M3-signing-env-counts-from-zero        SE-GREEN-appends-to-count
+  run_mutant MUT-M4-signing-env-green-on-unreadable-pub SE-UNMEASURED-agent-pub-gone
+  run_mutant MUT-M5-verify-principal-never-red          VP-RED-no-principal-matched
+  run_mutant MUT-M6-verify-principal-greps-Good         VP-RED-no-principal-matched
+
+  if [ "$arm_fail" -ne 0 ]; then
+    echo "GATE PREAMBLE MUTANTS ARM: FAILED"
+    exit 1
+  fi
+  echo "GATE PREAMBLE MUTANTS ARM: PASSED"
+  exit 0
 fi
 
 # Templated under $TMPDIR for the reason tests/run_tests.sh states at its head:
@@ -499,7 +700,7 @@ observe CS-GREEN-subject-only 0 "$REPO" bash "$PREAMBLE" commit-shape "$MSG.subj
 # is meant to admit.
 {
   printf 'docs(gate): a body that carries a relative path\n\n'
-  printf 'The decision is docs/adrs/ADR-083.md and the reasoning is beside it.\n'
+  printf 'The decision is docs/adrs/ADR-009-adr-contract-checker-and-hook-installation.md and the reasoning is beside it.\n'
   printf '%s of this gate read that file before wiring anything.\n' "$HOME_WORD"
 } > "$MSG.relative"
 observe CS-GREEN-relative-and-word 0 "$REPO" bash "$PREAMBLE" commit-shape "$MSG.relative"
