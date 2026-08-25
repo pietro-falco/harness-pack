@@ -1026,7 +1026,19 @@ bypass_row tests/bypass_ft_emitter_agent_without_depth_bound_fixture.sh GREEN BR
 bypass_row tests/bypass_ft_emitter_memory_undeclared_fixture.sh GREEN   BROKEN
 bypass_row tests/bypass_ft_emitter_empty_tools_resolution_fixture.sh GREEN BROKEN
 bypass_row tests/bypass_ft_emitter_deny_order_inversion_fixture.sh GREEN BROKEN
-bypass_row tests/bypass_ft_emitter_output_rejected_by_cli_fixture.sh RED UNMEASURED-2
+# FT-19 flips to GREEN, and the flip is bounded by a bisection and not by a
+# single run: 2.1.237 and 2.1.241 measured RED, 2.1.245 measured GREEN. The
+# transition therefore sits BETWEEN 2.1.241 and 2.1.245 and is not
+# individuated. The fixture carries that floor as a named constant, prints the
+# version it observed on every branch, and returns exit 2 below the floor
+# rather than a verdict about a binary it never measured -- which is why the
+# third column stays UNMEASURED-2.
+#
+# The subject of this row is an EXTERNAL gate. Its state is not a property of
+# this tree and no commit here can move it, so the declared literal tracks a
+# reading taken elsewhere; the fixture header keeps the 2026-08-13 RED at
+# 2.1.231 beside the new one for exactly that reason.
+bypass_row tests/bypass_ft_emitter_output_rejected_by_cli_fixture.sh GREEN UNMEASURED-2
 
 # THR-CONFORMANCE eight (FT-20..FT-27, ADR-024): the conformance record --
 # an execution is conformant only against a surface declared BEFORE it ran,
