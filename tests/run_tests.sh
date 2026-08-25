@@ -868,11 +868,11 @@ bypass_row() { BYPASS_REGISTER="${BYPASS_REGISTER}${1} ${2} ${3}"$'\n'; }
 
 #          path                                               declared  exit-2 policy
 bypass_row tests/bypass_f1_lease_worktree_fixture.sh          RED       BROKEN
-bypass_row tests/bypass_f2_guard_nonbash_fixture.sh           RED       BROKEN
+bypass_row tests/bypass_f2_guard_nonbash_fixture.sh           GREEN     BROKEN
 bypass_row tests/bypass_f3_oracle_writable_fixture.sh         RED       BROKEN
 bypass_row tests/bypass_f4_deny_literal_fixture.sh            RED       BROKEN
 bypass_row tests/bypass_f5_receipt_provenance_fixture.sh      RED       BROKEN
-bypass_row tests/bypass_f6_permission_layers_write_fixture.sh RED       BROKEN
+bypass_row tests/bypass_f6_permission_layers_write_fixture.sh GREEN     BROKEN
 bypass_row tests/bypass_f7_const_pin_absent_fixture.sh        RED       BROKEN
 # The one lenient row in the register, and it is lenient because its own header
 # is what says so -- F8 declares three states, and spells the third:
@@ -888,6 +888,24 @@ bypass_row tests/bypass_f8_tamper_gate_unwired_fixture.sh     RED       UNMEASUR
 bypass_row tests/bypass_f9_ci_verity_unwired_fixture.sh       RED       BROKEN
 bypass_row tests/bypass_fb_budget_tokens_unbounded_fixture.sh GREEN     BROKEN
 bypass_row tests/bypass_fc_scope_unread_fixture.sh            GREEN     BROKEN
+# F-d is DIFFERENTIAL and that is the whole reason it is a separate row. It does
+# not ask whether a Write is refused -- F2 and F6, two lines up, already accuse
+# that and go GREEN in this same commit on the guard's FAIL-CLOSED branch, where
+# HARNESS_SCOPE never arrived at all. F-d asks whether ONE identical payload gets
+# TWO verdicts under TWO declared scopes: scope=src/ refuses docs/probe.md, and
+# scope=docs/ allows it. A guard that refused every Write would satisfy F2 and F6
+# and leave this row RED under its own distinct message (the fixture spells that
+# case separately at :133-141). GREEN here means the declared value was READ, not
+# that writes got harder.
+#
+# Declared GREEN off this commit's own diff and not off a run, per D6: the
+# fixture's header declares RED against the guard it was written against, and
+# that RED was OBSERVED -- 2026-08-24, main c81301e's guard blob
+# sha256 2a4b861f..., arm exit 1 -- beside GREEN on the guard this commit lands
+# (sha256 65556aec..., arm exit 0). The observation is the reason the literal is
+# GREEN and not RED; without it this row would be a green assertion about a
+# repair that arrived in the same commit.
+bypass_row tests/bypass_fd_scope_unenforced_fixture.sh       GREEN     BROKEN
 bypass_row tests/bypass_fe_secret_in_context_fixture.sh       RED       BROKEN
 
 # The attestation family, landed with ADR-018's ratification. Three rows and not
