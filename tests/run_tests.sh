@@ -827,6 +827,29 @@ bash tests/gate_preamble_fixture.sh || fail=1
 echo "== gate preamble: ogni mutante muore, e per il caso che lo dichiara (THR-GATE-2 1b-D) =="
 bash tests/gate_preamble_fixture.sh --mutants || fail=1
 
+# FLAT for the same reason as the two rows above, and it is this fixture's own
+# property rather than a relaxation of the gate: every case it registers is
+# measurable in every environment by construction. The scenario is a throwaway
+# git repository this fixture builds under $TMPDIR with identity and signing
+# pinned into that repository's own .git/config, and no linter, no network and
+# no agent is invoked anywhere in it. Nothing can be refused by an environment,
+# so there is no third state and nothing is added to UNMEASURED_REGISTER.
+#
+# A comment line in this file must not OPEN with a linter directive keyword.
+# This file sits inside the surface it lints, so a line whose first word after
+# '#' is the linter's own name is parsed as a directive and not as prose.
+# Measured on 2026-08-28: SC1073 and SC1072, error-level, on the line that
+# listed the two linters this fixture does not call -- a sentence about the gate
+# that broke the gate.
+echo "== ADR contract gate: an ADR addition must ride with measured work (THR-ADRGATE 4a) =="
+bash tests/gate_adr_contract_fixture.sh || fail=1
+
+# Same FLAT reading: every mutant is a copy the arm writes under $TMPDIR and
+# drives through ADR_GATE_BIN, and each dies for the single case that declares
+# it. A mutation that changes nothing is itself a failure here.
+echo "== ADR contract gate: ogni mutante muore, e per il caso che lo dichiara (THR-ADRGATE 4a) =="
+bash tests/gate_adr_contract_fixture.sh --mutants || fail=1
+
 echo "== bypass falsifier register: every tracked falsifier, in its declared state (ADR-017 D1) =="
 # Until this block existed the tests/bypass_* falsifiers were linted by the gate
 # below and executed by nothing. They sat inside the perimeter of the tooling
@@ -1303,6 +1326,32 @@ python3 -m py_compile scripts/*.py || fail=1
 # Every row below waits on recorded evidence from a THR-SUBAGENT run. Recording
 # one to make a row pass is not this gate's business and is not a repair: a row
 # leaves this register when the evidence it needs exists for its own reasons.
+# TEN rows in the register above declare UNMEASURED-2 in the third column and
+# are absent from the list below: bypass_f8_tamper_gate_unwired,
+# bypass_ft_scoped_gate_out_of_scope_red,
+# bypass_ft_emitter_output_rejected_by_cli,
+# bypass_ft_monitor_blind_while_running, bypass_ft_passed_without_record,
+# bypass_ft_sequence_continues_past_red_gate,
+# bypass_ft_orphan_lock_blocks_resume,
+# bypass_ft_added_slice_criterion_absent, bypass_ft_derive_no_signal,
+# bypass_ft_graft_incomplete_refused.
+#
+# That is not an omission to correct by adding them. This register compares in
+# BOTH directions, so an environment-conditional row has no honest entry: listed,
+# it reads stale on every shell where it does measure; unlisted, it reads
+# undeclared on every shell where it does not. Either way TESTS INCONCLUSIVE.
+# The comment at the gate-preamble row above already states the same fixed point
+# for a fixture that solved it by construction; these ten cannot, because their
+# subject is a recorded run or an external CLI.
+#
+# So the true scope of this suite's certification is narrower than ALL TESTS
+# PASSED suggests: it certifies on a host where the observed unmeasured set
+# equals the declared one, and nothing here says which host that is. Closing it
+# needs a second, environment-conditional class -- a change to ADR-017 D4/D6
+# semantics, which is a decision and not an edit. Recorded here, unrepaired, so
+# the next reader does not rediscover it from the exit code.
+#
+# Owner of this file: THR-WIRING. Written by THR-ADRGATE, which reads it.
 UNMEASURED_REGISTER='
 bypass_ft_positive_control_bash_in_pool        no THR-SUBAGENT run with RESULT.json
 bypass_ft_appended_prompt_negative_control     C2pos/C2neg evidence not recorded
