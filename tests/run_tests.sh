@@ -1161,6 +1161,30 @@ bypass_row tests/bypass_ft_added_slice_criterion_absent_fixture.sh GREEN UNMEASU
 bypass_row tests/bypass_ft_derive_no_signal_fixture.sh GREEN UNMEASURED-2
 bypass_row tests/bypass_ft_graft_incomplete_refused_fixture.sh GREEN UNMEASURED-2
 
+# ADR-027's falsifier, and the only file that ADR's proposing commit adds to the
+# measured surface. DECLARED RED, and RED is what its own header declares: the
+# two subjects it interrogates -- scripts/preflight_env.sh and
+# scripts/gate_readme_claims.sh -- are absent from this tree, because ADR-027 is
+# Proposed and no implementation is written against a Proposed ADR. This row is
+# not a defect waiting on a repair. It is the question ADR-027 asks, in the one
+# form this suite can hold an ADR to, and acceptance is what turns it GREEN.
+#
+# WHY A PROPOSED ADR SHIPS A FALSIFIER AT ALL (ADR-027 D3). scripts/
+# gate_adr_contract.sh rejects an addition under docs/adrs/ that touches nothing
+# on the measured surface, while the two-commit lifecycle wants the Proposed ADR
+# to be docs-only; together the two rules make a Proposed ADR unproposable. A
+# falsifier resolves it without bending either: it implements nothing, so "no
+# code against a Proposed ADR" is intact, and it is the most load-bearing thing
+# that could satisfy the gate.
+#
+# BROKEN and not UNMEASURED-2, though this row is exactly the environment-
+# conditional kind the comment at UNMEASURED_REGISTER below says has no honest
+# entry. It needs node and git to build its own two arms and exits 2 without
+# them -- which is the disease ADR-027 D1 names, carried in the open by that
+# ADR's own falsifier rather than excused here. The excuse is what acceptance
+# would earn, and taking it first would be the register certifying itself.
+bypass_row tests/bypass_ft_env_unchecked_and_readme_unbound_fixture.sh RED BROKEN
+
 # COMPLETENESS IS MEMBERSHIP, NOT CARDINALITY (D5), and it runs before the
 # fixtures because it is the cheap half. The set of registered paths must EQUAL
 # the set `git ls-files` tracks, and the two directions are accused separately

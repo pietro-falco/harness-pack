@@ -176,8 +176,20 @@ to guarantee, are:
 
 ## Requirements
 
-Python 3 and bash. No packages to install, no daemon, no network calls,
-nothing listening on a port. CI runs on Python 3.12.
+The suite is bash and Python 3, and it shells out to tools this
+repository does not vendor. Before `bash tests/run_tests.sh`, have on
+PATH: `git`, `python3` (CI runs 3.12), `node` (the launcher's two
+collaborators are Node CLIs), `shellcheck` at the version pinned in
+`.shellcheck-version`, `gitleaks`, `ssh-keygen` and `ssh-agent`,
+`shasum`, `tar`, `cmp` and `diff`. Two fixtures invoke the `claude`
+binary and therefore make network calls; without it those rows report
+UNMEASURED by name rather than passing. One fixture looks for a
+deployed thread gate outside this repository and reports UNMEASURED
+when it is absent. Nothing here listens on a port and nothing runs as
+a daemon. Run the suite as an unprivileged user: one fixture
+fabricates its condition with `chmod 000`, which does not make a file
+unreadable to uid 0, and the fixture correctly refuses to report a
+verdict in that case.
 
 ## License
 
