@@ -72,8 +72,16 @@ cleanup, no ceremony.
 ## Quickstart
 
 ```bash
-# 1. Prove the machinery works on your machine
-bash tests/run_tests.sh        # expect: ALL TESTS PASSED
+# 1. Prove the machinery works on your machine.
+#    Needs a verity CLI: `verity` on PATH, or VERITY_CLI=/path/to/verity/cli.js.
+#    With one:    exits 0 and prints "ALL TESTS PASSED".
+#    Without one: exits 2 and prints "TESTS INCONCLUSIVE [unmeasured register]",
+#    naming bypass_ft_orphan_lock_blocks_resume, bypass_ft_passed_without_record
+#    and bypass_ft_sequence_continues_past_red_gate. Those three rows stop being
+#    measurable and the register does not declare them, so the suite refuses to
+#    certify the run rather than pass it. That gap is this tree's, recorded as
+#    ADR-027 D1, and not a mistake you made.
+bash tests/run_tests.sh
 
 # 2. Create your private model manifest (never committed: *.local.json
 #    is gitignored) and point the launcher at it

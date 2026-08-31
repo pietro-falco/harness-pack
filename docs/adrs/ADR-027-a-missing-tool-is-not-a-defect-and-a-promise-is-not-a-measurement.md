@@ -291,6 +291,17 @@ sentence this ADR exists to distrust.
   side effect of it.
 - The contract gate's declared residue R1 is untouched: the gate reads
   paths and not diffs, and D3 does not change that or claim to.
+- This document's own repair missed a guarantee one section away from
+  the one it was repairing, in the same commit that decided guarantees
+  must be bound. The Quickstart kept `expect: ALL TESTS PASSED` while
+  `## Requirements` was being rewritten directly above it, and the
+  rewritten Requirements list omits the one prerequisite whose absence
+  actually stops the suite certifying. An attentive human reading for
+  exactly this defect, holding it in mind, corrected one sentence and
+  walked past two others. That is the argument for D2 stated at full
+  strength, and it comes from the defect and not from the proposal:
+  review found the instance it was looking for and still left two
+  behind, because nothing failed when they stayed.
 
 ## Open records
 
@@ -303,6 +314,17 @@ sentence this ADR exists to distrust.
   because a binding a reader cannot see while reading the sentence is a
   binding that rots unread, but the cost is visible syntax in a
   published document and that is a legitimate objection.
+  A third option was not considered when OR-2 was written: the marker
+  lives on the claim's side, and the `description` in
+  `.verity/claims.json` names the README anchor it binds. The
+  dependency inverts -- the claim knows the prose instead of the prose
+  knowing the claim -- and the published document stays clean, which
+  answers the objection above without giving up the binding. Its cost
+  is the one inline syntax was bought to avoid: the binding stops being
+  visible to whoever reads the sentence, so a reader cannot tell a
+  bound guarantee from an unbound one, and the author who edits the
+  sentence gets no signal that a claim is pointing at it. That cost is
+  the whole of the disagreement and the choice is not made here.
 - OR-3: CI is the boundary and a local hook is an error detector, in
   `gate_adr_contract.sh`'s own words. D2's gate inherits that: it runs
   in CI, and its local run is a courtesy.
@@ -326,3 +348,85 @@ and `.verity/claims.json` at 818a2e1 and are listed in the Basis. The
 D3 contradiction was found by trying to author this document: the
 docs-only commit that ADR-006's non-goal requires is the commit
 `scripts/gate_adr_contract.sh` rejects.
+
+## Amendment — 2026-08-31: the Quickstart was a guarantee, and two of the twelve claims are red at the Basis
+
+**Appended, not corrected.** Everything above is left as ratified. This
+document is Proposed and stays Proposed; nothing here promotes it and no
+implementation is written against it.
+
+**D2's scope, as written, did not reach the line that mattered.** The
+Context above repairs `## Requirements` and calls it "the README repair
+that needs no decision". One section below it, `## Quickstart` read:
+
+    bash tests/run_tests.sh        # expect: ALL TESTS PASSED
+
+That is a guarantee. It is the first line of this repository a stranger
+executes, and on the author's machine at 818a2e1 and after the commit
+that carries this document, `bash tests/run_tests.sh` exits 2 and prints
+`TESTS INCONCLUSIVE [unmeasured register]`. D2 says "every line of
+`README.md` that asserts a guarantee", and that was already the right
+rule; what this amendment records is that the rule was read narrowly,
+as if the guarantees lived in `## Every claim has a fixture` and the
+prose around them did not. It reaches every line of the README that
+asserts an observable outcome, wherever it sits -- a comment inside a
+fenced block included, because a reader runs the block and does not
+grade the comment. The Quickstart line is repaired in this commit to
+state the measured outcome instead of the intended one.
+
+**The measurement corrects the finding that prompted it.** The exit-2
+run was first read as this tree's declared state. It is not, or not
+only. Measured on this machine, 2026-08-31, at 1d80fcb, same tree, two
+arms differing in one environment variable:
+
+    VERITY_CLI unset      exit 2   183 ok  0 FAIL  8 unattrib  72 PASS
+                                   TESTS INCONCLUSIVE [unmeasured register]:
+                                   bypass_ft_orphan_lock_blocks_resume
+                                   bypass_ft_passed_without_record
+                                   bypass_ft_sequence_continues_past_red_gate
+    VERITY_CLI resolvable exit 0   187 ok  0 FAIL  5 unattrib  72 PASS
+                                   ALL TESTS PASSED
+
+Three rows move between the arms and no fourth. Each prints
+`UNMEASURED: verity CLI not resolvable (set VERITY_CLI)`, so the trigger
+is an absent prerequisite and not a broken invariant. The defect is that
+the three rows do not declare the environment-conditional case the way
+the five surviving rows do, so their absence reaches the register as
+observed-and-not-declared and the suite refuses to certify. That is
+exactly the class D1 exists to name, now with an instance measured on a
+tool the repaired `## Requirements` list does not enumerate: `verity`
+and `VERITY_CLI` appear nowhere in it, though `CLAUDE.md`'s gate has
+required both all along. Repairing that list is not this commit's, and
+it is not free: it is D1's mapping work, OR-1. [verified]
+
+**Two of the twelve claims are red at the Basis, on tracked paths.**
+`node <verity-cli> verify .verity/claims.json` at 1d80fcb: 10 passed, 2
+failed, `OVERALL: FAIL`. The two are `privacy-lint-operator-uid-bare`
+and `privacy-lint-model-id`. Both predicates are `git grep` over the
+tracked tree, so both are red on tracked content -- `runs/THR-SUBAGENT/**`,
+`.verity/evidence/**`, `scripts/tier_map.json` -- and not on scratch. No
+gate blocks on this, consistently with `bypass_f9_ci_verity_unwired`
+declared RED. [verified]
+
+This is a fact of the Basis and it changes what D2 can bind at
+acceptance, so it belongs here and not in the discovery that would
+follow acceptance. D2 takes `--verdicts` and answers exit 1 when a cited
+id is "present and not green". On day one, then, a guarantee bound to
+either of these two ids makes the gate refuse -- not because the
+guarantee is false, but because the claim under it is red for reasons
+that have nothing to do with the sentence. `privacy-lint-operator-uid-bare`
+sharpens this: its own description declares it "expected to stay RED
+until the operator records a decision on the exposure it now measures",
+and names why the repair is not the claim's to take. It is a
+deliberately red claim. A gate that treats red as refusal cannot
+distinguish a claim that broke from a claim that was never green by
+design, and D2 as written does not draw that line. Ten ids are
+bindable at acceptance and two are not. Whether D2 gains a declared-red
+class, or those two guarantees stay unbound and say so, is a decision
+this amendment records as owed and does not take.
+
+**What this amendment does not do.** No preflight, no README gate, no
+change under `scripts/`. FT-36 stays RED and its register line is
+untouched. The suite's measured surface is unchanged: this commit
+modifies two existing files and adds none, so `gate_adr_contract.sh`
+exits 0 without the ADR-surface rule engaging.
