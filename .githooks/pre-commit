@@ -1,0 +1,93 @@
+#!/usr/bin/env bash
+# pre-commit -- a CONTAINER FOR SEVERAL INDEPENDENT LEGS, not a file dedicated
+# to any one gate. Every leg runs, prints what it found on stderr, and returns
+# 0. The hook itself returns 0 unconditionally, on every path, always.
+#
+# WHY NOTHING HERE BLOCKS. This is a FIRST INSTALLATION (ADR-009 D4 Case B):
+# before this file the repository had no hook, no core.hooksPath, and samples
+# only. D4 Case B decides the shape verbatim -- "No `set -e`. The hook runs the
+# leg, captures the status, branches explicitly, and exits 0. `set -e` is what
+# makes a first-installation hook abort mutely on any surprise, and it is what
+# the fixture discipline already forbids in working scripts for the same
+# reason." The disposition behind it is ADR-009 D1: the gate warns, it does not
+# block, "and the hook leg (D4) returns 0 for classes 0, 1 and 2 alike",
+# because otherwise OR-1 parity is vacuous (site 1 reports what site 2 would
+# refuse), because under `set -e` a block is mute, and because vault/ADR-073 D1
+# says a gate is not a gate until observed to fail. Promotion of this leg from
+# reporter to blocking is ADR-009 OR-C and is NOT taken here.
+#
+# ABSENT IS VISIBLE, NEVER SILENT. A leg whose tool it cannot resolve prints
+# one line naming what it did not resolve and returns 0 -- the same discipline
+# D4 prescribes for the ADR_CONTRACT_CLI leg in the other repositories.
+#
+# NEVER READ A LEG THROUGH A PIPE. `leg | tail; echo $?` reports tail's exit,
+# and scripts/gate_adr_contract.sh says so in its own header. Every leg below
+# captures its status from the invocation itself.
+#
+# NO PATH TO ANY MACHINE IS WRITTEN DOWN. The repository root is asked of git;
+# no home directory, no repository name, no absolute path appears in this file.
+# ADR-004 de-literalized this surface and is not reopened.
+#
+# LEGS, in the order they run. Each one returns 0:
+#   1. adr-contract  -- scripts/gate_adr_contract.sh --staged. Present below.
+#   2. adr-contract-checker -- ADR-009 D1's checker, reached through
+#      ADR_CONTRACT_CLI. Not written yet; deliberately not invoked here.
+#   3. gitleaks -- vault/ADR-022 section 5. This repository has no gitleaks
+#      gate; that gap is ADR-009 OR-B and is not closed by adding a leg here.
+#   Adding a leg means adding a function that returns 0 and a call below it.
+#
+# THIS FILE IS TRACKED; core.hooksPath IS NOT. A fresh clone gets this file and
+# fires no hook at all until an operator sets core.hooksPath locally. That
+# bootstrap gap is ADR-009 OR-C, declared and not implemented.
+
+set -u
+
+HOOK=${0##*/}
+
+say() { printf '%s\n' "$1" >&2; }
+
+# Re-emit a leg's own output, one line per line, prefixed so a reader cannot
+# mistake a report for a block.
+relay() {  # relay <text>
+  local line
+  while IFS= read -r line || [ -n "$line" ]; do
+    [ -n "$line" ] || continue
+    say "$HOOK:   $line"
+  done <<< "$1"
+}
+
+root=$(git rev-parse --show-toplevel 2>/dev/null)
+if [ -z "$root" ]; then
+  say "$HOOK: no leg ran -- git did not resolve a repository root"
+  exit 0
+fi
+
+# --- leg 1: adr-contract ---------------------------------------------------
+# scripts/gate_adr_contract.sh --staged. Exit 0 silent, 1 a contract finding,
+# 2 an error or a missing declaration. All three return 0 from here, and the
+# three are distinguished in the text because a finding and an error are
+# different statements: one is about the change, the other about the checker.
+leg_adr_contract() {
+  local gate out status
+  gate="$root/scripts/gate_adr_contract.sh"
+  if [ ! -x "$gate" ]; then
+    say "$HOOK: adr-contract DID NOT RUN -- scripts/gate_adr_contract.sh is absent or not executable; nothing on the ADR contract was checked"
+    return 0
+  fi
+  out=$(cd "$root" && "$gate" --staged 2>&1)
+  status=$?
+  case "$status" in
+    0) : ;;
+    1) say "$HOOK: adr-contract FINDING (report only -- this leg does not block, the commit proceeds):"
+       relay "$out" ;;
+    2) say "$HOOK: adr-contract DID NOT RUN -- the gate reported an error or a missing declaration (report only -- this leg does not block, the commit proceeds):"
+       relay "$out" ;;
+    *) say "$HOOK: adr-contract DID NOT RUN -- the gate returned an undefined status $status, read as an error (report only -- this leg does not block, the commit proceeds):"
+       relay "$out" ;;
+  esac
+  return 0
+}
+
+leg_adr_contract
+
+exit 0

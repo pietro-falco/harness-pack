@@ -850,6 +850,22 @@ bash tests/gate_adr_contract_fixture.sh || fail=1
 echo "== ADR contract gate: ogni mutante muore, e per il caso che lo dichiara (THR-ADRGATE 4a) =="
 bash tests/gate_adr_contract_fixture.sh --mutants || fail=1
 
+# FLAT for the same reason as the rows above, and it is again this fixture's own
+# property rather than a relaxation. The scenario is a throwaway git repository
+# built under $TMPDIR with identity, gpgsign and core.hooksPath pinned into that
+# repository's own .git/config -- the only place any hooks path is set. Nothing
+# is set in THIS repository: the tracked .githooks/pre-commit fires nowhere
+# until an operator sets core.hooksPath in a clone, which ADR-009 D4 records as
+# local clone configuration and OR-C records as an unclosed bootstrap gap.
+#
+# The leg reports and does not block (ADR-009 D1, D4 Case B), so a green row
+# here is not evidence that any commit was stopped. Every case asserts both the
+# text on stderr and the existence of the commit, and one case runs the same
+# change with no hook installed: an uninstalled hook prints nothing, and that
+# control is what makes the printed finding attributable to this file.
+echo "== pre-commit container: the ADR contract leg reports and never blocks (THR-ADRGATE 4b) =="
+bash tests/hook_pre_commit_fixture.sh || fail=1
+
 echo "== bypass falsifier register: every tracked falsifier, in its declared state (ADR-017 D1) =="
 # Until this block existed the tests/bypass_* falsifiers were linted by the gate
 # below and executed by nothing. They sat inside the perimeter of the tooling
