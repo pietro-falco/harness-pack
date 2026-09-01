@@ -128,11 +128,11 @@ A trailing summary line on stderr names the count of files examined and the coun
 2. Otherwise `git rev-parse --show-toplevel` from the working directory. A pre-commit hook runs at the repository root, so the hook case needs no argument at all.
 3. Otherwise the parent of the script's own resolved directory.
 
-No `$HOME`, no repository name, no `/Users/`, and no `~/Code/` appears in the script or in any tracked file this ADR authorises. **harness-pack/ADR-004 already de-literalized this surface and is not reopened**; this is the same resolution discipline `scripts/launch_worker.sh` applies to `HW_CLI` and `VERITY_CLI`, and the same claim set in `.verity/claims.json` remains the invariant.
+No `$HOME`, no repository name, no absolute path rooted at the platform's user-home prefix — the `userpath` class `.verity/claims.json` declares — and no `~/Code/` appears in the script or in any tracked file this ADR authorises. **harness-pack/ADR-004 already de-literalized this surface and is not reopened**; this is the same resolution discipline `scripts/launch_worker.sh` applies to `HW_CLI` and `VERITY_CLI`, and the same claim set in `.verity/claims.json` remains the invariant.
 
 **No repository registry is introduced.** The four-repo sweep D6 describes is served by passing four roots as arguments, not by a tracked list of repository names — which the privacy claims forbid and ADR-004 D3 already externalized for the worker case. Whether the parity fixture's root list becomes a gitignored local file on the `workers.local.json` pattern is an implementation choice, not a decision this ADR makes.
 
-**Falsifier.** `fx-four-digit` — a four-digit conformant file yields no finding, which is only possible if both spellings were found. Plus `git grep -qF '/Users/'` staying green outside `docs/adrs/` after the checker lands.
+**Falsifier.** `fx-four-digit` — a four-digit conformant file yields no finding, which is only possible if both spellings were found. Plus the `surface-separation-internal-vs-public` claim of `.verity/claims.json` staying green once the checker lands: that claim already measures the `userpath` class over every tracked file a change adds, which is the property this falsifier needs and a wider surface than a grep that excludes `docs/adrs/`.
 
 ## D3 — Form Y wins, and their disagreement is itself a finding
 
