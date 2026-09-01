@@ -72,8 +72,16 @@ cleanup, no ceremony.
 ## Quickstart
 
 ```bash
-# 1. Prove the machinery works on your machine
-bash tests/run_tests.sh        # expect: ALL TESTS PASSED
+# 1. Prove the machinery works on your machine.
+#    Needs a verity CLI: `verity` on PATH, or VERITY_CLI=/path/to/verity/cli.js.
+#    With one:    exits 0 and prints "ALL TESTS PASSED".
+#    Without one: exits 2 and prints "TESTS INCONCLUSIVE [unmeasured register]",
+#    naming bypass_ft_orphan_lock_blocks_resume, bypass_ft_passed_without_record
+#    and bypass_ft_sequence_continues_past_red_gate. Those three rows stop being
+#    measurable and the register does not declare them, so the suite refuses to
+#    certify the run rather than pass it. That gap is this tree's, recorded as
+#    ADR-027 D1, and not a mistake you made.
+bash tests/run_tests.sh
 
 # 2. Create your private model manifest (never committed: *.local.json
 #    is gitignored) and point the launcher at it
@@ -176,8 +184,20 @@ to guarantee, are:
 
 ## Requirements
 
-Python 3 and bash. No packages to install, no daemon, no network calls,
-nothing listening on a port. CI runs on Python 3.12.
+The suite is bash and Python 3, and it shells out to tools this
+repository does not vendor. Before `bash tests/run_tests.sh`, have on
+PATH: `git`, `python3` (CI runs 3.12), `node` (the launcher's two
+collaborators are Node CLIs), `shellcheck` at the version pinned in
+`.shellcheck-version`, `gitleaks`, `ssh-keygen` and `ssh-agent`,
+`shasum`, `tar`, `cmp` and `diff`. Two fixtures invoke the `claude`
+binary and therefore make network calls; without it those rows report
+UNMEASURED by name rather than passing. One fixture looks for a
+deployed thread gate outside this repository and reports UNMEASURED
+when it is absent. Nothing here listens on a port and nothing runs as
+a daemon. Run the suite as an unprivileged user: one fixture
+fabricates its condition with `chmod 000`, which does not make a file
+unreadable to uid 0, and the fixture correctly refuses to report a
+verdict in that case.
 
 ## License
 
