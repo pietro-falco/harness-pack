@@ -681,3 +681,94 @@ against `harness-pack/ADR-019` git blob
 `13064f802801addcb40b203e2b76608ebe1612db` — the text ratified in the same arc.
 Every measurement quoted above is the fixture's own output on this basis, read
 from the run and not from the fixture's source.
+
+## Amendment 2 — 2026-09-03 — the row at :470-471 is no longer vacuous, and the green it records is uniqueness of convention, not absence of artifacts
+
+Owner of this file: THR-ADR. This amendment written by THR-SWEEP, which reads it.
+
+### What :470-471 recorded, and why it was true when it was written
+
+The row carries `[verified] on the current count`. At the time of writing that was
+accurate: no tracked artifact carried either digest convention, so the row was green by
+vacuity — nothing could have made it red. The caution was already in the text. What was
+missing was the anchor.
+
+This ADR was accepted by 95f508b, commit date 2026-08-13T05:55:21, inside a feature commit
+whose subject does not name it.
+
+### What changed, and when
+
+Commit 2787612, commit date 2026-08-14T14:29:07 — thirty-three hours after acceptance —
+added eighteen files under `runs/THR-CONFORMANCE/`. Three of them are the `*.statement.json`
+artifacts at `runs/THR-CONFORMANCE/20260814T002404Z/records/{A2fg,A3,A8}`, and those three
+are the whole of the tracked tree's `*.statement.json` population at the basis pinned below.
+From that commit the row has a subject and is no longer vacuous.
+
+The ordering matters and is recorded here so that it is not re-litigated: acceptance came
+first and drift came after. This is not the ratification of a `[verified]` that was already
+false. It is post-acceptance drift, and the correct remedy is an appended amendment, not a
+rewrite of the row.
+
+### What the green means at this basis
+
+Measured at the pinned basis, in the session that appended this amendment, the fixture's
+negative control over the live corpus reports:
+
+    negative control: the live corpus -> alg-value=0 digestset=3
+    GREEN [bypass_att_two_digest_shapes] at most one digest convention is emitted
+
+Three artifacts carry the DigestSet convention; zero carry the alg-tagged one. The row is
+green because exactly one of the two conventions is emitted across three carrying
+artifacts — uniqueness of convention. It is no longer green because nothing carries
+anything. Any future reading of this row that treats the green as absence is reading a state
+that ended on 2026-08-14.
+
+### A distinction this amendment fixes in passing
+
+A file count of the literal `"alg"` over the tracked tree returns two files: this ADR and the
+fixture. Both describe the form. Zero artifacts carry it. A grep of a literal counts
+descriptions, not carriers. The count that bears on this row comes from the fixture's own
+negative control over the corpus, not from a grep of the documents that talk about it.
+
+### The defect this amendment names
+
+`[verified] on the current count`, with no basis sha, is stale by construction: the phrase
+names its own weakness and does not cure it. The cure is an anchor plus a recomputation. Both
+are supplied below. Any future `[verified]` on a count in this repository carries the sha at
+which it was taken and the command that retakes it, or it is not a `[verified]`.
+
+A second form of the same defect was met while writing this amendment, and is recorded here so
+that it is not met again: a falsifier whose scope is wider than the claim it is meant to decide
+cannot decide it. An earlier draft of the paragraph above named 2787612 as the commit that
+added three artifacts, and the check written against that draft listed every path the commit
+touched. The check diverged and the claim did not. The scope of a measurement is part of the
+measurement.
+
+### Scope
+
+This amendment changes no decision in this ADR. It re-anchors the observation at :470-471 and
+leaves that text in place.
+
+### Provenance of this amendment
+
+- HEAD at authorship: `43fae793e8fb1c994237510603cb0768450c0bbf`
+  (merge commit "merge(bypass): THR-SWEEP -- the digest-shape sweep reads form from bytes",
+  2026-09-02 21:15:50)
+- Blob of this file immediately before this amendment:
+  `45bb8f3a2069c524de964c177b9a9bf1cb1a285c` (683 lines, `status: accepted` at :3)
+- Commit that accepted this ADR: `95f508bcff7cbc893e9ab25925cc73ff0f2039c5`,
+  committer date 2026-08-13T05:55:21+02:00
+- Commit that ended the vacuity: `2787612848ec08d1f983f2024da4793e4ef011e4`,
+  committer date 2026-08-14T14:29:07+02:00
+- Fixture that produces the counts, at the pinned blob
+  `f4ef0ecfa8d37e3e7f1d3bd39db556389a9fb008`:
+  `tests/bypass_att_two_digest_shapes_fixture.sh`
+- Recomputation of every count in this amendment, from the repository root at the pinned HEAD:
+
+      git diff-tree --no-commit-id --name-status -r 2787612 -- 'runs/THR-CONFORMANCE/' | wc -l
+      git ls-tree -r --name-only HEAD | grep -c 'statement.json'
+      bash tests/bypass_att_two_digest_shapes_fixture.sh
+
+  Expected at the pinned basis: eighteen, three, and exit 0 carrying the two lines quoted
+  above. If any of the three differs, this amendment is stale and a third amendment is owed —
+  this one is not to be edited.
