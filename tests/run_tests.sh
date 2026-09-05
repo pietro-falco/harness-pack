@@ -1329,6 +1329,35 @@ bypass_row tests/bypass_ft_env_unchecked_and_readme_unbound_fixture.sh RED BROKE
 # different door: no emitter, no verifier, or a control arm that did not hold.
 bypass_row tests/bypass_ft_conformance_corpus_refused_by_verifier_fixture.sh RED BROKEN
 
+# FT-37. The set of UNATTRIBUTED commits reachable from HEAD, against a set
+# declared by enumeration in a tracked baseline. DECLARED EXIT3, which is this
+# register's spelling of the judge's UNMEASURED-BASELINE: the baseline file
+# does not exist in the commit that installs this row, and the judge spends a
+# distinct exit saying so. A gate that shipped GREEN beside its own absent
+# input would be certifying a file nobody has written yet.
+#
+# EXIT3 AND NOT UNMEASURED-2, and the third column is BROKEN on purpose. The
+# judge's exit 2 is UNMEASURED-SCOPE -- no commit was read at all -- and its
+# corpus is this repository's own history. There is no host on which a clone of
+# this repository reads zero commits, so exit 2 here is a broken fixture and
+# not an environmental refusal. Exit 3 is the honest not-yet, and it reaches
+# this loop as the literal EXIT3, compared for equality like any other row.
+#
+# NOT ENVIRONMENT-CONDITIONAL, which is why it is here and not in
+# UNMEASURED_REGISTER. %G? is host-dependent -- gpg.ssh.allowedSignersFile
+# lives outside the repository, and without it every signed commit reads U
+# instead of G -- so the judge classifies G and U into the same ATTRIBUTED
+# class. Measured on the tree at this basis: 173 G + 18 N with the operator's
+# allowed_signers, 173 U + 18 N with that setting pointed at a path that does
+# not exist, and the set of N commits identical across the two. The arms sign
+# with a key the fixture generates in its own scratch directory, so nothing in
+# this row reads the operator's ~/.config.
+#
+# The row moves to GREEN in the commit that writes the baseline, and that
+# commit is where the acceptance is argued. Moving it earlier would be the
+# register asserting a decision no file records.
+bypass_row tests/bypass_ft_unattributed_commit_undeclared_fixture.sh EXIT3 BROKEN
+
 # COMPLETENESS IS MEMBERSHIP, NOT CARDINALITY (D5), and it runs before the
 # fixtures because it is the cheap half. The set of registered paths must EQUAL
 # the set `git ls-files` tracks, and the two directions are accused separately
