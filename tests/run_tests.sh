@@ -1302,14 +1302,18 @@ bypass_row tests/bypass_ft_graft_incomplete_refused_fixture.sh GREEN UNMEASURED-
 # would earn, and taking it first would be the register certifying itself.
 bypass_row tests/bypass_ft_env_unchecked_and_readme_unbound_fixture.sh RED BROKEN
 
-# The round-trip between the two halves of the conformance protocol: the
-# emitter writes a record, the verifier reads it, and the closed vocabularies
-# the verifier enforces are the contract between them. DECLARED RED, and RED
-# is what it was observed in on the tree that installs it: the three tracked
-# records under runs/THR-CONFORMANCE/ carry `completeness` inside
-# `transformation`, whose closed keyset scripts/conformance_verify.py declares
-# to be {id, sha256} exactly. All three verify NOT-RECOMPUTABLE, naming that
-# key. The verifier refuses this repository's own evidence.
+# The tracked corpus of conformance records measured against the tracked
+# verifier, ONE DIRECTION ONLY. DECLARED RED, and RED is what it was observed
+# in on the tree that installs it: the three tracked records under
+# runs/THR-CONFORMANCE/ carry `completeness` inside `transformation`, whose
+# closed keyset scripts/conformance_verify.py declares to be {id, sha256}
+# exactly. All three verify NOT-RECOMPUTABLE, naming that key. The verifier
+# refuses records this repository holds as evidence.
+#
+# NOT A ROUND-TRIP, and the name this row carried until now asserted one. The
+# tracked emitter writes `"transformation": None` and no tracked program
+# writes `completeness` into it, so the refused records have no tracked
+# producer and no emitter -> verifier loop is under measurement.
 #
 # NOT REPAIRED BY THIS ROW, and the repair is not a one-liner disguised as
 # one. Widening the keyset changes what the verifier admits from every
@@ -1323,7 +1327,7 @@ bypass_row tests/bypass_ft_env_unchecked_and_readme_unbound_fixture.sh RED BROKE
 # either has those records or is not this repository. Exits 3, 4 and 5 reach
 # the register as EXIT<n> and fail the row, which is the same judgement by a
 # different door: no emitter, no verifier, or a control arm that did not hold.
-bypass_row tests/bypass_ft_conformance_roundtrip_closed_vocabulary_fixture.sh RED BROKEN
+bypass_row tests/bypass_ft_conformance_corpus_refused_by_verifier_fixture.sh RED BROKEN
 
 # COMPLETENESS IS MEMBERSHIP, NOT CARDINALITY (D5), and it runs before the
 # fixtures because it is the cheap half. The set of registered paths must EQUAL

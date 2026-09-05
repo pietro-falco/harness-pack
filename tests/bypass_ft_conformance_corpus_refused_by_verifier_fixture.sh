@@ -1,11 +1,16 @@
 #!/usr/bin/env bash
-# conformance-roundtrip-closed-vocabulary -- the emitter's output is the
-# verifier's input, and the closed vocabulary the verifier enforces is the
-# contract between them. A record this repository emits must be a record
-# this repository accepts. When the emitter writes a key into an object
-# whose keyset the verifier declares closed, the round-trip breaks: the
-# verifier refuses the repository's own evidence, and it refuses it in the
+# conformance-corpus-refused-by-verifier -- the tracked corpus of
+# conformance records contains records the tracked verifier refuses. That
+# is the whole of what this file measures, and it measures it in the
 # tracked tree, not only on a clone.
+#
+# NOT A ROUND-TRIP, and the name this file carried until now asserted one.
+# The tracked emitter scripts/conformance_record.py writes
+# `"transformation": None` (line 236) and never populates that object, and
+# no tracked program writes the `completeness` key the three records carry
+# inside it. The refused records therefore have no tracked producer, and no
+# emitter -> verifier loop is under measurement here. One direction only:
+# which records in the corpus the verifier refuses.
 #
 # WHAT IS MEASURED, and by what. Three legs, each RESOLVED BY CONTENT and
 # never by the name of a file or of the directory holding it:
