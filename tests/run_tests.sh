@@ -1192,6 +1192,60 @@ bypass_row tests/bypass_ft_path_transform_undeclared_fixture.sh GREEN BROKEN
 # row does. Nothing is added to UNMEASURED_REGISTER: on a host where this row
 # measures, an entry there reads stale, and that register compares both ways.
 bypass_row tests/bypass_ft_internal_enters_public_surface_fixture.sh GREEN UNMEASURED-2
+
+# FT -- the WIDTH of that same boundary and the OBJECT it reads, and the row
+# above is what it stands beside: that fixture asks whether --surface refuses
+# internal material, this one asks what it charges a file for and which bytes
+# it charges. Two defects, an arm for each, because a falsifier that measured
+# one would certify half a repair as a whole one.
+#   WIDTH   membership in the charged set is whole-file byte inequality against
+#           the baseline and the charge is the count over the WHOLE blob, so a
+#           document the baseline already counts and already admits is charged
+#           with every occurrence it has always carried the moment one byte of
+#           it moves. That is wider than the claim it serves, whose own words
+#           are zero NEW occurrences on the surface a change adds.
+#   OBJECT  the measured side is read from the WORKING TREE, which git does not
+#           record, so one commit can carry two opposite verdicts and a receipt
+#           pinning gitHeadSha does not identify what it judged.
+# Both width arms are seeded from blobs this repository carries, extracted by
+# digest, so the specimen is the real one and nothing it guards is spelled.
+#
+# DECLARED RED BECAUSE IT WAS OBSERVED RED, at this basis, before this row was
+# written -- the form the FT-28 row above uses, and for the same reason:
+# nothing was synthesized to produce the red, the fixture that fails is the
+# boundary. Boundary scripts/statement_lint.py at blob
+# sha256/git 80d9b063c9fb90ec54cab40ccf8e4553689662c9, three of seven arms
+# failing and four holding:
+#   arm 1 PASSAGE   wanted exit 0, got 1 -- the specimen refused for five
+#                   occurrences the baseline already counts and it did not add
+#   arm 5 COMMIT    wanted exit 0, got 1 -- one occurrence written into the
+#                   working tree and into no commit, and the verdict moved
+#   arm 7 REMOVAL   wanted exit 0, got 1 -- a commit whose only effect is a
+#                   class count that falls
+#   arms 2, 4 refuse as wanted; arms 3, 6 accept and refuse as wanted, so the
+#   red is three specific arms and not a fixture that fails everything.
+#
+# THE REPAIR IS NOT THIS COMMIT'S TO TAKE and the literal is not a permanent
+# state. D3 above cuts both ways here: when this goes GREEN the rule moved, and
+# that is a decision recorded on this line in the commit that moves it, never
+# absorbed by amending the literal to match a run.
+#
+# A REFUTER AT FRESH CONTEXT WAS RUN AGAINST THIS FIXTURE BEFORE IT LANDED and
+# found four real defects, all repaired in the same commit that tracks it: the
+# object half was unconstrained (every arm committed, so the working tree and
+# HEAD never disagreed -- arm 5 is that repair); the charge could be kept per
+# file instead of per class, and unclamped on removals, and no arm noticed
+# (arms 6 and 7); the two COMPUTED classes could turn arm 1 red on some hosts
+# for a reason that is not the subject (a preflight now reports that as
+# UNMEASURED by class name); and no arm asserted that its own commit had
+# happened, so a setup that silently did nothing reported ok (every arm now
+# states what must hold of its repository before the boundary is asked).
+#
+# UNMEASURED-2 on the same ground as the row above and nothing wider: the
+# fixture's own header spells its exit 2 as "not a pass and not a fail: the arm
+# never reached its own question". Nothing goes into UNMEASURED_REGISTER: on a
+# host where this row measures, an entry there reads stale.
+bypass_row tests/bypass_ft_surface_charges_untouched_occurrences_fixture.sh RED UNMEASURED-2
 bypass_row tests/bypass_ft_dossier_fabricated_source_fixture.sh GREEN BROKEN
 bypass_row tests/bypass_ft_typed_equality_bool_int_fixture.sh GREEN BROKEN
 bypass_row tests/bypass_ft_evidence_role_shadowing_fixture.sh GREEN BROKEN
@@ -1397,7 +1451,7 @@ python3 -m py_compile scripts/*.py || fail=1
 # Every row below waits on recorded evidence from a THR-SUBAGENT run. Recording
 # one to make a row pass is not this gate's business and is not a repair: a row
 # leaves this register when the evidence it needs exists for its own reasons.
-# ELEVEN rows in the register above declare UNMEASURED-2 in the third column and
+# TWELVE rows in the register above declare UNMEASURED-2 in the third column and
 # are absent from the list below: bypass_f8_tamper_gate_unwired,
 # bypass_ft_scoped_gate_out_of_scope_red,
 # bypass_ft_emitter_output_rejected_by_cli,
@@ -1406,7 +1460,8 @@ python3 -m py_compile scripts/*.py || fail=1
 # bypass_ft_orphan_lock_blocks_resume,
 # bypass_ft_added_slice_criterion_absent, bypass_ft_derive_no_signal,
 # bypass_ft_graft_incomplete_refused,
-# bypass_ft_internal_enters_public_surface.
+# bypass_ft_internal_enters_public_surface,
+# bypass_ft_surface_charges_untouched_occurrences.
 #
 # That is not an omission to correct by adding them. This register compares in
 # BOTH directions, so an environment-conditional row has no honest entry: listed,
