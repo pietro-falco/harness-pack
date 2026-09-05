@@ -45,7 +45,7 @@ USAGE
     statement_lint.py FILE [FILE ...]         lint the named artifacts
 
     statement_lint.py --surface --selftest    discriminate on built-in repositories
-    statement_lint.py --surface [--repo DIR] [--baseline REV]
+    statement_lint.py --surface [--repo DIR] [--baseline REV] [--now REV]
                                 [--class NAME=FLAGS:LITERAL ...] [--declaration PATH]
                                 [--declare NAME=FILES:OCCURRENCES ...]
 
@@ -54,9 +54,10 @@ linter could not run at all. `--sweep` over zero artifacts is exit 0 and says so
 on stdout: the vacuity is reported, never disguised as a measurement.
 
 `--surface` is the same boundary asked at the other place material leaves the
-machine -- the tracked tree, which is exactly what a push carries. Its rule and
-the defect it replaces are documented at the section marked THE SECOND BOUNDARY
-below.
+machine -- the tracked tree, which is exactly what a push carries. What it
+measures is a COMMIT: `--now` defaults to `HEAD`, so the verdict is a function
+of the revision a receipt pins and of nothing on disk. Its rule and the defect
+it replaces are documented at the section marked THE SECOND BOUNDARY below.
 """
 import json
 import os
@@ -466,27 +467,18 @@ def _git(repo, *args):
     return p.returncode, p.stdout
 
 
-def _tracked_worktree(repo):
-    """path -> bytes, for every file git tracks. This is the public surface:
-    exactly what a push carries, and nothing a push leaves behind."""
-    rc, out = _git(repo, "ls-files", "-z")
-    if rc != 0:
-        raise SurfaceError("git ls-files failed in %s" % repo)
-    files = {}
-    for name in out.split(b"\0"):
-        if not name:
-            continue
-        rel = name.decode("utf-8", "replace")
-        try:
-            with open(os.path.join(repo, rel), "rb") as fh:
-                files[rel] = fh.read()
-        except (IOError, OSError):
-            continue  # tracked but absent from the worktree; nothing to judge
-    return files
-
-
+# THE MEASURED SIDE IS A REVISION, AND THERE IS NO LONGER A READER FOR ANYTHING
+# ELSE. What used to stand here read the WORKING TREE, and that made the verdict
+# a function of an input no receipt records: the same commit, the same subject
+# and the same declaration produced PASS and FAIL an hour apart because a
+# tracked file's bytes had been edited in place and never staged. git does not
+# record the tree that was on disk at either moment, so a receipt pinning
+# gitHeadSha did not identify the object it judged. Both sides of the comparison
+# now come from `_tracked_at`, and the function that read the disk is gone
+# rather than kept as an option: an option is a way back.
 def _tracked_at(repo, rev):
-    """path -> bytes, for the tree of `rev`. The already-published surface."""
+    """path -> bytes, for the tree of `rev`. What a push of `rev` carries, and
+    nothing a push leaves behind."""
     rc, _ = _git(repo, "rev-parse", "--verify", "%s^{tree}" % rev)
     if rc != 0:
         raise SurfaceError("baseline %r does not resolve in %s" % (rev, repo))
@@ -657,7 +649,8 @@ def _remotes(repo):
     return [r.decode() for r in out.split() if r]
 
 
-def surface(repo, baseline, declared_classes, declarations, declaration=None):
+def surface(repo, baseline, declared_classes, declarations, declaration=None,
+            now_rev="HEAD"):
     classes = _classes(declared_classes)
     unmeasured = _guard(classes)
     for u in unmeasured:
@@ -680,9 +673,14 @@ def surface(repo, baseline, declared_classes, declarations, declaration=None):
     print("remotes: %s -- this repository publishes; the tracked set is the public surface"
           % ", ".join(remotes))
 
-    now = _tracked_worktree(repo)
+    rc, out = _git(repo, "rev-parse", now_rev)
+    resolved = out.decode().strip() if rc == 0 else now_rev
+    now = _tracked_at(repo, now_rev)
+    print("measuring %s == %s: the verdict is a function of this commit and of "
+          "nothing in the working tree" % (now_rev, resolved))
     if not now:
-        raise SurfaceError("the tracked set is empty; a boundary over nothing is not green")
+        raise SurfaceError("the tracked set of %r is empty; a boundary over nothing "
+                           "is not green" % now_rev)
     base = _tracked_at(repo, baseline)
 
     # --- the surface that already exists: exactly as declared, not at most ---
@@ -711,16 +709,62 @@ def surface(repo, baseline, declared_classes, declarations, declaration=None):
             print("  baseline %-10s declared, but no such class in this invocation" % name)
             moved += 1
 
-    # --- the surface this change adds: zero, unless a reason says otherwise ---
+    # --- the surface this change adds: zero NEW, unless a reason says otherwise ---
+    #
+    # THE CHARGE IS PER FILE, PER CLASS, ON THE DELTA. Whole-file byte inequality
+    # still decides which files are worth looking at -- that is only the candidate
+    # set -- but what a file is charged is what the change ADDS to it:
+    # max(0, now - base), class by class. The rule this replaces charged the whole
+    # blob of every file whose bytes moved, so a document the baseline already
+    # counts, and already ADMITS in its declared census, became a file charged
+    # with every occurrence it had carried all along the moment one byte of it
+    # changed for an unrelated reason. That is wider than the claim it serves,
+    # whose own words are zero NEW occurrences on the surface a change adds; and a
+    # boundary that refuses what it has already accepted is not measuring the
+    # thing it is named for.
+    #
+    # PER CLASS AND CLAMPED, and neither is a detail. Collapsed into one number
+    # per file, a commit that removes one class's occurrence and adds another's
+    # nets to zero and travels. Unclamped, a commit whose only effect is to
+    # REMOVE material is refused for a negative charge. Both are refused by
+    # tests/bypass_ft_surface_charges_untouched_occurrences_fixture.sh.
+    #
+    # THE HOLE THIS FORM LEAVES, named rather than hidden: one occurrence of the
+    # SAME class added and one removed in the same file in the same commit nets to
+    # zero and is not charged. A count cannot see that; only an anchor on the
+    # lines a diff adds can, and adopting one is a decision and not an edit. It is
+    # recorded here so the next reader does not rediscover it from a survivor.
+    #
+    # EXEMPTION STAYS WHOLE-FILE. Whether a file is a rule that names what it
+    # replaces, the declaration itself, or evidence fixed by a digest is a
+    # property of the whole file, never of the occurrences one commit happens to
+    # add. Asking it of the delta alone would let the shape of the bytes AROUND a
+    # leak exempt the leak.
     added = sorted(p for p, b in now.items() if base.get(p) != b)
     print("delta vs %s: %d added or changed tracked file(s)" % (baseline, len(added)))
-    refused = exempted = 0
+    refused = exempted = carried = 0
     for path in added:
         hits = _hits(now[path], classes)
         if not hits:
             continue
+        was = _hits(base.get(path, b""), classes)
+        charged = {}
+        for name, occurrences in hits.items():
+            gained = len(occurrences) - len(was.get(name, ()))
+            if gained > 0:
+                charged[name] = gained
+        if not charged:
+            # Reported and not skipped: a file that carries a class and is not
+            # charged for it is exactly the case this rule changed, and a reader
+            # who cannot see it cannot check that the change is the right width.
+            carried += 1
+            print("  CARRIED  %-62s %s  [bytes moved, no class gained an occurrence]"
+                  % (path, ", ".join("%s x%d" % (k, len(v))
+                                     for k, v in sorted(hits.items()))))
+            continue
         reason = _exemption(path, now[path], hits, now, classes, declaration)
-        detail = ", ".join("%s x%d" % (k, len(v)) for k, v in sorted(hits.items()))
+        detail = ", ".join("%s +%d of %d" % (k, charged[k], len(hits[k]))
+                           for k in sorted(charged))
         if reason:
             exempted += 1
             print("  EXEMPT   %-62s %s  [%s]" % (path, detail, reason))
@@ -728,8 +772,9 @@ def surface(repo, baseline, declared_classes, declarations, declaration=None):
             refused += 1
             print("  REFUSED  %-62s %s  [no stated reason: neither the rule that names "
                   "what it replaces nor evidence fixed by a digest]" % (path, detail))
-    print("surface: %d refused, %d exempt, %d class(es) moved on the baseline, %d unmeasured"
-          % (refused, exempted, moved, len(unmeasured)))
+    print("surface: %d refused, %d exempt, %d carried, %d class(es) moved on the "
+          "baseline, %d unmeasured"
+          % (refused, exempted, carried, moved, len(unmeasured)))
     return 1 if (refused or moved or unmeasured) else 0
 
 
@@ -867,10 +912,12 @@ def main(argv):
         if rest and rest[0] == "--selftest":
             return surface_selftest()
         repo, baseline, cls, decl, declaration = ".", "origin/main", [], {}, None
+        now_rev = "HEAD"
         i = 0
         while i < len(rest):
             a = rest[i]
-            if a in ("--repo", "--baseline", "--class", "--declare", "--declaration"):
+            if a in ("--repo", "--baseline", "--now", "--class", "--declare",
+                     "--declaration"):
                 if i + 1 >= len(rest):
                     print("--surface: %s needs a value" % a, file=sys.stderr)
                     return 2
@@ -879,6 +926,8 @@ def main(argv):
                     repo = v
                 elif a == "--baseline":
                     baseline = v
+                elif a == "--now":
+                    now_rev = v
                 elif a == "--declaration":
                     declaration = v
                 elif a == "--class":
@@ -896,7 +945,7 @@ def main(argv):
             print("--surface: unknown argument %r" % a, file=sys.stderr)
             return 2
         try:
-            return surface(repo, baseline, cls, decl, declaration)
+            return surface(repo, baseline, cls, decl, declaration, now_rev)
         except SurfaceError as e:
             print("UNMEASURED: %s" % e, file=sys.stderr)
             return 2
