@@ -1245,7 +1245,23 @@ bypass_row tests/bypass_ft_internal_enters_public_surface_fixture.sh GREEN UNMEA
 # fixture's own header spells its exit 2 as "not a pass and not a fail: the arm
 # never reached its own question". Nothing goes into UNMEASURED_REGISTER: on a
 # host where this row measures, an entry there reads stale.
-bypass_row tests/bypass_ft_surface_charges_untouched_occurrences_fixture.sh RED UNMEASURED-2
+#
+# 2026-09-05: RED -> GREEN, and this is the decision the paragraph above said
+# would be recorded here rather than absorbed by a run. THE RULE MOVED, in
+# b2cdcaf: scripts/statement_lint.py blob
+# 80d9b063c9fb90ec54cab40ccf8e4553689662c9 -> 16e4adf8e6e557225d759d33bdf8fb9534a76d48,
+# where the charge became max(0, hits_now - hits_base) per class per path and
+# both sides of the comparison came to be read from a revision, `--now`
+# defaulting to HEAD, with the function that read the working tree deleted
+# rather than kept behind a flag.
+#
+# THE JUDGE DID NOT MOVE, and that is checkable rather than asserted: the
+# fixture's blob is f4af08e6ecb7ef1dd14cb149078aabc4b8cc19ec at 3e28ab1, where
+# it was observed RED, and the same f4af08e6 at b2cdcaf, where it answers
+# GREEN. Not one byte of the falsifier differs across the commit that repaired
+# what it accuses. Arms 1, 5 and 7 answer exit 0 where they answered exit 1;
+# arms 2, 3, 4 and 6 answer exactly as before. The repair is what moved.
+bypass_row tests/bypass_ft_surface_charges_untouched_occurrences_fixture.sh GREEN UNMEASURED-2
 bypass_row tests/bypass_ft_dossier_fabricated_source_fixture.sh GREEN BROKEN
 bypass_row tests/bypass_ft_typed_equality_bool_int_fixture.sh GREEN BROKEN
 bypass_row tests/bypass_ft_evidence_role_shadowing_fixture.sh GREEN BROKEN
