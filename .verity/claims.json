@@ -82,6 +82,20 @@
       "expect": {
         "exitCode": 0
       }
+    },
+    {
+      "id": "conformance-roundtrip-closed-vocabulary",
+      "type": "command",
+      "description": "DECLARED RED, and RED because observed RED on the tree that installs it -- not a target, a measurement. The conformance protocol has two halves that must agree: scripts/conformance_record.py emits a record, scripts/conformance_verify.py reads one, and the keysets the verifier declares closed are the contract between them. They do not agree today. The three tracked records under runs/THR-CONFORMANCE/20260814T002404Z/records/ carry `completeness` inside `transformation`, whose closed keyset the verifier declares to be {id, sha256} exactly; all three verify NOT-RECOMPUTABLE naming that key. The verifier refuses this repository's own evidence, in the tracked tree and not only on a clone. The falsifier resolves all three legs BY CONTENT and never by filename: the verifier is the tracked module declaring a closed keyset for `transformation`, an emitter is a tracked module declaring the same PREDICATE_TYPE and no keyset of its own, and the corpus is every tracked file whose top-level predicateType matches -- read statically, nothing imported and nothing executed. FOUR OUTCOMES, NEVER TWO: hits>0 on a populated corpus is RED (1), hits=0 on a populated corpus is GREEN (0), a corpus that is empty or did not resolve is UNMEASURED (2), and an emitter that was not located is UNMEASURED (3) -- an exit shared between green and unmeasured reports a vacuum as a pass, which is the defect this judge refuses to reproduce. The GREEN arms are non-vacuous BY GENERATION, not by grep: twelve generated records carrying no out-of-vocabulary key answer GREEN over a printed corpus count of twelve, and the same twelve with one mutated answer RED on exactly one hit. This claim expects exit 1 and the falsifier's own verdict line, so a run that goes red for some other reason does not satisfy it, and the repair -- widening the keyset or moving the records, whose digests three sibling narrowing.json files pin -- is the edit that must flip this row to 0.",
+      "run": "bash tests/bypass_ft_conformance_roundtrip_closed_vocabulary_fixture.sh",
+      "expect": {
+        "exitCode": 1,
+        "stdout": {
+          "kind": "substring",
+          "value": "RED: the verifier refuses records this repository emits"
+        }
+      },
+      "timeoutMs": 120000
     }
   ]
 }

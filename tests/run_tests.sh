@@ -1302,6 +1302,29 @@ bypass_row tests/bypass_ft_graft_incomplete_refused_fixture.sh GREEN UNMEASURED-
 # would earn, and taking it first would be the register certifying itself.
 bypass_row tests/bypass_ft_env_unchecked_and_readme_unbound_fixture.sh RED BROKEN
 
+# The round-trip between the two halves of the conformance protocol: the
+# emitter writes a record, the verifier reads it, and the closed vocabularies
+# the verifier enforces are the contract between them. DECLARED RED, and RED
+# is what it was observed in on the tree that installs it: the three tracked
+# records under runs/THR-CONFORMANCE/ carry `completeness` inside
+# `transformation`, whose closed keyset scripts/conformance_verify.py declares
+# to be {id, sha256} exactly. All three verify NOT-RECOMPUTABLE, naming that
+# key. The verifier refuses this repository's own evidence.
+#
+# NOT REPAIRED BY THIS ROW, and the repair is not a one-liner disguised as
+# one. Widening the keyset changes what the verifier admits from every
+# emitter; narrowing the records moves their bytes, and their digests are
+# pinned by the three sibling narrowing.json files beside them. Which of the
+# two moves is the operator's decision, taken against the cascade, not here.
+#
+# BROKEN and not UNMEASURED-2. The fixture's exit 2 means its corpus did not
+# resolve -- and its corpus is the TRACKED record set of this repository, so
+# there is no host on which that is an honest environmental refusal. A clone
+# either has those records or is not this repository. Exits 3, 4 and 5 reach
+# the register as EXIT<n> and fail the row, which is the same judgement by a
+# different door: no emitter, no verifier, or a control arm that did not hold.
+bypass_row tests/bypass_ft_conformance_roundtrip_closed_vocabulary_fixture.sh RED BROKEN
+
 # COMPLETENESS IS MEMBERSHIP, NOT CARDINALITY (D5), and it runs before the
 # fixtures because it is the cheap half. The set of registered paths must EQUAL
 # the set `git ls-files` tracks, and the two directions are accused separately
