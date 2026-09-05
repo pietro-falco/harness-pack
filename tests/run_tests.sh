@@ -1161,6 +1161,37 @@ bypass_row tests/bypass_ft_monitor_blind_while_running_fixture.sh GREEN UNMEASUR
 # moved, and this line records why.
 bypass_row tests/bypass_ft_flattened_home_form_undetected_fixture.sh GREEN BROKEN
 bypass_row tests/bypass_ft_path_transform_undeclared_fixture.sh GREEN BROKEN
+
+# FT -- the eleven-arm falsifier of scripts/statement_lint.py --surface, tracked
+# here for the first time. It existed on disk, unregistered and untracked, while
+# .verity/claims.json's own description named it as an independent driver of the
+# same boundary: a tracked claim citing a falsifier no clone would receive.
+# Tracking it is what makes that citation checkable, and D5 above is what makes
+# tracking it require this row -- membership, not cardinality.
+#
+# DECLARED GREEN OFF THE HEADER AND NOT OFF A RUN (D6). The header declares
+# GREEN as all eleven arms matching what each wants, and the mechanism those
+# arms measure is present and implements --surface at this basis. The
+# anti-vacuity is an OBSERVED RED, and its only TRACKED sede is the claim's own
+# description in .verity/claims.json: "was observed RED with each exemption
+# reason disabled before it was observed green". No file under .verity/evidence/
+# carries that observation -- the run record naming its transcripts is not in
+# the tracked set -- so this row cites the description and says so, rather than
+# citing a path a fresh clone will not have. Nothing was manufactured to
+# produce it and no run produced this literal.
+#
+# UNMEASURED-2 AND NOT BROKEN, on the ground D4 states and nothing wider: the
+# fixture's own header spells its exit 2 -- "python3, git, or the boundary
+# itself is absent, or the boundary does not implement --surface. That is not a
+# pass and not a fail: the arm never reached its own question." That is the
+# attribution reading, declared in the fixture, beside itself. It is also the
+# house reading of that clause: bypass_ft_graft_incomplete_refused and
+# bypass_ft_orphan_lock_blocks_resume both exit 2 on git or node absent and both
+# carry UNMEASURED-2. bypass_ft_env_unchecked_and_readme_unbound is not a
+# counter-precedent -- its own header spells its exit 2 BROKEN, which is why its
+# row does. Nothing is added to UNMEASURED_REGISTER: on a host where this row
+# measures, an entry there reads stale, and that register compares both ways.
+bypass_row tests/bypass_ft_internal_enters_public_surface_fixture.sh GREEN UNMEASURED-2
 bypass_row tests/bypass_ft_dossier_fabricated_source_fixture.sh GREEN BROKEN
 bypass_row tests/bypass_ft_typed_equality_bool_int_fixture.sh GREEN BROKEN
 bypass_row tests/bypass_ft_evidence_role_shadowing_fixture.sh GREEN BROKEN
@@ -1366,7 +1397,7 @@ python3 -m py_compile scripts/*.py || fail=1
 # Every row below waits on recorded evidence from a THR-SUBAGENT run. Recording
 # one to make a row pass is not this gate's business and is not a repair: a row
 # leaves this register when the evidence it needs exists for its own reasons.
-# TEN rows in the register above declare UNMEASURED-2 in the third column and
+# ELEVEN rows in the register above declare UNMEASURED-2 in the third column and
 # are absent from the list below: bypass_f8_tamper_gate_unwired,
 # bypass_ft_scoped_gate_out_of_scope_red,
 # bypass_ft_emitter_output_rejected_by_cli,
@@ -1374,7 +1405,8 @@ python3 -m py_compile scripts/*.py || fail=1
 # bypass_ft_sequence_continues_past_red_gate,
 # bypass_ft_orphan_lock_blocks_resume,
 # bypass_ft_added_slice_criterion_absent, bypass_ft_derive_no_signal,
-# bypass_ft_graft_incomplete_refused.
+# bypass_ft_graft_incomplete_refused,
+# bypass_ft_internal_enters_public_surface.
 #
 # That is not an omission to correct by adding them. This register compares in
 # BOTH directions, so an environment-conditional row has no honest entry: listed,
