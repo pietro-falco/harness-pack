@@ -1330,11 +1330,24 @@ bypass_row tests/bypass_ft_env_unchecked_and_readme_unbound_fixture.sh RED BROKE
 bypass_row tests/bypass_ft_conformance_corpus_refused_by_verifier_fixture.sh RED BROKEN
 
 # FT-37. The set of UNATTRIBUTED commits reachable from HEAD, against a set
-# declared by enumeration in a tracked baseline. DECLARED EXIT3, which is this
-# register's spelling of the judge's UNMEASURED-BASELINE: the baseline file
-# does not exist in the commit that installs this row, and the judge spends a
-# distinct exit saying so. A gate that shipped GREEN beside its own absent
-# input would be certifying a file nobody has written yet.
+# declared by enumeration in INTEGRITY.md. DECLARED EXIT3, which is this
+# register's spelling of the judge's UNMEASURED-BASELINE: INTEGRITY.md exists
+# in the commit that installs this row and carries no such section, and the
+# judge spends a distinct exit saying so. A gate that shipped GREEN beside an
+# input nobody has written would be certifying a decision no file records.
+#
+# THE BASELINE IS NOT A FILE OF ITS OWN. INTEGRITY.md is the only tracked
+# integrity declaration this repository has, and a second one at the root would
+# be a second door on the same room. A PRESENT FILE WITH NO SECTION IS NOT AN
+# EMPTY ENUMERATION: the fixture's arm B-nosection holds those apart, and arm
+# B-empty reads the empty declaration out of the same bytes arm A reads a true
+# one from, so "declared empty" and "read nothing" cannot be confused here.
+#
+# THE ENUMERATION IS `.git-blame-ignore-revs`-SHAPED -- one full sha per line,
+# '#' at the start of a line for a comment, free text after the sha ignored --
+# so the declaration can carry each commit's date and subject beside it and
+# still be a machine-read set. A COMMENT IS NOT A DECLARATION, which arm
+# C-commented-out proves by commenting out a true member and requiring RED.
 #
 # EXIT3 AND NOT UNMEASURED-2, and the third column is BROKEN on purpose. The
 # judge's exit 2 is UNMEASURED-SCOPE -- no commit was read at all -- and its

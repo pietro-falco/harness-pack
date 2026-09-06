@@ -3,10 +3,29 @@
 # reachable from HEAD must equal, EXACTLY, a set declared by enumeration in a
 # tracked baseline file. Not its size: its membership.
 #
+# WHERE THE BASELINE LIVES, and why it is not a file of its own. INTEGRITY.md
+# is the only tracked integrity declaration this repository has, and it is
+# added by the push this gate ships in. A second declaration at the root would
+# be a second door on the same room -- two places to look, and one of them
+# eventually stale. The judge reads $ROOT/INTEGRITY.md and nothing else.
+#
 # DECLARED UNMEASURED-BASELINE in the commit that installs it, and observed so.
-# The baseline file does not exist in this commit. A gate that shipped GREEN
-# beside its own absent input would be certifying a file nobody wrote, so the
-# judge spends a distinct exit on it (3) and the register declares EXIT3.
+# INTEGRITY.md exists in this commit; the section it will carry does not. A
+# gate that shipped GREEN beside an input nobody has written would be
+# certifying a decision no file records, so the judge spends a distinct exit on
+# it (3) and the register declares EXIT3. A PRESENT FILE WITH NO SECTION IS NOT
+# AN EMPTY ENUMERATION, and arm B-nosection holds that door shut: the two
+# differ by exactly the decision this gate exists to make visible.
+#
+# THE ENUMERATION FORM is `.git-blame-ignore-revs`: one full sha per line, a
+# '#' at the start of a line for a comment, and free text after the sha on the
+# same line ignored. The judge takes the FIRST whitespace-separated token of
+# every surviving line, so a row may carry its own short-sha, date and subject
+# beside the sha it declares and the record stays readable to a person without
+# a second lookup. A COMMENT IS NOT A DECLARATION: arm C-commented-out takes a
+# true member of the observed set, prefixes it with '# ', and requires the gate
+# to go RED. Commenting a line out withdraws the exemption; it does not hide
+# the commit.
 #
 # WHAT IS "UNATTRIBUTED", and why it is DERIVED and not asserted. The judge
 # reads %G? for every commit `git rev-list HEAD` returns and builds the
@@ -76,7 +95,7 @@
 #   4  FIXTURE BROKEN      a control arm did not answer what it must, or the
 #                          classification map did not cover an observed %G?
 #
-# SIX ARMS, each printed with its own exit:
+# TEN ARMS, each printed with its own exit:
 #   P  positive control, on a CLONE of this repository: the measured set
 #      declared verbatim answers GREEN, and ONE further unsigned commit turns
 #      it RED. The clone carries no allowed_signers, so this arm is also where
@@ -96,6 +115,21 @@
 #      the exit is 0.
 #   Z  null cases: an absent baseline -> 3, and a repository with no commits
 #      -> 2.
+#   C  comment tolerance, in both directions. C-comment: a synthetic baseline
+#      carrying '# ' lines between the shas and free text after each sha ->
+#      GREEN, with `declared` equal to the number of sha rows and not to the
+#      number of lines. C-commented-out: one true member of the observed set
+#      prefixed with '# ' -> RED, naming that commit UNDECLARED. The second arm
+#      is what keeps the first from being a licence to park a commit behind a
+#      '#'.
+#   B  the baseline's two degenerate shapes, which are not one shape. B-
+#      nosection: a baseline file that exists and carries no sentinel pair -> 3,
+#      never GREEN-over-zero-declared. B-empty: the sentinels present around an
+#      empty block, on a tree that has unattributed commits -> RED. An empty
+#      block IS a declaration -- it declares that nothing is exempt -- and on
+#      this tree that declaration is false. Arm A is the SAME empty block on a
+#      tree where it is true, read from the same file; the pair is what
+#      separates "declared empty" from "read nothing".
 #
 # The arms sign with an EPHEMERAL key this fixture generates in its own scratch
 # directory. Nothing is read from the operator's ~/.config and nothing is
@@ -223,17 +257,22 @@ def main():
         out("verdict: UNMEASURED-BASELINE")
         return 3
 
+    # `.git-blame-ignore-revs` form: one full sha per line, a '#' at the
+    # start of a line is a comment, and anything after the sha on the line is
+    # ignored. The declaration is the FIRST whitespace token of a surviving
+    # line; a commented line declares nothing at all.
     block = text.split(BEGIN, 1)[1].split(END, 1)[0]
     declared = []
     for ln in block.splitlines():
         t = ln.strip()
         if not t or t.startswith("#") or t.startswith("<!--") or t == "-->":
             continue
-        if not SHA_RE.match(t):
+        tok = t.split()[0]
+        if not SHA_RE.match(tok):
             out("baseline: malformed enumeration entry %r" % t)
             out("verdict: UNMEASURED-BASELINE")
             return 3
-        declared.append(t)
+        declared.append(tok)
     out("declared: %d" % len(declared))
 
     obs_set = set(observed)
@@ -346,6 +385,12 @@ arm() { # name want repo baseline
 want_line() { # needle description
   printf '%s\n' "$ARM_OUT" | grep -qF -- "$1" \
     || broken "$2 -- the arm exited as wanted but never printed \"$1\""
+}
+
+reject_line() { # needle description
+  if printf '%s\n' "$ARM_OUT" | grep -qF -- "$1"; then
+    broken "$2 -- the arm printed \"$1\""
+  fi
 }
 
 # ---- arm Z: the null cases ------------------------------------------------
@@ -470,9 +515,80 @@ baseline that is silently out of date is the state this line exists to name"
 want_line "covered-by-patchid: 3" "arm R did not resolve all three through \
 the patch-id"
 
+# ---- arm C: a comment is not a declaration, in both directions ------------
+# The body is built by hand rather than by the judge: three rows carrying a
+# short-sha and a date after the full sha, a '#' comment line above them and a
+# bare '#' between the groups, and the remaining rows bare. If the shape this
+# arm claims to test is not in the file, the arm proves nothing, so the shape
+# is asserted before it is measured.
+{ echo "# a group heading, which declares nothing"
+  head -3 "$WORK/real_unattributed.txt" | while read -r c_sha; do
+      printf '%s  %s %s\n' "$c_sha" \
+        "$(git -C "$ROOT" log -1 --format=%h "$c_sha")" \
+        "$(git -C "$ROOT" log -1 --format=%ad --date=short "$c_sha")"
+    done
+  echo "#"
+  echo "# and the rest, declared bare"
+  sed -n '4,$p' "$WORK/real_unattributed.txt"; } > "$WORK/commented.body"
+c_rows="$(grep -c '^[0-9a-f]\{40\}' "$WORK/commented.body")"
+c_hashlines="$(grep -c '^#' "$WORK/commented.body")"
+c_trailing="$(grep -c '^[0-9a-f]\{40\} .' "$WORK/commented.body")"
+if [ "$c_hashlines" -lt 2 ] || [ "$c_trailing" -lt 3 ]; then
+  broken "arm C-comment built a body with $c_hashlines comment lines and \
+$c_trailing rows carrying trailing text; it must carry both or it is measuring \
+a form it does not contain"
+fi
+[ "$c_rows" -eq "$s_declared" ] || broken "arm C-comment declared $c_rows of \
+the $s_declared observed commits; the body lost a row while being decorated"
+baseline_from "$WORK/commented.base" < "$WORK/commented.body"
+arm C-comment 0 "$ROOT" "$WORK/commented.base" \
+  || broken "a baseline in the .git-blame-ignore-revs form -- comment lines \
+between the shas, short-sha and date after them -- did not answer GREEN; the \
+enumeration this repository is about to write is not the one the judge reads"
+want_line "declared: $c_rows" "arm C-comment counted something other than the \
+$c_rows sha rows; a comment line was counted as a declaration"
+want_line "delta: 0" "arm C-comment answered GREEN on a non-zero delta"
+echo "arm C-comment: $c_rows sha rows, $c_hashlines comment lines, \
+$c_trailing rows with trailing text, declared=$c_rows delta=0"
+
+c_hidden="$(head -1 "$WORK/real_unattributed.txt")"
+sed '1s/^/# /' "$WORK/real_unattributed.txt" | baseline_from "$WORK/hidden.base"
+arm C-commented-out 1 "$ROOT" "$WORK/hidden.base" \
+  || broken "a true member of the observed set, commented out with '# ', did \
+not turn the gate RED; commenting a line would be a way to drop a commit from \
+the declaration without the record showing it"
+want_line "UNDECLARED $c_hidden" "arm C-commented-out went RED without naming \
+the commit whose declaration was commented out"
+want_line "declared: $((s_declared - 1))" "arm C-commented-out still counted \
+the commented line among the declarations"
+echo "arm C-commented-out: $c_hidden commented out, declared=$((s_declared - 1)) \
+of $s_declared observed, RED"
+
+# ---- arm B: the two degenerate baselines, which are not one --------------
+printf '# INTEGRITY\n\nA tracked declaration that carries no unattributed\nenumeration at all.\n' \
+  > "$WORK/nosection.md"
+arm B-nosection 3 "$ROOT" "$WORK/nosection.md" \
+  || broken "a baseline file that exists and carries no sentinel pair did not \
+answer UNMEASURED-BASELINE; a present file with no section would have been \
+read as an empty enumeration, which is the one thing it is not"
+want_line "no enumeration block" "arm B-nosection answered 3 without naming \
+the absent sentinels"
+reject_line "declared: 0" "arm B-nosection reached a declaration count over a \
+file that declares nothing; it must refuse before it counts"
+
+arm B-empty 1 "$ROOT" "$WORK/empty.base" \
+  || broken "an empty enumeration on a tree with $s_declared unattributed \
+commits did not answer RED; an empty block is a declaration that nothing is \
+exempt, and on this tree that declaration is false"
+want_line "declared: 0" "arm B-empty did not declare the empty set"
+want_line "delta: $s_declared" "arm B-empty went RED at a delta other than the \
+$s_declared commits it declared nothing about"
+echo "arm B-empty: the byte-identical empty declaration that answered GREEN \
+in arm A answers RED here; the tree under it changed and the file did not"
+
 echo "== verdict =="
 set +e
-python3 "$WORK/judge.py" --repo "$ROOT" --baseline "$ROOT/ATTRIBUTION.md"
+python3 "$WORK/judge.py" --repo "$ROOT" --baseline "$ROOT/INTEGRITY.md"
 p_rc=$?
 set -e
 case "$p_rc" in
