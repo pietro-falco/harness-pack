@@ -12,6 +12,14 @@
 # emitter -> verifier loop is under measurement here. One direction only:
 # which records in the corpus the verifier refuses.
 #
+# THE VERDICT STRING SAYS ONLY WHAT WAS MEASURED. It read "records this
+# repository emits" while the paragraph above it recorded that no tracked
+# emitter produces them -- the file contradicted itself on its own most
+# visible line, and the claim pinned the contradiction as an expected
+# substring. What the corpus leg actually resolves is the TRACKED record
+# set, so the line now reads "records tracked in this repository". The
+# measurement did not change; the sentence stopped overstating it.
+#
 # WHAT IS MEASURED, and by what. Three legs, each RESOLVED BY CONTENT and
 # never by the name of a file or of the directory holding it:
 #   verifier  the tracked .py whose module-level KEYSETS declares a closed
@@ -445,7 +453,7 @@ round-trip has one leg missing and the judge reported a measurement"
 echo "== verdict =="
 case "$p_rc" in
   0) echo "GREEN: the emitter's records pass the verifier that reads them"; ;;
-  1) echo "RED: the verifier refuses records this repository emits"; ;;
+  1) echo "RED: the verifier refuses records tracked in this repository"; ;;
   2) echo "UNMEASURED: the corpus did not resolve"; ;;
   3) echo "UNMEASURED: no emitter located"; ;;
   5) echo "UNMEASURED: no verifier located"; ;;

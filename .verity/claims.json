@@ -92,7 +92,7 @@
         "exitCode": 1,
         "stdout": {
           "kind": "substring",
-          "value": "RED: the verifier refuses records this repository emits"
+          "value": "RED: the verifier refuses records tracked in this repository"
         }
       },
       "timeoutMs": 120000
