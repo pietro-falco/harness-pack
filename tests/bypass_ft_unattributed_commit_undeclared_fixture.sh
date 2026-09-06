@@ -95,7 +95,7 @@
 #   4  FIXTURE BROKEN      a control arm did not answer what it must, or the
 #                          classification map did not cover an observed %G?
 #
-# TEN ARMS, each printed with its own exit:
+# ELEVEN ARMS, each printed with its own exit:
 #   P  positive control, on a CLONE of this repository: the measured set
 #      declared verbatim answers GREEN, and ONE further unsigned commit turns
 #      it RED. The clone carries no allowed_signers, so this arm is also where
@@ -115,6 +115,26 @@
 #      the exit is 0.
 #   Z  null cases: an absent baseline -> 3, and a repository with no commits
 #      -> 2.
+#   X  cherry-pick exemption, DECLARED FAILING AT THIS BASIS. The same scratch
+#      shape as R with one thing changed: the commit that replaces the declared
+#      one was never declared. A signed base, one unsigned commit D declared by
+#      sha, then D put out of HEAD's reach and its diff replayed as E -- a new
+#      unsigned commit with a different author, a different message and a
+#      different sha. Nothing declares E. The judge resolves the declared D by
+#      patch-id, and the commit that patch-id lands on is E, so E is exempt for
+#      belonging to a class -- "some declared commit has my diff" -- and the
+#      section the gate reads says the opposite in as many words: "Exemption is
+#      by enumeration only. No commit is exempt by author, by date, or by
+#      membership in any class." The arm WANTS RED. It is OBSERVED GREEN, and
+#      it is DECLARED GREEN here for that reason and no other: this basis
+#      installs the measurement, not the repair. An arm that started answering
+#      RED without this file changing would mean the declaration below had gone
+#      stale, so X answering 1 is FIXTURE BROKEN until the day the repair lands
+#      and this block is rewritten with it.
+#      R AND X ARE NOT THE SAME ARM. R replays a commit that IS declared and
+#      asks the exemption to survive; X replays a commit that is NOT and asks
+#      the exemption to stop. The judge cannot tell them apart, which is the
+#      whole of the finding.
 #   C  comment tolerance, in both directions. C-comment: a synthetic baseline
 #      carrying '# ' lines between the shas and free text after each sha ->
 #      GREEN, with `declared` equal to the number of sha rows and not to the
@@ -514,6 +534,69 @@ want_line "STALE-SHA" "arm R held the exemption without printing STALE-SHA; a \
 baseline that is silently out of date is the state this line exists to name"
 want_line "covered-by-patchid: 3" "arm R did not resolve all three through \
 the patch-id"
+
+# ---- arm X: the patch-id fallback exempts a commit nobody declared --------
+# DECLARED FAILING AT THIS BASIS -- see the ELEVEN ARMS block above. The arm is
+# built and run; its wanted exit is 1 and its observed exit is recorded, not
+# repaired. Every precondition is asserted before the judge is asked anything,
+# so a GREEN that came from a mis-built scratch repository cannot be read as the
+# finding this arm exists to record.
+mkrepo "$WORK/xcp"
+csigned "$WORK/xcp" base.txt "x signed base"
+cunsigned "$WORK/xcp" declared.txt "x the declared unattributed commit"
+xcp_d="$(git -C "$WORK/xcp" rev-parse HEAD)"
+git -C "$WORK/xcp" update-ref refs/backup/xcp-original "$xcp_d" \
+  || broken "could not park the declared commit on a ref outside HEAD's reach"
+git -C "$WORK/xcp" checkout -q --detach "$xcp_d^" \
+  || broken "could not detach onto the parent of the declared commit"
+# A cherry-pick that keeps the author, the message and the parent reproduces the
+# sha exactly, and there would be no second commit to find. Author and message
+# are changed so that E is a genuinely different commit carrying the same diff.
+XCP_ID="Somebody Else"
+XCP_MAIL="else@invalid"
+GIT_AUTHOR_NAME="$XCP_ID" GIT_AUTHOR_EMAIL="$XCP_MAIL" \
+GIT_COMMITTER_NAME="$XCP_ID" GIT_COMMITTER_EMAIL="$XCP_MAIL" \
+  git -C "$WORK/xcp" -c commit.gpgsign=false cherry-pick --no-commit "$xcp_d" \
+  >/dev/null 2>&1 || broken "could not replay the declared diff"
+GIT_AUTHOR_NAME="$XCP_ID" GIT_AUTHOR_EMAIL="$XCP_MAIL" \
+GIT_COMMITTER_NAME="$XCP_ID" GIT_COMMITTER_EMAIL="$XCP_MAIL" \
+  git -C "$WORK/xcp" -c commit.gpgsign=false commit -q \
+  -m "x a commit nobody declared" \
+  || broken "could not commit the undeclared replay"
+xcp_e="$(git -C "$WORK/xcp" rev-parse HEAD)"
+
+[ "$xcp_d" != "$xcp_e" ] || broken "arm X: the replay reproduced the declared \
+sha, so there is no undeclared commit to exempt and the arm measures nothing"
+git -C "$WORK/xcp" merge-base --is-ancestor "$xcp_d" HEAD 2>/dev/null \
+  && broken "arm X: the declared commit is still reachable from HEAD, so the \
+judge would cover it by sha and never reach the patch-id at all"
+git -C "$WORK/xcp" cat-file -e "$xcp_d^{commit}" 2>/dev/null \
+  || broken "arm X: the declared commit no longer resolves, so the judge would \
+answer BOGUS and the arm would go RED for a reason that is not the finding"
+[ "$(git -C "$WORK/xcp" log -1 --format='%G?' "$xcp_e")" = "N" ] \
+  || broken "arm X: the replayed commit is not unattributed, so it would never \
+enter the observed set"
+xcp_pd="$(git -C "$WORK/xcp" show "$xcp_d" | git patch-id --stable | cut -d' ' -f1)"
+xcp_pe="$(git -C "$WORK/xcp" show "$xcp_e" | git patch-id --stable | cut -d' ' -f1)"
+if [ -z "$xcp_pd" ] || [ "$xcp_pd" != "$xcp_pe" ]; then
+  broken "arm X: the two commits do not share a patch-id, so the fallback \
+this arm is about is not the thing being exercised"
+fi
+printf '%s\n' "$xcp_d" | baseline_from "$WORK/xcp.base"
+
+echo "arm X-cherrypick: declared $xcp_d (unreachable from HEAD, still an object)"
+echo "arm X-cherrypick: undeclared $xcp_e ($XCP_ID, unsigned) shares patch-id $xcp_pd"
+if arm X-cherrypick 1 "$WORK/xcp" "$WORK/xcp.base"; then
+  broken "arm X-cherrypick answered RED. The patch-id fallback no longer \
+exempts a commit that nothing declares, which is the repair this basis does \
+NOT contain -- so the DECLARED FAILING block at the top of this file is stale \
+and must be rewritten with the repair that made it true"
+fi
+echo "arm X-cherrypick: DECLARED FAILING -- wanted RED, observed GREEN. An \
+unsigned commit by $XCP_ID that no line of the baseline names is exempt \
+because its patch-id matches one that does. That is an exemption by \
+membership in a class, and the section this gate reads forbids exactly that. \
+Recorded, not repaired."
 
 # ---- arm C: a comment is not a declaration, in both directions ------------
 # The body is built by hand rather than by the judge: three rows carrying a
