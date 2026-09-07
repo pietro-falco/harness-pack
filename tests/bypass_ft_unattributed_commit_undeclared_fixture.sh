@@ -108,7 +108,7 @@
 # and the one the defect violated -- the old judge let a patch-id coincidence
 # carry an undeclared commit all the way to 0.
 #
-# EXIT CONTRACT. Six codes, all distinct, and GREEN shares none of them with a
+# EXIT CONTRACT. Seven codes, all distinct, and GREEN shares none of them with a
 # non-measurement. An exit that cannot separate "the sets are equal" from "no
 # set was read" reports a vacuum as a pass.
 #   0  GREEN               observed set == declared set, by sha
@@ -117,6 +117,11 @@
 #   3  UNMEASURED-BASELINE the baseline file is absent, unreadable, carries no
 #                          enumeration block, or carries a row that is not a
 #                          sha and a patch-id
+#   5  UNMEASURED-SHALLOW  the history is truncated. The observed set is
+#                          then the checkout's depth window and not this
+#                          history, so the judge declares that it cannot
+#                          measure instead of reporting a --depth setting
+#                          as a property of this repository
 #   6  UNMEASURED-STALE    every difference is accounted for by a declared
 #                          patch-id: the rows name shas this history no longer
 #                          has, and re-declaring them is the operator's act
@@ -211,19 +216,17 @@
 #                        they are not the same one. It must therefore answer
 #                        exactly as a full clone does, and never as a shallow
 #                        one.
-#      H-shallow WANTS a verdict of its own -- a refusal to measure, distinct
-#      from RED and from GREEN alike. It is OBSERVED RED, and it is DECLARED
-#      RED here for that reason and no other: this basis installs the
-#      measurement, not the repair. If it answers anything else without this
-#      file changing, the arm fails and the fixture halts as FIXTURE BROKEN, so
-#      the repair cannot land silently and cannot be forgotten.
-#      RED IS NOT THE ONLY WRONG ANSWER, AND IT IS NOT THE WORST ONE. Measured
-#      on this same source at a depth whose window happens to contain every
-#      declared row, the judge answers 0 GREEN -- it certifies a corpus that is
-#      a function of the checkout. The arm below takes the RED case because
-#      that is the one a reader meets on a `--depth 1` checkout of this
-#      repository; the GREEN case is why the repair has to be a distinct exit
-#      and not a louder RED.
+#      H-shallow answers 5 UNMEASURED-SHALLOW: a verdict of its own, distinct
+#      from RED and from GREEN alike, and the whole of the repair. The OLD
+#      judge answered 1 RED -- observed, at the basis that armed this block --
+#      accusing the repository of a discrepancy that belongs to `--depth 2`.
+#      RED WAS NOT THE ONLY WRONG ANSWER AND NOT THE WORST ONE, which is why
+#      the repair is a distinct exit and not a louder RED. Measured on this
+#      same source at a depth whose window happens to contain every declared
+#      row, the old judge answered 0 GREEN: it certified a corpus the checkout
+#      chose. A guard that only stopped the RED would have left that GREEN
+#      standing, and a gate that can be made to pass by cloning shallower is
+#      worse than one that can be made to fail that way.
 #
 # The arms sign with an EPHEMERAL key this fixture generates in its own scratch
 # directory. Nothing is read from the operator's ~/.config and nothing is
@@ -246,7 +249,7 @@ declared enumeration of sha AND patch-id.
   judge.py --repo REPO --baseline FILE
 
 Exits 0 GREEN, 1 RED, 2 UNMEASURED-SCOPE, 3 UNMEASURED-BASELINE,
-6 UNMEASURED-STALE, 4 FIXTURE-BROKEN.
+5 UNMEASURED-SHALLOW, 6 UNMEASURED-STALE, 4 FIXTURE-BROKEN.
 
 A PATCH-ID MATCH NEVER PRODUCES GREEN. A patch-id identifies a diff; a commit
 is a diff plus its parent, author, committer, message and dates, and patch-id
@@ -311,6 +314,56 @@ def main():
         out("scanned: 0")
         out("verdict: UNMEASURED-SCOPE")
         return 2
+
+    # A TRUNCATED HISTORY IS NOT A SMALLER HISTORY. `git log HEAD` on a shallow
+    # clone returns the commits inside the checkout's depth window and stops --
+    # no error, no marker on the rows, nothing in the output that distinguishes
+    # "this history has six commits" from "this checkout was given two of them".
+    # Every verdict below reads off that set, so on a shallow clone every
+    # verdict is a function of --depth: a window that misses a declared row
+    # accuses the repository of a discrepancy the history does not have, and a
+    # window that happens to contain every declared row CERTIFIES -- measured,
+    # exit 0 -- a corpus nobody chose. The second is the worse of the two and
+    # it is why this is a distinct exit rather than a louder RED.
+    #
+    # SO THE JUDGE DOES NOT ANSWER. It declares that it cannot measure. 5 is
+    # spent on that and shares its code with nothing: an exit that could not
+    # separate "the sets are equal" from "the corpus was truncated" would
+    # report a depth setting as a property of this repository.
+    #
+    # AND IT ASKS THE REPOSITORY, NEVER AN OBJECT.
+    # `git rev-parse --is-shallow-repository` reads a property of the clone; no
+    # sha is resolved here and none is looked up. That is the constraint the
+    # patch-id repair was paid for -- a rule keyed on whether an object
+    # resolves reads one way on the machine that still holds refs/backup/* and
+    # another on a clone -- and it holds for this guard too.
+    #
+    # A GIT THAT CANNOT ANSWER IS NOT A FULL HISTORY. `--is-shallow-repository`
+    # arrived in git 2.15; where it does not answer, this judge cannot tell a
+    # truncated corpus from a whole one, and it says FIXTURE-BROKEN rather than
+    # assuming the answer it would prefer.
+    #
+    # BEFORE THE BASELINE IS READ, and deliberately. On a shallow clone the
+    # corpus is unmeasurable whatever the baseline says, and a 3 here would
+    # send the operator to look at a file that is not the problem.
+    rc_sh, so_sh, err_sh = git(a.repo, "rev-parse", "--is-shallow-repository")
+    shallow = so_sh.strip()
+    if rc_sh != 0 or shallow not in ("true", "false"):
+        out("verdict: FIXTURE-BROKEN")
+        sys.stderr.write("git rev-parse --is-shallow-repository answered %r "
+                         "(rc %d, stderr %r) -- this judge will not assume a "
+                         "complete history it could not confirm\n"
+                         % (shallow, rc_sh, err_sh.strip()))
+        return 4
+    out("shallow: %s" % shallow)
+    if shallow == "true":
+        out("scanned: %d" % len(rows))
+        out("depth-bounded: the observed set is this checkout's depth window, "
+            "not this history -- the declaration is not what is being "
+            "measured, and unshallowing the clone is what makes the "
+            "measurement possible")
+        out("verdict: UNMEASURED-SHALLOW")
+        return 5
 
     codes, subjects, dist, signers = {}, {}, {}, {}
     for ln in rows:
@@ -932,18 +985,24 @@ git -C "$WORK/hshallow" log HEAD --format='%H' | grep -qx "$h_unsigned" \
 commit, so the arm would not exercise a window that misses a declared row"
 echo "arm H-shallow: $h_seen of $h_full commits inside the window, the \
 declared $h_unsigned outside it"
-arm H-shallow 1 "$WORK/hshallow" "$WORK/h.base" \
-  || broken "arm H-shallow answered something other than RED. If it answered \
-the refusal this arm wants, the repair has landed and this block is the stale \
-half: rewrite the declaration with it. This basis installs the measurement, \
-not the repair, and the literal above is what keeps the two from being \
-confused"
-want_line "verdict: RED" "arm H-shallow reached exit 1 without the RED \
-verdict; the arm is declared against the verdict, not against the number"
-want_line "DECLARED-NOT-OBSERVED $h_unsigned" "arm H-shallow went RED without \
-naming the declared commit its window never reached"
-echo "arm H-shallow: RED over a corpus the checkout chose -- the accusation is \
-about --depth 2 and not about this history"
+arm H-shallow 5 "$WORK/hshallow" "$WORK/h.base" \
+  || broken "a shallow clone did not answer UNMEASURED-SHALLOW. Exit 1 is the \
+defect this arm was armed against -- the judge accusing the repository of a \
+discrepancy that belongs to --depth 2 -- and exit 0 is the same defect at a \
+depth whose window happens to hold every declared row"
+want_line "shallow: true" "arm H-shallow reached exit 5 without the judge \
+saying what it read; the reader is owed the property the refusal turns on"
+want_line "verdict: UNMEASURED-SHALLOW" "arm H-shallow reached exit 5 without \
+the verdict; the arm is declared against the verdict, not against the number"
+reject_line "verdict: RED" "arm H-shallow accused the repository of a \
+discrepancy that is a property of the checkout"
+reject_line "verdict: GREEN" "arm H-shallow certified a corpus the checkout \
+chose"
+reject_line "DECLARED-NOT-OBSERVED" "arm H-shallow named a declared row as \
+missing from a set it had already refused to measure; the rows are not the \
+finding here and printing them would send the operator to edit the baseline"
+echo "arm H-shallow: UNMEASURED-SHALLOW, and no row named -- the declaration \
+is not what is being measured at --depth 2"
 
 # ---- arm H-full-control: the same clone, at full depth --------------------
 git -C "$WORK/hshallow" fetch -q --unshallow \
@@ -1007,6 +1066,7 @@ case "$p_rc" in
   1) echo "RED: the unattributed set reachable from HEAD is not the declared set" ;;
   2) echo "UNMEASURED: no commit was read" ;;
   3) echo "UNMEASURED-BASELINE: no baseline declares an unattributed set" ;;
+  5) echo "UNMEASURED-SHALLOW: the history is truncated, so the set read is this checkout's depth window and not this history -- unshallow the clone and ask again" ;;
   6) echo "UNMEASURED-STALE: every difference is accounted for by a declared patch-id, and a patch-id never certifies -- re-declare the rows named above" ;;
   *) broken "the judge answered an exit outside its contract: $p_rc" ;;
 esac
