@@ -83,3 +83,223 @@ blob, which is the blob committed at this merge.
 | 38 | `runs/THR-SUBAGENT/20260813T194853Z/arms/C2neg/stream.jsonl` | `f9a5cb793d4b955f33dbb1ec0824f6b4bd9ce54fd8e4934ada7c9cc7e84074d4` |
 | 39 | `runs/THR-SUBAGENT/20260813T194853Z/arms/C2pos/invocation.txt` | `d756f0b82df68c31c3510b51829867911821d0fbd24dc2054c9fd97b9db6e6e9` |
 | 40 | `runs/THR-SUBAGENT/20260813T194853Z/arms/C2pos/stream.jsonl` | `cdd2f7f912842be3b8886bf57a00a718114739742ccd6e4cbf13d67a152fe64f` |
+
+## Commit attribution
+
+### What counts as a verifiable signature here
+
+Signatures in this repository are SSH signatures: `gpg.format` is `ssh`, and
+`git log --format=%G?` is the whole of the reading. Two keys sign here, the
+operator's and an agent key, and both are listed in an `allowed_signers` file
+that lives OUTSIDE the repository. A clone that has no such file reads `U`
+where this host reads `G`.
+
+`G` and `U` are the SAME class, and this document calls that class ATTRIBUTED.
+The difference between them measures the reader's key list, not the history:
+a gate that demanded `G` would go red on every clone that lacks the file and
+would be reporting on one laptop's `~/.config`. `N` -- no signature at all --
+is the UNATTRIBUTED class, and it is the class the rows below enumerate. No
+other `%G?` code is bucketed: one appearing would halt the gate rather than be
+folded silently into either side.
+
+One of the two keys shows a grey "Unverified" badge on GitHub, because that
+host does not know it. That is GitHub's key registry speaking, not `%G?`. Both
+keys answer `G` here, `U` on a clone without the signers file, and both are
+attributed.
+
+### What the gate does, and what it does not do
+
+The rows at the end of this section enumerate every UNATTRIBUTED commit
+reachable from HEAD. Each row carries two tokens: the commit's full sha, and
+that commit's stable `git patch-id`. Anything after the second token is free
+text; a `#` at the start of a line is a comment and declares nothing.
+
+`tests/bypass_ft_unattributed_commit_undeclared_fixture.sh` reads this section,
+walks every commit reachable from HEAD, and requires the observed set and the
+declared set to be EQUAL -- member for member, in both directions. A declared
+sha the observed set does not contain fails it just as a commit the rows do not
+name does.
+
+THIS GATE COMPELS THE DECLARATION, NOT THE ABSENCE. Another unsigned commit
+does not turn the suite red by existing; it turns it red by going undeclared.
+Write its row and the suite is green again. What this section buys is that the
+set cannot grow in silence -- not that it cannot grow.
+
+A PATCH-ID MATCH NEVER PRODUCES GREEN. A patch-id identifies a diff, and a
+commit is a diff plus its parent, author, committer, message and dates. If a
+rewrite moves a declared sha, the written patch-id says which new commit
+answers to which stale row, and the gate answers 6 UNMEASURED-STALE: neither a
+pass nor an accusation, but an instruction to re-declare the row.
+
+Run it:
+
+```
+bash tests/bypass_ft_unattributed_commit_undeclared_fixture.sh
+```
+
+IT NEEDS THE COMPLETE HISTORY, AND IT REFUSES TO ANSWER WITHOUT ONE. On a
+shallow clone the set of commits reachable from HEAD is the checkout's depth
+window and not this history, so the gate declares `UNMEASURED-SHALLOW` and
+takes no verdict at all -- neither the accusation nor the pass would be about
+this repository. Unshallow the clone and ask again:
+
+```
+git fetch --unshallow
+```
+
+A `--filter=blob:none` clone is a different reduction and is not affected: it
+omits blobs and keeps every commit, so it measures exactly as a full clone
+does.
+
+### The check a reader can run without trusting this file
+
+```
+git log --format='%h %G? %ad %cd' --date=iso-strict
+```
+
+The second column is the signature reading. The third and fourth are the author
+date and the committer date, and the gap between them is the subject of the
+next paragraph.
+
+### On when the signatures were made
+
+AN SSH SIGNATURE CARRIES NO TIMESTAMP OF ITS OWN. There is no field to read
+that says when a signature was made, so "these were not signed after the fact"
+is not directly checkable in this repository, and this file will not assert it
+as though it were.
+
+The only check available is the gap between a commit's author date and its
+committer date: a history rewritten to add signatures rewrites the commits, and
+that moves the committer date while leaving the author date alone. THAT GAP IS
+NOT A PROOF. It is an indirect reading of a rewrite, not of a signature, and a
+rewrite that also set `GIT_COMMITTER_DATE` would leave nothing to see at all.
+
+No figure is quoted here. A figure would be a measurement no gate takes, in a
+published document, moving under every commit -- which is the class of claim
+this section exists to stop making. Take the reading yourself, on the history in
+front of you, with the same `git log --format='%h %G? %ad %cd'` the section
+above prints: what the gap can show is a commit whose two dates are far apart,
+and what it cannot show is when any signature was made.
+
+What this repository does assert is the forward-looking half, which needs no
+measurement: the rows below are not going to be closed by signing old commits
+now. A signature applied today to a commit authored in July would assert an
+attestation that never took place. The gap is declared instead of closed.
+
+### The groups
+
+**Founding history.** These commits precede the first attributed commit in this
+repository, `a8c31a6`, authored 2026-07-13. Before it there was no signing
+arrangement here to use. They are published on `origin/main`.
+
+**Automated dependency updates.** Authored by `dependabot[bot]` through GitHub.
+The operator did not author these bytes and cannot attest to them after the
+fact. THE BYTES ARE HELD LOCALLY -- they are in this clone and in every other
+one; what is absent is the authorship, not the possession. Published on
+`origin/main`.
+
+**Operator commits.** Authored after `a8c31a6` and with attributed commits
+standing on both sides of them in time: signing was available and was not used.
+These are the only rows below that `origin/main` does not carry.
+
+### Three rows stand in a relation to the in-toto statements, and it is three different relations
+
+Three tracked statements live under
+`runs/THR-CONFORMANCE/20260814T002404Z/records/`. THOSE STATEMENTS PIN BLOBS BY
+SHA256. Nothing in them names a commit at all. The fact this section records is
+therefore not that records are anchored to unattributable commits -- it is that
+BLOBS THOSE RECORDS PIN WERE INTRODUCED BY COMMITS THIS REPOSITORY CANNOT
+ATTRIBUTE. The pins themselves are unaffected: a blob's digest does not depend
+on who committed it.
+
+Three rows below touch that material, by three different mechanisms:
+
+- `4a6a611` introduced NO attested bytes. It wrote the CONTENT OF THE
+  ATTESTATION: it added the `anchor` and `transformation` predicate objects to
+  all three statements and re-pinned their subject and evidence digests. An
+  unattributed commit authored what those records assert. Of the three this is
+  the heaviest, and it is named first for that reason.
+- `b0ce2f9` introduced the blobs the statements pin -- six of the files it
+  added are named in them by sha256, in an `evidence` or `subject` role. The
+  same commit also rewrote a pin inside all three statements, moving one
+  evidence digest.
+- `90e27ce` introduced one file that the Path transformation table above pins
+  by path and digest. No statement names it.
+
+A previous version of this section called two of these "commits that carry
+bytes in-toto statements pin", which was one mechanism where there are three,
+and it filed `4a6a611` under the lightest of them.
+
+<pre>
+<!-- ACCEPTED-UNATTRIBUTED-BEGIN -->
+# founding history
+71fce181977be83d44d24885ac2538bace4c2035  e8e7c994fad786d720e354f84e278df282be2a10  # 71fce18 2026-07-12 feat: harness-pack v0 (constitution v2.1, tier manifest, has
+8dd899aec4e2c020860194b792743025af90e5ad  1b3b65ae33426724e80afef35cddd30b09538f6a  # 8dd899a 2026-07-12 docs(readme): plain-language rewrite with diagrams
+386f4519961e5c91759b2e753017948fee5e4a33  ad74183ae73d3b540df01f7b59a2ebb0bcf65881  # 386f451 2026-07-12 fix(launcher): pipe spec via stdin — leading YAML fence was
+b257ca0e33dfbb180765b932d3236255bb335914  6fc07e55c430c240f1efcdebab89337cc6d13c0f  # b257ca0 2026-07-12 fix(ci): shellcheck SC2002 + single-hop tier enforcement + f
+a1405db8ad3d67bf4539085ee3786df1e79807ee  f4df46e3af9a71f443ae3cf589fa88ddc862f174  # a1405db 2026-07-12 chore(repo): gitignore .DS_Store, SHA-pin actions, dependabo
+3466e1c83a39c0367dabf7b5d92330e3f6b3efd1  a2dd2cd42e484c28cee477cf05b8c78b1958eda5  # 3466e1c 2026-07-12 docs(constitution): v2.2 — injection wording, G4 cites L-021
+b12aff39fea633e691d801488e080b4b47de3c05  d1fc60545cfaa72331619488aceb805ba24294bb  # b12aff3 2026-07-12 feat(launcher): pin constitution hash via constitution_hash_
+c3a64febdcd465817bbc8e422d490915edabf684  4c23fc32f91843211476df6869b20825b1396fc2  # c3a64fe 2026-07-12 fix(specs): RS-001 trigger self-contained via rollup_due.sh
+6d451a330b7caef2884343069116d457f3dd3c35  55b29ba5fd68618ace3833168a980be32146b702  # 6d451a3 2026-07-12 fix(launcher): pin HALT kill-switch to HARNESS_HOME, stable
+835503f220e0e16d1e8bdc2f62459635b907a340  702bdb11f09ccc9fedb5ce4b839d10ee3716f348  # 835503f 2026-07-13 docs(examples): add verified receipt-chain sample
+73f2a7356f9ec6dc5dc5642f142b6c1c037a3727  ecff4ded443b09108918a981314bf0d68c3bf2bd  # 73f2a73 2026-07-13 feat(halt): hot kill-switch — guard blocks all tools, walk-u
+# automated dependency updates
+ddf0a26d4a5a0bf7ec8ff0d0834328223c434b07  91f7bf7fea08797b7440a77213407ba2bf0595f5  # ddf0a26 2026-08-09 chore(deps): bump actions/setup-python from 5.6.0 to 7.0.0 (
+393ab001ebf95d4200913544b1fe277c927cc97c  ad657d7de1f87c1bffd815ee445376bbe1b13453  # 393ab00 2026-08-09 chore(deps): bump actions/checkout from 4.3.1 to 7.0.1 (#3)
+# operator commits
+b0ce2f9e56ec8fb2d7d39dbb100144b23c31e84e  93e2e8e5d8be63c67d9e7b68bb9c7a33dc5db541  # b0ce2f9 2026-08-14 test(subagent): eight-arm evidence, path-transformed — the b
+90e27cef83ee42bea98ab7dc0c83fc3b2a8aef70  6b64940ff734776909ddce165d38a4c478284bf2  # 90e27ce 2026-08-14 test(register): THR-SUBAGENT RESULT.json, path-transformed
+4b6c98fd557777f08aa3262321dd09b90ffc4d66  5c48dd2f6b0fa028e2a40f57b5693dd734d99fa4  # 4b6c98f 2026-08-19 fix(fixture): FT-12 locates the deployed gate instead of nam
+640511b17a7fed78f635c7c494c41986f4826c8f  51987097ba494504770a6ad602249710831ca8b5  # 640511b 2026-08-19 test(privacy): FT-28 detects the flattened home-path spellin
+4a6a611abb2aebcb7a5e160fb565ae1b7d4b2f93  08a8b5bcdd58aee25c25773e6de7fe3c69c107a5  # 4a6a611 2026-08-19 privacy(tree): remove the flattened home-path spelling from
+<!-- ACCEPTED-UNATTRIBUTED-END -->
+</pre>
+
+Matching is by sha, and the patch-id beside each sha is what identifies the
+commit a row names if a rewrite moves it. Exemption is by enumeration only. No
+commit is exempt by author, by date, or by membership in any class -- and that
+includes the class "has the same diff as a commit that is declared", which is
+what a patch-id match names and why a patch-id match cannot produce GREEN.
+
+## Local-only refs
+
+This clone carries refs that `git push origin main` does not send: three under
+`refs/backup/` and ten branches besides `main`. A reader can list them in their
+own copy:
+
+```
+git for-each-ref --format='%(refname)' refs/backup refs/heads
+```
+
+An earlier version of this section named one backup ref and said it must never
+be published because the commits it reaches carry the operator's home path in
+their trees. The trees do carry it. What was said to follow does not. Measured:
+
+- the blobs carrying that path, in either of the two spellings the Path
+  transformation section above describes, are reachable from HEAD and from
+  `origin/main` alike. They are already published, in the history behind the
+  commit that removed the spelling from the tracked surface;
+- no local ref reaches such a blob that `origin/main` does not already have.
+  Across every local ref, the objects reachable from it and from neither HEAD
+  nor `origin/main` include no carrier at all;
+- `git push origin main` from this clone sends no carrier.
+
+So the reason to keep these refs unpublished is not that they hold something
+`origin` lacks. It is that they are working state -- pre-rewrite history and
+abandoned branches -- and publishing them would put working state into the
+record as though it were the record.
+
+The check, and what a non-empty answer means:
+
+```
+git ls-remote origin 'refs/backup/*'
+```
+
+Empty is the expected result and the one measured here. A NON-EMPTY RESULT IS
+AN INCIDENT, not a state to reconcile: it means a `--mirror` push or an
+explicit refspec published working state, and the refs are to be deleted on the
+remote. `git push --mirror` and an explicit `refs/backup/*:refs/backup/*`
+refspec both send them; a client-side `pre-push` hook sees the resolved ref
+list in both cases -- measured -- so this is gateable, and it is not gated
+today.
