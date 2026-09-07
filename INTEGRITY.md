@@ -337,3 +337,65 @@ The trailer was not removed. Removing it would make the record less true: those
 sessions happened, they produced those commits, and a message stripped of the
 line would say less about how the commit came to exist than the message that
 carries it. The class is declared here rather than deleted there.
+
+## A truncated checkout makes the claim verifier report a false red
+
+The gate this repository documents is `bash tests/run_tests.sh`, and it is the
+first step of the Quickstart in the README. Everything below is about what that
+gate says on a checkout whose history has been cut, and about a second reader
+that mistakes the answer.
+
+ON A TRUNCATED HISTORY THE SUITE REFUSES TO JUDGE, AND SAYS SO. It exits 2 and
+prints
+
+```
+TESTS INCONCLUSIVE [truncated history]
+```
+
+pointing at the sites and rows that declined -- the ones whose corpus is this
+repository's own commit history -- and naming the command that repairs the
+condition rather than an edit to make:
+
+```
+git fetch --unshallow
+```
+
+That is the refusal working. The suite takes no verdict because at that depth
+neither the accusation nor the pass would be about this repository.
+
+### What the claim verifier reports instead
+
+`verity verify .verity/claims.json`, run against that same truncated history,
+reports `OVERALL: FAIL`.
+
+THAT VERDICT IS NOT A DEFECT OF THIS TREE. It is that the claims manifest has no
+vocabulary for a non-verdict. A claim declares an expected exit code and nothing
+else, so a row that measured nothing and a row that measured and failed arrive at
+the verifier in the same shape, and the verifier has only PASS and FAIL to answer
+with. The refusal is read as the accusation.
+
+The rows that answer this way are the two whose corpus is the commit history:
+`surface-separation-internal-vs-public`, which resolves a declared baseline
+commit, and `attribution-unattributed-commit-set`, which walks the commits
+reachable from HEAD. On a complete checkout both are green. The depth of the
+clone is the whole of the difference, and no byte of this tree is in question.
+
+### Why it is declared and not repaired
+
+THE REPAIR IS THE VERIFIER'S, NOT THIS TREE'S. What is missing is a third
+outcome: a claim able to say it did not measure, and a report able to carry that
+as neither pass nor fail. Nothing in this repository can supply it.
+
+What this repository could do instead is widen a claim's expectation until an
+unmeasured run exits 0. That would be a row certifying a run that judged
+nothing -- the defect the conformance judge in this same manifest refuses to
+reproduce, where "an exit shared between green and unmeasured reports a vacuum as
+a pass", and the vacuous green ADR-018 D3 weighs by name.
+
+So the choice is between two wrong answers, and they are not symmetric. A FALSE
+RED ACCUSES; A FALSE GREEN CERTIFIES. An accusation survives being checked -- a
+reader who reaches this section learns what the red is and how to dissolve it,
+and the record loses nothing. A certification nobody measured cannot be checked
+at all: it says the question was asked and answered when it was neither, and
+every later reading inherits that. Between the two this repository keeps the
+first, declared here.
