@@ -877,7 +877,10 @@ echo "== bypass falsifier register: every tracked falsifier, in its declared sta
 # state it declares.
 #
 # THE REGISTER IS DATA -- one literal line per falsifier, carrying its path, its
-# declared state and its exit-2 policy, driven by the loop below (D2).
+# declared state, its exit-2 policy and, where it has one, a CONDITIONAL EXIT;
+# driven by the loop below (D2). The fourth column is optional and its absence
+# is not a door: a row that omits it reaches exactly the comparison it always
+# reached.
 # Deliberately not a compacted array: a
 # reader counting rows and a `grep -c 'tests/bypass_'` must reach the same
 # number, and the tracker's WIR-5 counts the second.
@@ -911,7 +914,11 @@ echo "== bypass falsifier register: every tracked falsifier, in its declared sta
 # `unmeasured` exits 2 with TESTS INCONCLUSIVE. The column decides what this
 # suite ACCUSES, never whether it certifies.
 BYPASS_REGISTER=""
-bypass_row() { BYPASS_REGISTER="${BYPASS_REGISTER}${1} ${2} ${3}"$'\n'; }
+# THE FOURTH COLUMN IS OPTIONAL AND ITS ABSENCE IS NOT A DOOR. A row that omits
+# it carries an empty field and reaches exactly the comparison it reached
+# before: seventy-three of the seventy-four rows below are unchanged, byte for
+# byte, by the clause this column adds.
+bypass_row() { BYPASS_REGISTER="${BYPASS_REGISTER}${1} ${2} ${3} ${4:-}"$'\n'; }
 
 #          path                                               declared  exit-2 policy
 bypass_row tests/bypass_f1_lease_worktree_fixture.sh          RED       BROKEN
@@ -1384,21 +1391,45 @@ bypass_row tests/bypass_ft_conformance_corpus_refused_by_verifier_fixture.sh RED
 # Neither is a pass, and neither can be mistaken for one, because GREEN shares
 # a code with nothing.
 #
-# NOT ENVIRONMENT-CONDITIONAL, which is why it is here and not in
-# UNMEASURED_REGISTER. %G? is host-dependent -- gpg.ssh.allowedSignersFile
-# lives outside the repository, and without it every signed commit reads U
-# instead of G -- so the judge classifies G and U into the same ATTRIBUTED
-# class. Measured on the tree at this basis: 173 G + 18 N with the operator's
-# allowed_signers, 173 U + 18 N with that setting pointed at a path that does
-# not exist, and the set of N commits identical across the two. The arms sign
-# with a key the fixture generates in its own scratch directory, so nothing in
-# this row reads the operator's ~/.config.
+# NOT ENVIRONMENT-CONDITIONAL IN ITS KEY LIST. %G? is host-dependent --
+# gpg.ssh.allowedSignersFile lives outside the repository, and without it every
+# signed commit reads U instead of G -- so the judge classifies G and U into the
+# same ATTRIBUTED class. Measured on the tree at this basis: 173 G + 18 N with
+# the operator's allowed_signers, 173 U + 18 N with that setting pointed at a
+# path that does not exist, and the set of N commits identical across the two.
+# The arms sign with a key the fixture generates in its own scratch directory,
+# so nothing in this row reads the operator's ~/.config.
+#
+# IT IS ENVIRONMENT-CONDITIONAL IN ITS DEPTH, AND THE FOURTH COLUMN IS WHERE
+# THAT IS DECLARED. `git log HEAD` on a shallow checkout returns the commits
+# inside the depth window and stops -- no error, no marker on the rows -- so
+# the observed set becomes a function of --depth. The fixture answers 5
+# UNMEASURED-SHALLOW there rather than accusing this repository of a
+# discrepancy that belongs to the clone, and `SHALLOW:5` is this row saying so
+# in advance.
+#
+# THE REGISTER MEASURES THE CONDITION, THE ROW DOES NOT. A 5 is excused only
+# when this file's own `git rev-parse --is-shallow-repository` answers true. A
+# 5 on a full tree falls through to the ordinary comparison and is accused as
+# EXIT5 against GREEN, which is the correct reading: on a tree that is not
+# truncated, UNMEASURED-SHALLOW is the judge broken. That is the difference
+# between a conditional exit and a licence, and it is why the clause lives in
+# the register rather than in the row.
+#
+# AND NOTHING IS ADDED TO UNMEASURED_REGISTER, deliberately. That register
+# compares in both directions, so this row has no honest entry there: listed,
+# it reads stale on every full checkout; unlisted, it reads undeclared on every
+# shallow one. The comment at UNMEASURED_REGISTER below already records that
+# fixed point for the rows that live with it. This column is the other answer
+# to the same question -- measure the condition instead of declaring the
+# exemption -- and it leaves the unmeasured set independent of the environment
+# rather than making it depend on one.
 #
 # THE ACCEPTANCE IS NOT HERE. This row records that the declared set and the
 # observed set agree; INTEGRITY.md's "Commit attribution" section records WHY
 # eighteen commits are exempt, and that argument is the operator's, in the file
 # the gate reads, not in this comment.
-bypass_row tests/bypass_ft_unattributed_commit_undeclared_fixture.sh GREEN BROKEN
+bypass_row tests/bypass_ft_unattributed_commit_undeclared_fixture.sh GREEN BROKEN SHALLOW:5
 
 # COMPLETENESS IS MEMBERSHIP, NOT CARDINALITY (D5), and it runs before the
 # fixtures because it is the cheap half. The set of registered paths must EQUAL
@@ -1439,11 +1470,41 @@ else
   fi
 fi
 
+# A CONDITIONAL EXIT IS DECLARED IN A FOURTH COLUMN, AND THE REGISTER MEASURES
+# ITS CONDITION -- never the row, and never the fixture.
+#
+# `SHALLOW:5` says: this fixture answers 5 UNMEASURED-SHALLOW when the checkout
+# under it is truncated, and that answer is admissible ONLY on a checkout that
+# is truncated. So the condition is measured HERE, once, by this file, on the
+# repository this suite is running against, and the row is believed only when
+# it holds. A 5 on a full tree is not an excused row: it is the judge broken,
+# and it reaches the ordinary comparison below and fails as EXIT5 against the
+# state its header declares. The row cannot vouch for its own exemption, which
+# is the whole difference between this column and a licence.
+#
+# NOTHING HERE SPENDS `unmeasured`, and no name is added to
+# UNMEASURED_REGISTER. That register compares in BOTH directions, so an
+# environment-conditional entry there has no honest form: listed, it reads
+# stale on every host where the row does measure; unlisted, it reads undeclared
+# on every host where it does not. The comment at UNMEASURED_REGISTER below
+# already states that fixed point for a dozen rows that live with it. This
+# column is the other answer to the same question -- the condition is measured
+# instead of declared -- and it keeps the unmeasured set independent of the
+# environment rather than making it depend on one.
+#
+# A CHECKOUT THAT WILL NOT SAY is not treated as full. `--is-shallow-repository`
+# answering neither true nor false leaves bp_root_shallow holding whatever it
+# said, which equals neither, so no conditional row is ever excused on it.
+set +e
+bp_root_shallow="$(git rev-parse --is-shallow-repository 2>/dev/null)"
+set -e
+bp_shallow_inconclusive=0
+
 # The fixtures are invoked with stdin closed: the loop reads the register off a
 # here-string, and a child that consumed stdin would eat the rows below it and
 # silently shorten the register. The here-string keeps the loop in this shell,
 # so `fail` set inside it is the same `fail` the tail reads.
-while read -r bp_path bp_declared bp_exit2; do
+while read -r bp_path bp_declared bp_exit2 bp_cond; do
   [ -n "$bp_path" ] || continue
   if [ ! -f "$bp_path" ]; then
     echo "FAIL [bypass $bp_path]: registered and not on disk"
@@ -1469,6 +1530,17 @@ while read -r bp_path bp_declared bp_exit2; do
       fail=1
       echo "FAIL [bypass $bp_path]: FIXTURE BROKEN (exit 2) -- the fixture's own control could not confirm what it is measuring. D4: with no UNMEASURED-2 on this row, exit 2 routes to fail. It is cleared by realigning the fixture by hand, not by re-running it"
     fi
+    printf '%s\n' "$bp_out" | sed 's/^/      | /'
+    continue
+  fi
+  # The conditional door, and it opens on the CONDITION and not on the row.
+  # Declared exit, observed exit and measured condition must all three hold;
+  # any one of them missing falls through to the comparison below, where a 5
+  # meets the state this row declares and is accused as EXIT5.
+  if [ "$bp_cond" = "SHALLOW:5" ] && [ "$bp_rc" -eq 5 ] \
+     && [ "$bp_root_shallow" = "true" ]; then
+    bp_shallow_inconclusive=1
+    echo "unmeasured [bypass $bp_path]: exit 5, this row declares SHALLOW:5, and this checkout answered 'true' to \`git rev-parse --is-shallow-repository\`. The fixture refused to judge a history it can only see part of. Not a pass and not a fail: the suite does not certify this run"
     printf '%s\n' "$bp_out" | sed 's/^/      | /'
     continue
   fi
@@ -1606,15 +1678,28 @@ unmeasured_names="$(printf '%s' "$unmeasured_observed" | awk 'NF {print $1}' | L
 unmeasured_undeclared="$(LC_ALL=C comm -13 <(printf '%s\n' "$unmeasured_declared") <(printf '%s\n' "$unmeasured_names"))"
 unmeasured_stale="$(LC_ALL=C comm -23 <(printf '%s\n' "$unmeasured_declared") <(printf '%s\n' "$unmeasured_names"))"
 
-# Three verdicts, because the suite has fixtures with three outcomes. A
-# violation outranks a disagreement about the unmeasured set. Exit 1 says
-# something was broken; exit 2 says the set of invariants nobody looked at is
-# not the set this tree declares; exit 0 says both are as declared -- and the
+# Four verdicts, because the suite has fixtures with four outcomes. A violation
+# outranks everything: exit 1 says something was broken. Exit 2 has two doors
+# and they are different sentences -- a truncated checkout, or a disagreement
+# about the unmeasured set. Exit 0 says all of it is as declared, and the
 # unattrib lines above still print, so exit 0 never means nothing went
 # unmeasured, only that nothing went unmeasured unexpectedly.
+#
+# THE TRUNCATED-HISTORY DOOR COMES FIRST AMONG THE TWO, and not because it is
+# worse. It is the one whose repair is a command rather than an edit. The other
+# exit-2 verdict sends the reader to amend a declaration by hand, and sending
+# anyone to edit a tracked register over a defect that is the depth of their
+# clone is the expensive mistake here. Unshallow first, then ask again; if the
+# set still disagrees, that verdict is waiting and unchanged.
 if [ "$fail" -ne 0 ]; then
   echo "TESTS FAILED"
   exit 1
+fi
+if [ "$bp_shallow_inconclusive" -ne 0 ]; then
+  echo "TESTS INCONCLUSIVE [truncated history]: this checkout is shallow, and a row that declares a conditional exit for exactly that refused to judge a history it can only see part of. Read its unmeasured line above for which"
+  echo "      Run \`git fetch --unshallow\` in this checkout and ask again. Nothing here is a finding about this repository: the rows that were not asked are the rows whose corpus is this repository's own history, and at this depth the set they would read is the window the checkout chose"
+  echo "      THE UNMEASURED-SET COMPARISON BELOW WAS NOT REACHED, and this line is not reporting it clean. Rows that read a history answer differently on a truncated checkout, so its two sets are downstream of the same depth and comparing them here would produce a second accusation about the clone. It runs on the unshallowed tree"
+  exit 2
 fi
 if [ -n "$unmeasured_undeclared" ] || [ -n "$unmeasured_stale" ]; then
   if [ -n "$unmeasured_undeclared" ]; then
