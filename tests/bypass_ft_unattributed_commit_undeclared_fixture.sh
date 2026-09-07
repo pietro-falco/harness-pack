@@ -123,7 +123,10 @@
 #   4  FIXTURE BROKEN      a control arm did not answer what it must, or the
 #                          classification map did not cover an observed %G?
 #
-# THIRTEEN ARMS, each printed with its own exit:
+# NINETEEN ARMS, each printed with its own exit. The literal here read
+# THIRTEEN against sixteen invocations before this basis; it is the
+# measured count now, and it is a count of INVOCATIONS, which is what a
+# reader can check against `grep -c '^arm ' "$0"`:
 #   P  positive control, on a CLONE of this repository: the measured set
 #      declared verbatim answers GREEN, and ONE further unsigned commit turns
 #      it RED. The clone carries no allowed_signers, so this arm is also where
@@ -180,6 +183,47 @@
 #      this tree that declaration is false. Arm A is the SAME empty block on a
 #      tree where it is true, read from the same file; the pair is what
 #      separates "declared empty" from "read nothing".
+#   H  TRUNCATED HISTORY, DECLARED FAILING AT THIS BASIS on H-shallow. The
+#      judge reads `git log HEAD` and never asks whether the history it walked
+#      is the whole one. On a shallow clone that set is the checkout's DEPTH
+#      WINDOW: the observed set becomes a function of --depth, and every
+#      verdict below is then a statement about how the reader cloned rather
+#      than about what this repository contains. It is the same class of defect
+#      the G/U collapse above closed -- a judge that demanded %G?=G measured
+#      the reader's key list. This one measures the reader's depth.
+#      Three arms, one source repository, ONE complete and correct baseline,
+#      and the key list pinned in every clone so DEPTH is the only variable:
+#        H-shallow       a depth-bounded clone whose window does not reach the
+#                        one declared commit. Asserted before the judge is
+#                        asked: the clone is shallow, it sees fewer commits
+#                        than the source has, and the declared sha is not among
+#                        the commits it reaches.
+#        H-full-control  THE SAME CLONE, `git fetch --unshallow`-ed in place ->
+#                        GREEN. Same directory, same objects source, same
+#                        baseline; only the depth moved. This is what proves
+#                        the guard is not a permanent exemption for anything
+#                        that once looked truncated, and that depth is the
+#                        grandeur.
+#        H-partial       `git clone --filter=blob:none`. MEASURED, not assumed:
+#                        such a clone answers `false` to
+#                        `--is-shallow-repository` and carries the COMPLETE
+#                        commit history -- the two properties get confused and
+#                        they are not the same one. It must therefore answer
+#                        exactly as a full clone does, and never as a shallow
+#                        one.
+#      H-shallow WANTS a verdict of its own -- a refusal to measure, distinct
+#      from RED and from GREEN alike. It is OBSERVED RED, and it is DECLARED
+#      RED here for that reason and no other: this basis installs the
+#      measurement, not the repair. If it answers anything else without this
+#      file changing, the arm fails and the fixture halts as FIXTURE BROKEN, so
+#      the repair cannot land silently and cannot be forgotten.
+#      RED IS NOT THE ONLY WRONG ANSWER, AND IT IS NOT THE WORST ONE. Measured
+#      on this same source at a depth whose window happens to contain every
+#      declared row, the judge answers 0 GREEN -- it certifies a corpus that is
+#      a function of the checkout. The arm below takes the RED case because
+#      that is the one a reader meets on a `--depth 1` checkout of this
+#      repository; the GREEN case is why the repair has to be a distinct exit
+#      and not a louder RED.
 #
 # The arms sign with an EPHEMERAL key this fixture generates in its own scratch
 # directory. Nothing is read from the operator's ~/.config and nothing is
@@ -829,6 +873,129 @@ want_line "every-undeclared-explained: no" "arm B-empty reached RED without \
 the empty declaration being what failed to account for them"
 echo "arm B-empty: the byte-identical empty declaration that answered GREEN \
 in arm A answers RED here; the tree under it changed and the file did not"
+
+# ---- arm H: a truncated history is not a smaller history ------------------
+# The source is built here rather than cloned from $ROOT: the arm needs a
+# baseline that is COMPLETE AND CORRECT for the repository under it, and a
+# clone of $ROOT would carry $ROOT's declaration, whose correctness is arm N's
+# subject and not this one's. Six commits, one of them unsigned, and the
+# declaration enumerates exactly that one.
+mkrepo "$WORK/hsrc"
+csigned "$WORK/hsrc" h1.txt "h one signed"
+csigned "$WORK/hsrc" h2.txt "h two signed"
+cunsigned "$WORK/hsrc" h3.txt "h three unsigned"
+csigned "$WORK/hsrc" h4.txt "h four signed"
+csigned "$WORK/hsrc" h5.txt "h five signed"
+csigned "$WORK/hsrc" h6.txt "h six signed"
+# Read by arm H-partial's clone and by nothing else. A `--filter` clone from a
+# source that does not advertise the capability is silently a full one, and the
+# arm asserts the filter landed before it claims to have measured a partial.
+git -C "$WORK/hsrc" config uploadpack.allowFilter true
+git -C "$WORK/hsrc" log HEAD --format='%H %G?' | awk '$2=="N"{print $1}' \
+  | pair_rows "$WORK/hsrc" > "$WORK/h.pairs"
+h_rows="$(grep -c '^[0-9a-f]\{40\} ' "$WORK/h.pairs" || true)"
+[ "$h_rows" -eq 1 ] || broken "arm H: the source repository holds $h_rows \
+unattributed commits where the arm builds exactly one; the baseline it is \
+about to write would not be the complete-and-correct declaration these arms \
+need, and every H verdict would be about the wrong thing"
+baseline_from "$WORK/h.base" < "$WORK/h.pairs"
+h_unsigned="$(cut -d' ' -f1 "$WORK/h.pairs")"
+h_full="$(git -C "$WORK/hsrc" rev-list --count HEAD)"
+
+# Every clone below gets the SAME key list. Without this the clones would read
+# U where the source reads G -- attributed either way, so the verdict would not
+# move, but the arms would be varying two things and claiming one. Depth is the
+# variable; the key list is held.
+hpin() { # <clone dir>
+  git -C "$1" config gpg.format ssh
+  git -C "$1" config gpg.ssh.allowedSignersFile "$WORK/allowed_signers"
+}
+
+# file:// and not a plain path: git IGNORES --depth on a local-path clone and
+# hands over the whole history, so a plain path would build a full clone this
+# arm would then describe as shallow.
+git clone -q --depth 2 "file://$WORK/hsrc" "$WORK/hshallow" \
+  || broken "arm H-shallow: the shallow clone could not be made"
+hpin "$WORK/hshallow"
+[ "$(git -C "$WORK/hshallow" rev-parse --is-shallow-repository)" = "true" ] \
+  || broken "arm H-shallow: the clone is not shallow, so the arm measures \
+nothing about depth"
+h_seen="$(git -C "$WORK/hshallow" rev-list --count HEAD)"
+[ "$h_seen" -lt "$h_full" ] || broken "arm H-shallow: the clone reaches \
+$h_seen of the source's $h_full commits, so the window truncates nothing"
+# The reachable set, never `cat-file -e`. Whether an object happens to sit in
+# the clone's pack is exactly the host-dependent question this judge refuses to
+# ask, and an arm that asked it would be measuring by a rule the judge is
+# forbidden to use.
+git -C "$WORK/hshallow" log HEAD --format='%H' | grep -qx "$h_unsigned" \
+  && broken "arm H-shallow: the depth window still reaches the one declared \
+commit, so the arm would not exercise a window that misses a declared row"
+echo "arm H-shallow: $h_seen of $h_full commits inside the window, the \
+declared $h_unsigned outside it"
+arm H-shallow 1 "$WORK/hshallow" "$WORK/h.base" \
+  || broken "arm H-shallow answered something other than RED. If it answered \
+the refusal this arm wants, the repair has landed and this block is the stale \
+half: rewrite the declaration with it. This basis installs the measurement, \
+not the repair, and the literal above is what keeps the two from being \
+confused"
+want_line "verdict: RED" "arm H-shallow reached exit 1 without the RED \
+verdict; the arm is declared against the verdict, not against the number"
+want_line "DECLARED-NOT-OBSERVED $h_unsigned" "arm H-shallow went RED without \
+naming the declared commit its window never reached"
+echo "arm H-shallow: RED over a corpus the checkout chose -- the accusation is \
+about --depth 2 and not about this history"
+
+# ---- arm H-full-control: the same clone, at full depth --------------------
+git -C "$WORK/hshallow" fetch -q --unshallow \
+  || broken "arm H-full-control: --unshallow failed, so there is no full-depth \
+reading of this clone to compare against"
+[ "$(git -C "$WORK/hshallow" rev-parse --is-shallow-repository)" = "false" ] \
+  || broken "arm H-full-control: the clone is still shallow after --unshallow"
+h_after="$(git -C "$WORK/hshallow" rev-list --count HEAD)"
+[ "$h_after" -eq "$h_full" ] || broken "arm H-full-control: the unshallowed \
+clone reaches $h_after of the source's $h_full commits"
+arm H-full-control 0 "$WORK/hshallow" "$WORK/h.base" \
+  || broken "the SAME clone, same baseline, unshallowed in place, did not \
+answer GREEN; without this reading H-shallow's verdict could be about the \
+declaration rather than about the depth"
+want_line "undeclared: 0" "arm H-full-control answered GREEN over a non-empty \
+undeclared set"
+want_line "declared-not-observed: 0" "arm H-full-control answered GREEN with a \
+declared row the observed set does not contain"
+echo "arm H-full-control: same directory, same baseline, $h_seen -> $h_after \
+commits, GREEN. Depth is the grandeur"
+
+# ---- arm H-partial: not shallow, and the whole commit history -------------
+# A partial clone and a shallow one get confused because both fetch less. They
+# are different reductions: --depth truncates the COMMIT graph, --filter omits
+# BLOBS and keeps every commit. Both properties are measured here before the
+# arm claims either.
+git clone -q --filter=blob:none "file://$WORK/hsrc" "$WORK/hpartial" \
+  || broken "arm H-partial: the partial clone could not be made"
+hpin "$WORK/hpartial"
+h_filter="$(git -C "$WORK/hpartial" config --get remote.origin.partialclonefilter \
+  || true)"
+[ "$h_filter" = "blob:none" ] || broken "arm H-partial NOT APPLICABLE: the \
+clone records the filter as '$h_filter' rather than blob:none, so this git \
+built a full clone and the arm would be describing a partial it does not have"
+[ "$(git -C "$WORK/hpartial" rev-parse --is-shallow-repository)" = "false" ] \
+  || broken "arm H-partial: a blob:none clone answered 'true' to \
+--is-shallow-repository on this git, which is the opposite of what this arm \
+was measured to hold"
+h_part="$(git -C "$WORK/hpartial" rev-list --count HEAD)"
+[ "$h_part" -eq "$h_full" ] || broken "arm H-partial: the partial clone \
+reaches $h_part of the source's $h_full commits, so it does NOT carry the \
+complete commit history and the arm's premise is false on this git"
+echo "arm H-partial: filter=$h_filter, shallow=false, $h_part of $h_full \
+commits -- reduced in blobs, complete in commits"
+arm H-partial 0 "$WORK/hpartial" "$WORK/h.base" \
+  || broken "a blob:none clone that is not shallow and carries every commit \
+did not answer as a full clone does; a guard keyed on 'fetched less' rather \
+than on depth would land here"
+want_line "declared-not-observed: 0" "arm H-partial answered GREEN with a \
+declared row the observed set does not contain"
+echo "arm H-partial: GREEN, exactly as the full clone above -- the filter \
+reduces blobs and the judge reads commits"
 
 echo "== verdict =="
 set +e
