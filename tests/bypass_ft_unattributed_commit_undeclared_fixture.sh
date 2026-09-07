@@ -128,10 +128,13 @@
 #   4  FIXTURE BROKEN      a control arm did not answer what it must, or the
 #                          classification map did not cover an observed %G?
 #
-# NINETEEN ARMS, each printed with its own exit. The literal here read
-# THIRTEEN against sixteen invocations before this basis; it is the
+# TWENTY-TWO ARMS, each printed with its own exit. The literal here read
+# NINETEEN against nineteen invocations before this basis; it is the
 # measured count now, and it is a count of INVOCATIONS, which is what a
-# reader can check against `grep -c '^arm ' "$0"`:
+# reader can check against `grep -cE '^ *v?arm ' "$0"`. Nineteen of them ask
+# the judge a question directly through `arm`; the last three ask THIS FIXTURE
+# a question, through `varm`, and are counted here because a reader counting
+# arms must reach the same number either way:
 #   P  positive control, on a CLONE of this repository: the measured set
 #      declared verbatim answers GREEN, and ONE further unsigned commit turns
 #      it RED. The clone carries no allowed_signers, so this arm is also where
@@ -227,6 +230,34 @@
 #      chose. A guard that only stopped the RED would have left that GREEN
 #      standing, and a gate that can be made to pass by cloning shallower is
 #      worse than one that can be made to fail that way.
+#   V  THIS FIXTURE'S OWN ROOT, DECLARED FAILING AT THIS BASIS on V-shallow-root
+#      and V-scratch-visible. Arm H measures a truncated clone the fixture
+#      BUILDS. $ROOT is the one repository the arms cannot choose, and on a
+#      shallow checkout TEN of the nineteen arms above are asking their
+#      question about a corpus the checkout chose: eight invoke the judge with
+#      --repo "$ROOT", and P-pre and P run against a clone of $ROOT, which
+#      inherits its depth. Measured at this basis: the fixture answers 4
+#      FIXTURE BROKEN there. 4 says a control could not confirm what it is
+#      measuring, and here the control answered -- arm Z-baseline wanted 3 and
+#      got 5, correctly, about a tree that is not measurable. The fixture
+#      reported its own health where the tree's was the finding.
+#      THE REPAIR IS A PREFLIGHT THAT REFUSES AND DOES NOT COVER, and the
+#      three arms are one claim in three parts, run against THIS FILE copied
+#      into a checkout rather than against the commit the checkout carries:
+#        V-shallow-root     $ROOT shallow -> 5, each skipped arm naming itself
+#                           and its reason, the scratch arms still observed
+#                           running from the first to the last.
+#        V-full-root        THE SAME CHECKOUT unshallowed in place -> 0. Only
+#                           the depth moved, so the guard cannot be a permanent
+#                           exemption for anything that ever looked truncated.
+#        V-scratch-visible  $ROOT shallow AND a scratch arm genuinely broken ->
+#                           4, NOT 5, with the inner run naming the BROKEN
+#                           SCRATCH ARM. The exit code alone proves nothing
+#                           here: the unrepaired fixture answers 4 to that same
+#                           checkout for the other reason, which is why this
+#                           arm is declared against the reason and not the
+#                           number. It is the arm that fails if the preflight
+#                           ever grows into a cover.
 #
 # The arms sign with an EPHEMERAL key this fixture generates in its own scratch
 # directory. Nothing is read from the operator's ~/.config and nothing is
@@ -1055,6 +1086,212 @@ want_line "declared-not-observed: 0" "arm H-partial answered GREEN with a \
 declared row the observed set does not contain"
 echo "arm H-partial: GREEN, exactly as the full clone above -- the filter \
 reduces blobs and the judge reads commits"
+
+# ---- arm V: the preflight refuses to measure, and never covers ------------
+# The three H arms above measure a truncated clone this fixture BUILDS. These
+# three measure THIS FIXTURE, run from inside a truncated checkout of this
+# repository, because $ROOT is the one repository the arms cannot choose.
+#
+# WHY $ROOT IS NOT LIKE THE OTHER CORPORA, measured at the basis that armed
+# this block. EIGHT arms invoke the judge with --repo "$ROOT" -- Z-baseline, N,
+# S-bogus-row, S-sha-only, C-comment, C-commented-out, B-nosection, B-empty.
+# TWO MORE, P-pre and P, run against a clone of $ROOT and inherit its depth: a
+# clone of a shallow repository answers `true` to --is-shallow-repository and
+# reaches the same commits, which was measured on this git and not assumed. And
+# the block that builds the baseline all ten share reads $ROOT's own log and
+# calls broken when the depth window holds no unattributed commit at all. On a
+# shallow checkout every one of those ten asks its question about a corpus the
+# checkout chose.
+#
+# WHAT THE FIXTURE ANSWERS TODAY IS 4, AND 4 IS THE WRONG NUMBER. FIXTURE
+# BROKEN says a control could not confirm what it is measuring. Here the
+# control answered: arm Z-baseline wanted 3 and the judge said 5
+# UNMEASURED-SHALLOW, correctly, about a tree that is not measurable. The
+# fixture then reported its own health where the tree's was the finding.
+#
+# THE PREFLIGHT MUST NOT SHORT-CIRCUIT THE FIXTURE, and that is the risk this
+# block exists to hold rather than to describe. A guard that answered
+# "unmeasurable" for the WHOLE file the moment $ROOT looked truncated would
+# hide every defect in the nine arms that build their own repositories and
+# never read $ROOT. It would make a shallow checkout a place where this
+# falsifier certifies nothing AND accuses nothing, which is worse than the 4 it
+# replaces, and it would be reached by cloning shallower. So the three arms are
+# one claim in three parts:
+#
+#   V-shallow-root     $ROOT shallow -> 5 UNMEASURED-SHALLOW. The arms that
+#                      read $ROOT each say they were skipped and why, in both
+#                      regions of the file; the scratch arms are observed
+#                      running, first and last.
+#   V-full-root        THE SAME CHECKOUT, `git fetch --unshallow`-ed in place
+#                      -> 0. Same directory, same objects source, same fixture
+#                      file; only the depth moved. Without it the guard would
+#                      be indistinguishable from a permanent exemption for
+#                      anything that ever looked truncated.
+#   V-scratch-visible  $ROOT shallow AND one scratch arm genuinely broken -> 4,
+#                      NOT 5, and the inner run names the BROKEN SCRATCH ARM
+#                      and not a skipped $ROOT arm. THE EXIT CODE ALONE PROVES
+#                      NOTHING HERE: the unrepaired fixture answers 4 to this
+#                      same checkout, for the other reason. This is the arm
+#                      that fails if the preflight ever grows into a cover.
+#
+# THE FIXTURE UNDER TEST IS THIS FILE, copied into the checkout and asserted
+# byte-identical, never the one the checkout was cloned with. A clone carries
+# the last COMMIT; the subject here is the tree being judged, and an arm that
+# measured HEAD would let a working tree ship a preflight nobody ran -- the
+# object half of the defect bypass_ft_surface_charges_untouched_occurrences
+# was written for, one level up.
+#
+# The inner runs carry FT37_META=1, and that is what stops this block from
+# recursing: without it V-full-root's inner run would build its own checkouts
+# and run its own V arms, without end.
+if [ -z "${FT37_META:-}" ]; then
+  SELF_NAME="$(basename "$0")"
+  SELF="$ROOT/tests/$SELF_NAME"
+  [ -f "$SELF" ] || broken "arm V: this fixture is not at tests/$SELF_NAME \
+under its own root, so the arms below would run a file that is not the one \
+under test"
+
+  V_OUT=""
+  # The inner run's own judge output is not re-printed line for line -- three
+  # nested runs would bury the register's log. The arm lines, the skip lines
+  # and the verdict are, and every assertion below is made against the WHOLE
+  # captured output and not against this summary.
+  varm() { # name want checkout
+    local v_name="$1" v_want="$2" v_rc
+    set +e
+    V_OUT="$(FT37_META=1 bash "$3/tests/$SELF_NAME" 2>&1)"
+    v_rc=$?
+    printf '%s\n' "$V_OUT" \
+      | grep -E '^(arm |skipped \[|FIXTURE BROKEN|GREEN|RED|UNMEASURED)' \
+      | sed "s/^/  [$v_name] /"
+    set -e
+    echo "arm $v_name: exit $v_rc (want $v_want)"
+    [ "$v_rc" -eq "$v_want" ]
+  }
+
+  v_want_line() { # needle description
+    printf '%s\n' "$V_OUT" | grep -qF -- "$1" \
+      || broken "$2 -- the inner run exited as wanted and never printed \"$1\""
+  }
+
+  v_reject_line() { # needle description
+    if printf '%s\n' "$V_OUT" | grep -qF -- "$1"; then
+      broken "$2 -- the inner run printed \"$1\""
+    fi
+  }
+
+  # file:// and not a plain path, for the reason arm H-shallow gives: git
+  # IGNORES --depth on a local-path clone and hands over the whole history.
+  git clone -q --depth 2 "file://$ROOT" "$WORK/vroot" \
+    || broken "arm V: could not build a depth-bounded checkout of this \
+repository"
+  [ "$(git -C "$WORK/vroot" rev-parse --is-shallow-repository)" = "true" ] \
+    || broken "arm V: the checkout it built answers 'false' to \
+--is-shallow-repository, so these arms would measure nothing about depth"
+  [ "$(git -C "$WORK/vroot" rev-list --count HEAD)" \
+    -lt "$(git -C "$ROOT" rev-list --count HEAD)" ] \
+    || broken "arm V: the depth window truncates nothing, so the checkout is \
+not the truncated one these arms are about"
+  cp "$SELF" "$WORK/vroot/tests/$SELF_NAME" \
+    || broken "arm V: could not install the fixture under test into the checkout"
+  cmp -s "$SELF" "$WORK/vroot/tests/$SELF_NAME" \
+    || broken "arm V: the installed fixture is not byte-identical to this file, \
+so the arms would be measuring the last commit and not this tree"
+
+  varm V-shallow-root 5 "$WORK/vroot" \
+    || broken "this fixture, run from inside a depth-bounded checkout of this \
+repository, did not answer UNMEASURED-SHALLOW. Exit 4 is the defect this arm \
+was armed against: FIXTURE BROKEN reports a control that could not confirm \
+what it measures, and here the control answered -- it is the tree under it \
+that is not measurable"
+  # The needle is the TAIL verdict and not the bare word. Arm H-shallow prints
+  # "verdict: UNMEASURED-SHALLOW" about its own scratch clone on every run,
+  # green or not, so an assertion on that string would be satisfied by an inner
+  # run that never refused anything -- measured, on the inner run this block
+  # was armed against.
+  v_want_line "UNMEASURED-SHALLOW: the history is truncated" "arm \
+V-shallow-root reached exit 5 without the inner run reaching that verdict for \
+its own root; the arm is declared against the verdict, not against the number"
+  v_want_line "skipped [Z-baseline]" "arm V-shallow-root: the inner run never \
+said that the first arm reading its own history was skipped, so a reader is \
+not told which questions went unasked"
+  v_want_line "skipped [P]" "arm V-shallow-root: the inner run ran an arm \
+against a clone of a shallow checkout, and such a clone inherits the depth the \
+run had already refused to judge on"
+  v_want_line "skipped [B-empty]" "arm V-shallow-root: the inner run skipped \
+the first group of arms reading its own history and not the last"
+  v_want_line "arm A: scanned=" "arm V-shallow-root: a scratch arm did not run \
+under the preflight, so the guard is covering the file rather than refusing to \
+judge the tree"
+  v_want_line "arm H-partial: GREEN" "arm V-shallow-root: the last scratch arm \
+did not run, so the inner run stopped early rather than skipping selectively"
+  v_reject_line "FIXTURE BROKEN" "arm V-shallow-root reached exit 5 through a \
+broken control rather than through the preflight"
+  echo "arm V-shallow-root: UNMEASURED-SHALLOW; the arms reading this \
+repository's own history skipped by name in both regions, the scratch arms \
+observed running from the first to the last"
+
+  git -C "$WORK/vroot" fetch -q --unshallow \
+    || broken "arm V-full-root: --unshallow failed, so there is no full-depth \
+reading of this same checkout to compare against"
+  [ "$(git -C "$WORK/vroot" rev-parse --is-shallow-repository)" = "false" ] \
+    || broken "arm V-full-root: the checkout is still shallow after --unshallow"
+  cmp -s "$SELF" "$WORK/vroot/tests/$SELF_NAME" \
+    || broken "arm V-full-root: the fixture under test moved between the two \
+readings, so depth is not the only thing that changed"
+  varm V-full-root 0 "$WORK/vroot" \
+    || broken "the SAME checkout, same directory, same fixture file, \
+unshallowed in place, did not answer GREEN; without this reading \
+V-shallow-root's 5 could be about anything that checkout carries rather than \
+about its depth"
+  v_want_line "verdict: GREEN" "arm V-full-root answered 0 without the inner \
+run reaching GREEN"
+  v_reject_line "UNMEASURED-SHALLOW: the history is truncated" "arm \
+V-full-root: the preflight fired on a checkout that is not shallow, which is a \
+permanent exemption and not a guard"
+  v_reject_line "skipped [" "arm V-full-root: an arm was skipped on a checkout \
+that carries the whole history"
+  echo "arm V-full-root: the same directory and the same fixture, depth the \
+only difference, GREEN. Depth is the grandeur here too"
+
+  # The sabotage is ONE arm's declared want, in a copy, and both halves are
+  # asserted before the inner run is asked anything: that the line moved, and
+  # that NOTHING ELSE did. An arm that sabotaged more than it meant to would
+  # answer 4 for a reason it could not name, which is the shape of the defect
+  # it is here to refuse.
+  git clone -q --depth 2 "file://$ROOT" "$WORK/vsab" \
+    || broken "arm V-scratch-visible: could not build the second depth-bounded \
+checkout"
+  [ "$(git -C "$WORK/vsab" rev-parse --is-shallow-repository)" = "true" ] \
+    || broken "arm V-scratch-visible: the second checkout is not shallow, so \
+the arm would not be measuring a preflight at all"
+  sed 's/^arm A 0 /arm A 1 /' "$SELF" > "$WORK/vsab/tests/$SELF_NAME" \
+    || broken "arm V-scratch-visible: could not install the sabotaged fixture"
+  grep -q '^arm A 1 ' "$WORK/vsab/tests/$SELF_NAME" \
+    || broken "arm V-scratch-visible: the sabotage did not land, so the arm \
+would be measuring an unbroken fixture and its 4 would mean nothing"
+  v_sabotage="$(diff "$SELF" "$WORK/vsab/tests/$SELF_NAME" \
+    | grep -c '^[<>]' || true)"
+  [ "$v_sabotage" -eq 2 ] || broken "arm V-scratch-visible: the sabotage \
+rewrote $v_sabotage lines where it must rewrite exactly one, so the inner \
+run's exit could be about something other than the scratch arm it names"
+  varm V-scratch-visible 4 "$WORK/vsab" \
+    || broken "a shallow checkout carrying a genuinely broken SCRATCH arm did \
+not answer FIXTURE BROKEN. If it answered 5 the preflight is covering real \
+defects, which is the failure this arm exists to make expensive"
+  v_want_line "did not answer GREEN against an empty declaration" \
+    "arm V-scratch-visible reached exit 4 without the inner run naming the \
+broken scratch arm. Before the preflight the same checkout answered 4 from arm \
+Z-baseline, so an assertion on the exit code alone proves nothing here"
+  v_reject_line "an absent baseline did not answer UNMEASURED-BASELINE" \
+    "arm V-scratch-visible: the inner run broke on an arm reading its own \
+history rather than on the sabotaged scratch arm, so the preflight never ran"
+  v_want_line "skipped [Z-baseline]" "arm V-scratch-visible: the inner run \
+reached the broken scratch arm without skipping the arms that read its own \
+history, so the 4 did not come through the preflight"
+  echo "arm V-scratch-visible: 4 and not 5, and the inner run names the broken \
+scratch arm -- the preflight refuses to measure and does not cover"
+fi
 
 echo "== verdict =="
 set +e
