@@ -38,6 +38,80 @@ init_fixture_repo() {
   git -C "$1" config tag.gpgsign false
 }
 
+# A NON-VERDICT IS NOT A FAILURE, AND THE CONDITION THAT PRODUCES ONE IS
+# MEASURED HERE, ONCE, BY THIS FILE, ON THE CHECKOUT THIS SUITE IS RUNNING
+# AGAINST.
+#
+# Some checks answer non-zero for a reason that is not a defect of this tree:
+# the environment under them cannot supply what the check needs. The condition
+# this suite meets is the depth of the checkout. A check whose corpus is this
+# repository's own history reads `git log`/`git rev-list`
+# and gets back the window the clone chose -- no error, no marker on the rows --
+# so it refuses rather than accusing this repository of a discrepancy that
+# belongs to the clone. Composing that refusal into `fail` reports a defect
+# nobody observed, and that is the failure this measurement exists to prevent.
+#
+# THE SITE DECLARES, THE READER MEASURES, and the division is the whole
+# mechanism. It is already landed at the bypass register's fourth column
+# (`SHALLOW:5`, far below): a row names the exit code that means "not
+# measurable here", and this file -- never the row, never the fixture -- decides
+# whether the condition actually holds. The measurement is taken here rather
+# than beside that loop so every reader of it shares one answer: a checkout is
+# classified once, and no two doors can answer differently about the same tree.
+#
+# A CHECKOUT THAT WILL NOT SAY is not treated as full. `--is-shallow-repository`
+# answering neither true nor false leaves env_root_shallow holding whatever it
+# said, which equals neither, so no conditional site and no conditional row is
+# ever excused on it.
+set +e
+env_root_shallow="$(git rev-parse --is-shallow-repository 2>/dev/null)"
+set -e
+shallow_inconclusive=0
+
+# THE READER FOR TOP-LEVEL COMPOSITION SITES -- the lines that turn one check's
+# exit straight into `fail`. `topsite` is the bypass loop's conditional door
+# lifted to those sites, with the same three requirements and the same default.
+#
+#   declared   the site names the exit code that means "not measurable here",
+#              as SHALLOW:<n>. A site that declares NONE gets the strict door,
+#              which is what every site that does not call this helper gets too.
+#   observed   the check must actually answer that code. Any other non-zero
+#              falls through and is accused.
+#   measured   env_root_shallow above must answer 'true'. A declared code on a
+#              full checkout is NOT an excused site: it is the check broken, and
+#              it is accused as such. That is the difference between a
+#              conditional exit and a licence, and it is why the clause lives
+#              here rather than in the check.
+#
+# All three, or `fail`. The site cannot vouch for its own exemption.
+#
+# NOTHING HERE SPENDS `unmeasured` and no name enters UNMEASURED_REGISTER, for
+# the reason recorded at that register below: it compares in BOTH directions, so
+# an environment-conditional entry there has no honest form -- listed, it reads
+# stale on every full checkout; unlisted, it reads undeclared on every shallow
+# one. Measuring the condition is the other answer to that question, and it
+# leaves the unmeasured set independent of the environment.
+topsite() {   # $1=label  $2=SHALLOW:<n>|NONE  $3...=command
+  local ts_label="$1" ts_cond="$2" ts_rc
+  shift 2
+  set +e
+  "$@"
+  ts_rc=$?
+  set -e
+  if [ "$ts_rc" -eq 0 ]; then
+    echo "ok [$ts_label]"
+    return 0
+  fi
+  if [ "$ts_cond" = "SHALLOW:$ts_rc" ] && [ "$env_root_shallow" = "true" ]; then
+    shallow_inconclusive=1
+    echo "unmeasured [$ts_label]: exit $ts_rc, this site declares $ts_cond, and this checkout answered 'true' to \`git rev-parse --is-shallow-repository\`. The check refused to judge a history it can only see part of. Not a pass and not a fail: the suite does not certify this run"
+    return 0
+  fi
+  fail=1
+  echo "FAIL [$ts_label]: exit $ts_rc, against a declaration of $ts_cond on a checkout \`git rev-parse --is-shallow-repository\` answered '$env_root_shallow'. The conditional door needs the declared code AND the measured condition; without both this is the check reporting a defect, and it is read as one"
+  return 0
+}
+
 echo "== guard fixtures =="
 while IFS= read -r line; do
   [ -n "$line" ] || continue
@@ -731,7 +805,38 @@ echo "== ADR-008 falsifier register: six rows in their declared state (harnesswr
 # moved it, with the reason beside it. Changing a global mode so the suite goes
 # green is the defect ADR-009 exists to prevent, and there is no longer a global
 # mode to change.
-bash tests/adr008_falsifier_fixture.sh --expect-registered || fail=1
+#
+# THIS SITE IS ENVIRONMENT-CONDITIONAL IN ITS DEPTH, AND `SHALLOW:2` IS WHERE
+# THAT IS DECLARED. The fixture's D1 stage has to materialize a
+# scripts/launch_worker.sh from BEFORE the contribution field, and it finds that
+# commit by walking this repository's own history
+# (adr008_falsifier_fixture.sh:953 `git log --format=%H -- scripts/launch_worker.sh`).
+# On a truncated checkout that walk returns the depth window and stops -- no
+# error, no marker -- so :954 answers 2 FIXTURE BROKEN and names the depth in
+# its own message. Measured at this basis: exit 2 on `git clone --depth 1`, exit
+# 0 on a full clone of the same commit, VERITY_CLI resolved in both.
+#
+# The two calls below do NOT carry the declaration, and that is measured rather
+# than reasoned from where their mode blocks end: on the same `--depth 1` clone
+# of this basis, --discriminate and --shared-filter each ran to their own GREEN
+# summary and exited 0, so neither reaches the history walk this column excuses.
+# A 2 from either of them is the fixture broken and is accused as one.
+#
+# THE COLUMN NAMES A CODE, NOT ONE CALL SITE INSIDE THE FIXTURE, and that is
+# wider than the walk at :953 on purpose rather than by oversight. This
+# fixture reserves 2 for exactly one meaning -- "a fixture that cannot set its
+# scenario up has measured nothing. Exit 2 is reserved for that, and is never
+# reported as a red" (adr008_falsifier_fixture.sh:235-237) -- so every 2 it can
+# emit is already a non-verdict, whatever produced it. The door therefore
+# excuses non-verdicts as non-verdicts and never excuses a red, which is the
+# same property the UNMEASURED-2 column below already carries for a row.
+#
+# THE REGISTER MEASURES THE CONDITION, THE SITE DOES NOT. A 2 here on a full
+# checkout falls through `topsite`'s strict door and lands in `fail`, which is
+# the correct reading: on a tree that is not truncated, this refusal is the
+# fixture broken.
+topsite "ADR-008 register: six rows in their declared state" SHALLOW:2 \
+  bash tests/adr008_falsifier_fixture.sh --expect-registered
 
 echo "== ADR-008 discrimination control: the D1 and D2 rows can move =="
 # The line above re-observes two reds. This one answers the question that makes
@@ -1492,13 +1597,14 @@ fi
 # instead of declared -- and it keeps the unmeasured set independent of the
 # environment rather than making it depend on one.
 #
-# A CHECKOUT THAT WILL NOT SAY is not treated as full. `--is-shallow-repository`
-# answering neither true nor false leaves bp_root_shallow holding whatever it
-# said, which equals neither, so no conditional row is ever excused on it.
-set +e
-bp_root_shallow="$(git rev-parse --is-shallow-repository 2>/dev/null)"
-set -e
-bp_shallow_inconclusive=0
+# THE CONDITION IS NOT MEASURED HERE. `env_root_shallow` is taken once at the
+# top of this file, because a top-level composition site declares the same
+# column (`SHALLOW:2` at the ADR-008 register call above) and runs long before
+# this loop. Measured once and shared: a second `git rev-parse` here could
+# answer differently only by accident, and a suite whose conditional doors
+# disagree about the depth of one checkout reports nothing any of them meant.
+# What that block records about a checkout that will not say still holds: an
+# answer that is neither true nor false excuses no row and no site.
 
 # The fixtures are invoked with stdin closed: the loop reads the register off a
 # here-string, and a child that consumed stdin would eat the rows below it and
@@ -1538,8 +1644,8 @@ while read -r bp_path bp_declared bp_exit2 bp_cond; do
   # any one of them missing falls through to the comparison below, where a 5
   # meets the state this row declares and is accused as EXIT5.
   if [ "$bp_cond" = "SHALLOW:5" ] && [ "$bp_rc" -eq 5 ] \
-     && [ "$bp_root_shallow" = "true" ]; then
-    bp_shallow_inconclusive=1
+     && [ "$env_root_shallow" = "true" ]; then
+    shallow_inconclusive=1
     echo "unmeasured [bypass $bp_path]: exit 5, this row declares SHALLOW:5, and this checkout answered 'true' to \`git rev-parse --is-shallow-repository\`. The fixture refused to judge a history it can only see part of. Not a pass and not a fail: the suite does not certify this run"
     printf '%s\n' "$bp_out" | sed 's/^/      | /'
     continue
@@ -1695,9 +1801,9 @@ if [ "$fail" -ne 0 ]; then
   echo "TESTS FAILED"
   exit 1
 fi
-if [ "$bp_shallow_inconclusive" -ne 0 ]; then
-  echo "TESTS INCONCLUSIVE [truncated history]: this checkout is shallow, and a row that declares a conditional exit for exactly that refused to judge a history it can only see part of. Read its unmeasured line above for which"
-  echo "      Run \`git fetch --unshallow\` in this checkout and ask again. Nothing here is a finding about this repository: the rows that were not asked are the rows whose corpus is this repository's own history, and at this depth the set they would read is the window the checkout chose"
+if [ "$shallow_inconclusive" -ne 0 ]; then
+  echo "TESTS INCONCLUSIVE [truncated history]: this checkout is shallow, and a site or a row that declares a conditional exit for exactly that refused to judge a history it can only see part of. Read its unmeasured line above for which"
+  echo "      Run \`git fetch --unshallow\` in this checkout and ask again. Nothing here is a finding about this repository: the rows and sites that were not asked are the ones whose corpus is this repository's own history, and at this depth the set they would read is the window the checkout chose"
   echo "      THE UNMEASURED-SET COMPARISON BELOW WAS NOT REACHED, and this line is not reporting it clean. Rows that read a history answer differently on a truncated checkout, so its two sets are downstream of the same depth and comparing them here would produce a second accusation about the clone. It runs on the unshallowed tree"
   exit 2
 fi
