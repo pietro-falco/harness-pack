@@ -1330,11 +1330,35 @@ bypass_row tests/bypass_ft_env_unchecked_and_readme_unbound_fixture.sh RED BROKE
 bypass_row tests/bypass_ft_conformance_corpus_refused_by_verifier_fixture.sh RED BROKEN
 
 # FT-37. The set of UNATTRIBUTED commits reachable from HEAD, against a set
-# declared by enumeration in INTEGRITY.md. DECLARED EXIT3, which is this
-# register's spelling of the judge's UNMEASURED-BASELINE: INTEGRITY.md exists
-# in the commit that installs this row and carries no such section, and the
-# judge spends a distinct exit saying so. A gate that shipped GREEN beside an
-# input nobody has written would be certifying a decision no file records.
+# declared by enumeration in INTEGRITY.md. DECLARED GREEN, and observed GREEN:
+# the section exists, its rows carry a full sha AND that commit's stable
+# patch-id, and the set of shas is EQUAL to the set the judge measures --
+# member for member, in both directions.
+#
+# A PATCH-ID MATCH NEVER PRODUCES GREEN, and that is the invariant this row is
+# here for. A patch-id identifies a diff; a commit is a diff plus its parent,
+# author, committer, message and dates, and patch-id discards all of those.
+# "Same diff" is not "the commit I accepted". A declared patch-id can move a
+# verdict from RED to 6 -- it names which new commit answers to which stale
+# row -- and never to 0. The judge that shipped before this one derived the
+# patch-id from the declared commit's own object and let a coincidence carry an
+# unsigned, undeclared commit to GREEN; arm X-cherrypick is that commit.
+#
+# WHAT TURNS THIS ROW RED is a difference the written patch-ids do not account
+# for. A nineteenth unsigned commit does not turn it red by existing; it turns
+# it red by going undeclared. This gate compels the DECLARATION, not the
+# absence.
+#
+# IT WAS EXIT3 FOR EXACTLY AS LONG AS THE DECLARATION WAS UNWRITTEN. The judge
+# did not move: its blob answers 3 against a tree with no section and 0 against
+# a tree with one. The file under it moved. That is the only reason this row is
+# green, and it is the reason worth recording, because a row that went green
+# because its judge was loosened would look identical from here.
+#
+# THE ROW IS TWO TOKENS. First the sha, then the patch-id, a '#' at the start
+# of a line a comment, free text after the second token ignored so a row still
+# carries its own short-sha, date and subject. A ROW WITH ONE TOKEN ANSWERS 3:
+# an incomplete declaration is not a declaration.
 #
 # THE BASELINE IS NOT A FILE OF ITS OWN. INTEGRITY.md is the only tracked
 # integrity declaration this repository has, and a second one at the root would
@@ -1349,12 +1373,16 @@ bypass_row tests/bypass_ft_conformance_corpus_refused_by_verifier_fixture.sh RED
 # still be a machine-read set. A COMMENT IS NOT A DECLARATION, which arm
 # C-commented-out proves by commenting out a true member and requiring RED.
 #
-# EXIT3 AND NOT UNMEASURED-2, and the third column is BROKEN on purpose. The
-# judge's exit 2 is UNMEASURED-SCOPE -- no commit was read at all -- and its
-# corpus is this repository's own history. There is no host on which a clone of
-# this repository reads zero commits, so exit 2 here is a broken fixture and
-# not an environmental refusal. Exit 3 is the honest not-yet, and it reaches
-# this loop as the literal EXIT3, compared for equality like any other row.
+# THE THIRD COLUMN IS BROKEN ON PURPOSE. The judge's exit 2 is
+# UNMEASURED-SCOPE -- no commit was read at all -- and its corpus is this
+# repository's own history. There is no host on which a clone of this
+# repository reads zero commits, so exit 2 here is a broken fixture and not an
+# environmental refusal. Exits 3 and 6 reach this loop as the literal EXIT3 and
+# EXIT6 and fail the row: 3 says the declaration went missing or a row is
+# incomplete, 6 says every difference IS accounted for by a written patch-id
+# and a patch-id does not certify -- re-declare the rows the judge names.
+# Neither is a pass, and neither can be mistaken for one, because GREEN shares
+# a code with nothing.
 #
 # NOT ENVIRONMENT-CONDITIONAL, which is why it is here and not in
 # UNMEASURED_REGISTER. %G? is host-dependent -- gpg.ssh.allowedSignersFile
@@ -1366,10 +1394,11 @@ bypass_row tests/bypass_ft_conformance_corpus_refused_by_verifier_fixture.sh RED
 # with a key the fixture generates in its own scratch directory, so nothing in
 # this row reads the operator's ~/.config.
 #
-# The row moves to GREEN in the commit that writes the baseline, and that
-# commit is where the acceptance is argued. Moving it earlier would be the
-# register asserting a decision no file records.
-bypass_row tests/bypass_ft_unattributed_commit_undeclared_fixture.sh EXIT3 BROKEN
+# THE ACCEPTANCE IS NOT HERE. This row records that the declared set and the
+# observed set agree; INTEGRITY.md's "Commit attribution" section records WHY
+# eighteen commits are exempt, and that argument is the operator's, in the file
+# the gate reads, not in this comment.
+bypass_row tests/bypass_ft_unattributed_commit_undeclared_fixture.sh GREEN BROKEN
 
 # COMPLETENESS IS MEMBERSHIP, NOT CARDINALITY (D5), and it runs before the
 # fixtures because it is the cheap half. The set of registered paths must EQUAL

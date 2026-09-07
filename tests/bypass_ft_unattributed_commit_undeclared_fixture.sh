@@ -68,73 +68,103 @@
 # unchanged cardinality -- arm S exists to prove exactly that, because a gate
 # that compared two counts would pass it.
 #
-# THE KEY IS THE SHA, WITH THE PATCH-ID AS FALLBACK. A declared sha that is not
-# among the observed unattributed commits is not immediately a fault: history
-# gets rewritten and this repository keeps refs/backup/* precisely because it
-# does. So the judge asks, in this order:
-#   1  is the declared sha itself an unattributed commit?     -> covered
-#   2  is it a commit this repository does not have at all?   -> BOGUS, and RED.
-#      A baseline may not exempt something that is not here.
-#   3  does its patch-id (`git show <sha> | git patch-id --stable`) match the
-#      patch-id of an observed unattributed commit?           -> covered, and
-#      the judge prints STALE-SHA: the exemption survived the rewrite and the
-#      baseline is the thing that is out of date, not the history.
-#   4  neither                                                -> UNMEASURED-
-#      STALE (6). Not GREEN and not RED: the judge cannot tell an exemption
-#      that was rewritten beyond recognition from one that was never real.
+# THE KEY IS THE SHA. THE PATCH-ID IS DECLARED, AND IT NEVER EXEMPTS.
+# A ROW CARRIES TWO TOKENS: the sha, and the stable patch-id of the commit that
+# sha named when the row was written. Anything after the second token is free
+# text. A row with one token is an incomplete declaration and answers 3.
+#
+# WHY THE PATCH-ID CANNOT BE A COVERAGE. A patch-id identifies a DIFF. A commit
+# is (diff, parent, author, committer, message, dates) and `git patch-id`
+# discards everything but the first. A match therefore establishes "this has
+# the same diff", never "this is the commit I accepted", and an attribution
+# exemption needs the second. The two are different facts and this judge will
+# not spend one for the other.
+#
+# AND THE DISCRIMINATOR DOES NOT EXIST IN THE REPOSITORY. A rebase that moved a
+# declared commit and a cherry-pick that replayed its diff as a new unsigned
+# commit produce the SAME reading -- same declared count, same observed count,
+# same patch-id match, same delta. Measured, on arms R and X, which differ in
+# nothing a judge can see. Distinguishing them by whether the old object still
+# resolves would work on this machine and fail on a clone, which is the exact
+# host-dependence the G/U collapse below exists to remove. So the judge does
+# not distinguish them: it refuses to certify either, and says which rows to
+# re-declare.
+#
+# THE VERDICT, and it consults no object's resolvability anywhere:
+#   observed    the shas of the unattributed commits reachable from HEAD
+#   declared    the shas written in the block; pinned[S] is S's written patch-id
+#   undeclared  observed \ declared        missing  declared \ observed
+#
+#   1  undeclared empty AND missing empty                    -> 0 GREEN
+#   2  EVERY undeclared has a patch-id equal to pinned[S] for
+#      some S in missing, AND EVERY missing explains an
+#      undeclared this way -- a conjunction, not "at least
+#      one"                                                  -> 6 UNMEASURED-
+#                                                                 STALE
+#   3  anything else                                          -> 1 RED
+#
+# THE INVARIANT THIS FILE EXISTS TO HOLD, printed on every run: A PATCH-ID
+# MATCH NEVER PRODUCES GREEN. It is the one property the repair must guarantee
+# and the one the defect violated -- the old judge let a patch-id coincidence
+# carry an undeclared commit all the way to 0.
 #
 # EXIT CONTRACT. Six codes, all distinct, and GREEN shares none of them with a
 # non-measurement. An exit that cannot separate "the sets are equal" from "no
 # set was read" reports a vacuum as a pass.
-#   0  GREEN               observed set == declared set
-#   1  RED                 they differ, in either direction
+#   0  GREEN               observed set == declared set, by sha
+#   1  RED                 they differ and the patch-ids do not account for it
 #   2  UNMEASURED-SCOPE    no commit was read at all
-#   3  UNMEASURED-BASELINE the baseline file is absent, unreadable, or carries
-#                          no enumeration block
-#   6  UNMEASURED-STALE    a declared commit resolved by neither sha nor patch-id
+#   3  UNMEASURED-BASELINE the baseline file is absent, unreadable, carries no
+#                          enumeration block, or carries a row that is not a
+#                          sha and a patch-id
+#   6  UNMEASURED-STALE    every difference is accounted for by a declared
+#                          patch-id: the rows name shas this history no longer
+#                          has, and re-declaring them is the operator's act
 #   4  FIXTURE BROKEN      a control arm did not answer what it must, or the
 #                          classification map did not cover an observed %G?
 #
-# ELEVEN ARMS, each printed with its own exit:
+# THIRTEEN ARMS, each printed with its own exit:
 #   P  positive control, on a CLONE of this repository: the measured set
 #      declared verbatim answers GREEN, and ONE further unsigned commit turns
 #      it RED. The clone carries no allowed_signers, so this arm is also where
 #      the G/U collapse is exercised rather than argued.
 #   N  negative control, on the real tree with a synthetic-but-correct
-#      baseline -> GREEN, and it must print scanned>0 and delta=0. The baseline
-#      is built by an INDEPENDENT `git log | awk` and never by the judge, so the
-#      arm is not the judge agreeing with itself.
-#   S  set-identity: one declared sha replaced by a well-formed sha no object
-#      answers to -> RED at unchanged cardinality.
+#      baseline -> GREEN, and it must print scanned>0, undeclared=0 and
+#      declared-not-observed=0. The baseline is built by an INDEPENDENT
+#      `git log | awk` walk and a patch-id taken from each commit it names,
+#      never by the judge, so the arm is not the judge agreeing with itself.
+#   S  set-identity, at unchanged cardinality, in the two shapes the two-token
+#      row now has. S-bogus-row: both tokens replaced, so nothing explains the
+#      commit the row displaced -> RED. S-sha-only: the sha replaced and the
+#      TRUE patch-id kept -> 6, and never 0. Neither is a green; the second is
+#      not an accusation either, it is "re-declare this row".
 #   A  anti-vacuity BY GENERATION: a scratch repository in which every commit is
 #      signed and the baseline declares the EMPTY set -> GREEN with scanned>0
 #      printed. A green that came from never taking the measurement cannot pass
 #      for this one.
-#   R  rewrite resilience: a scratch repository rebased so that every sha moves
-#      -> the exemption holds through the patch-id, STALE-SHA is printed, and
-#      the exit is 0.
+#   R  after a rewrite that moved every declared sha: the written patch-ids say
+#      which new commit answers to which old row, STALE-SHA names each pair,
+#      and the exit is 6. NOT 0. A rewritten baseline IS stale; the gate says
+#      so and hands the operator the mapping. "The exemption survives a future
+#      rewrite" was the claim this arm used to carry, and it was false.
+#   R-partial  the branch above is a CONJUNCTION. One undeclared commit, two
+#      missing rows: the first row's patch-id explains it, the second explains
+#      nothing. Every undeclared is accounted for and one row is not -> RED. A
+#      judge that read the branch as "at least one" would answer 6 here.
 #   Z  null cases: an absent baseline -> 3, and a repository with no commits
 #      -> 2.
-#   X  cherry-pick exemption, DECLARED FAILING AT THIS BASIS. The same scratch
-#      shape as R with one thing changed: the commit that replaces the declared
-#      one was never declared. A signed base, one unsigned commit D declared by
-#      sha, then D put out of HEAD's reach and its diff replayed as E -- a new
-#      unsigned commit with a different author, a different message and a
-#      different sha. Nothing declares E. The judge resolves the declared D by
-#      patch-id, and the commit that patch-id lands on is E, so E is exempt for
-#      belonging to a class -- "some declared commit has my diff" -- and the
-#      section the gate reads says the opposite in as many words: "Exemption is
-#      by enumeration only. No commit is exempt by author, by date, or by
-#      membership in any class." The arm WANTS RED. It is OBSERVED GREEN, and
-#      it is DECLARED GREEN here for that reason and no other: this basis
-#      installs the measurement, not the repair. An arm that started answering
-#      RED without this file changing would mean the declaration below had gone
-#      stale, so X answering 1 is FIXTURE BROKEN until the day the repair lands
-#      and this block is rewritten with it.
-#      R AND X ARE NOT THE SAME ARM. R replays a commit that IS declared and
-#      asks the exemption to survive; X replays a commit that is NOT and asks
-#      the exemption to stop. The judge cannot tell them apart, which is the
-#      whole of the finding.
+#   X  cherry-pick: the commit nobody declared. A signed base, one unsigned
+#      commit D declared by sha, D put out of HEAD's reach and its diff
+#      replayed as E -- a new unsigned commit with a different author, a
+#      different message and a different sha. Nothing declares E. The OLD judge
+#      answered 0: it derived D's patch-id from D's object, matched E, and
+#      carried E to GREEN, which is an exemption for belonging to a class and
+#      is what the declaration forbids in as many words. The repaired judge
+#      answers 6 and names D as DECLARED-NOT-OBSERVED. The repair is "never
+#      green", not "accuse": the unsigned replay no longer gets in without
+#      somebody looking at it, and the judge does not pretend to know whether
+#      a person rebased or somebody replayed a diff, because nothing in the
+#      repository tells it which.
 #   C  comment tolerance, in both directions. C-comment: a synthetic baseline
 #      carrying '# ' lines between the shas and free text after each sha ->
 #      GREEN, with `declared` equal to the number of sha rows and not to the
@@ -161,15 +191,29 @@ WORK="$(mktemp -d "${TMPDIR:-/tmp}/ftuca.XXXXXX")"; trap 'rm -rf "$WORK"' EXIT
 
 broken() { echo "FIXTURE BROKEN: $*" >&2; exit 4; }
 
+# The one property the repair guarantees, spelled once here and asserted on the
+# arms that reach a verdict. If the judge stops printing it, the arms say so.
+FT37_INVARIANT="INVARIANT: a patch-id match never produces GREEN"
+
 cat > "$WORK/judge.py" <<'JUDGE'
 """Attribution gate: the unattributed set reachable from HEAD, against a
-declared enumeration.
+declared enumeration of sha AND patch-id.
 
   judge.py --repo REPO --baseline FILE
 
 Exits 0 GREEN, 1 RED, 2 UNMEASURED-SCOPE, 3 UNMEASURED-BASELINE,
-6 UNMEASURED-STALE, 4 FIXTURE-BROKEN. The classification of %G? is derived
-from the observed distribution and printed before it is applied.
+6 UNMEASURED-STALE, 4 FIXTURE-BROKEN.
+
+A PATCH-ID MATCH NEVER PRODUCES GREEN. A patch-id identifies a diff; a commit
+is a diff plus its parent, author, committer, message and dates, and patch-id
+discards all of those. "Same diff" is not "the commit I accepted", and an
+attribution exemption needs the second. So a declared patch-id can move a
+verdict from RED to 6 -- it names which new commit answers to which stale row
+-- and it can never move one to 0.
+
+Nothing here asks whether an object resolves. A rule keyed on that would read
+GREEN on the machine that still has refs/backup/* and something else on a
+clone, which is the host-dependence the G/U collapse removes.
 """
 import argparse
 import os
@@ -182,7 +226,10 @@ UNATTRIBUTED = {"N"}
 BEGIN = "ACCEPTED-UNATTRIBUTED-BEGIN"
 END = "ACCEPTED-UNATTRIBUTED-END"
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+PID_RE = re.compile(r"^[0-9a-f]{40,64}$")
 US = "\x1f"
+INVARIANT = ("INVARIANT: a patch-id match never produces GREEN -- at most it "
+             "produces 6 UNMEASURED-STALE")
 
 
 def out(s):
@@ -260,6 +307,7 @@ def main():
 
     observed = sorted(h for h, c in codes.items() if c in UNATTRIBUTED)
     out("unattributed: %d" % len(observed))
+    out(INVARIANT)
 
     if not os.path.isfile(a.baseline):
         out("baseline: absent -- %s" % a.baseline)
@@ -277,77 +325,87 @@ def main():
         out("verdict: UNMEASURED-BASELINE")
         return 3
 
-    # `.git-blame-ignore-revs` form: one full sha per line, a '#' at the
-    # start of a line is a comment, and anything after the sha on the line is
-    # ignored. The declaration is the FIRST whitespace token of a surviving
-    # line; a commented line declares nothing at all.
+    # TWO TOKENS PER ROW: the sha, then the stable patch-id the commit that sha
+    # named had when the row was written. A '#' at the start of a line is a
+    # comment and declares nothing; free text after the second token is
+    # ignored, so a row may carry its own short-sha, date and subject and stay
+    # readable to a person. A ROW WITH ONE TOKEN IS NOT A DECLARATION: an
+    # incomplete declaration is refused, never read as a sha-only one.
     block = text.split(BEGIN, 1)[1].split(END, 1)[0]
-    declared = []
+    declared, pinned, order = [], {}, []
     for ln in block.splitlines():
         t = ln.strip()
         if not t or t.startswith("#") or t.startswith("<!--") or t == "-->":
             continue
-        tok = t.split()[0]
-        if not SHA_RE.match(tok):
-            out("baseline: malformed enumeration entry %r" % t)
+        tok = t.split()
+        if len(tok) < 2:
+            out("baseline: incomplete declaration %r -- a row carries a sha "
+                "AND its patch-id, and one token is not a declaration" % t)
             out("verdict: UNMEASURED-BASELINE")
             return 3
-        declared.append(tok)
+        sha, pid = tok[0], tok[1]
+        if not SHA_RE.match(sha):
+            out("baseline: malformed sha %r" % sha)
+            out("verdict: UNMEASURED-BASELINE")
+            return 3
+        if not PID_RE.match(pid):
+            out("baseline: malformed patch-id %r on row for %s" % (pid, sha))
+            out("verdict: UNMEASURED-BASELINE")
+            return 3
+        declared.append(sha)
+        order.append(sha)
+        pinned[sha] = pid
     out("declared: %d" % len(declared))
 
     obs_set = set(observed)
-    covered, stale, bogus, unresolved = {}, [], [], []
+    dec_set = set(declared)
     dups = sorted({d for d in declared if declared.count(d) > 1})
-    obs_pid = None
-    for d in declared:
-        if d in obs_set:
-            covered[d] = d
-            continue
-        rc2, _, _ = git(a.repo, "cat-file", "-e", d + "^{commit}")
-        if rc2 != 0:
-            bogus.append(d)
-            continue
-        if obs_pid is None:
-            obs_pid = {}
-            for o in observed:
-                pid = patch_id(a.repo, o)
-                if pid:
-                    obs_pid.setdefault(pid, []).append(o)
-        dp = patch_id(a.repo, d)
-        hit = obs_pid.get(dp) if dp else None
-        if hit:
-            covered[d] = hit[0]
-            stale.append((d, hit[0]))
-        else:
-            unresolved.append(d)
-
-    for d, o in stale:
-        out("STALE-SHA %s -> %s (the exemption survived a rewrite; the "
-            "baseline is out of date, the history is not)" % (d, o))
-    for d in bogus:
-        out("BOGUS %s (declared, and no commit in this repository answers "
-            "to it)" % d)
     for d in dups:
         out("DUPLICATE %s" % d)
-    if unresolved:
-        for d in unresolved:
-            out("UNRESOLVED %s (neither its sha nor its patch-id is present "
-                "among the unattributed commits)" % d)
-        out("verdict: UNMEASURED-STALE")
-        return 6
 
-    undeclared = sorted(obs_set - set(covered.values()))
-    out("covered-by-sha: %d" % sum(1 for d, o in covered.items() if d == o))
-    out("covered-by-patchid: %d" % len(stale))
+    undeclared = sorted(obs_set - dec_set)
+    missing = [d for d in order if d not in obs_set]
+    out("undeclared: %d" % len(undeclared))
+    out("declared-not-observed: %d" % len(missing))
     for h in undeclared:
         out("UNDECLARED %s %s" % (h, subjects.get(h, "")))
-    delta = len(undeclared) + len(bogus) + len(dups)
-    out("delta: %d" % delta)
-    if delta:
-        out("verdict: RED")
-        return 1
-    out("verdict: GREEN")
-    return 0
+    for d in missing:
+        out("DECLARED-NOT-OBSERVED %s pinned %s" % (d, pinned[d]))
+
+    if not undeclared and not missing and not dups:
+        out("explained-by-declared-patch-id: 0")
+        out("verdict: GREEN")
+        return 0
+
+    # Patch-ids are taken from the OBSERVED commits only. The judge never asks
+    # the repository about a declared sha, so the answer does not depend on
+    # whether this clone still happens to hold the old object.
+    explained_by, explains = {}, {}
+    for h in undeclared:
+        ph = patch_id(a.repo, h)
+        if not ph:
+            continue
+        for d in missing:
+            if pinned[d] == ph:
+                explained_by[h] = d
+                explains.setdefault(d, []).append(h)
+                break
+    for h in sorted(explained_by):
+        out("STALE-SHA %s -> %s (the declared patch-id matches; the row names "
+            "a sha this history no longer has, and re-declaring it is the "
+            "operator's act, not this judge's)" % (explained_by[h], h))
+    out("explained-by-declared-patch-id: %d" % len(explained_by))
+
+    every_undeclared = all(h in explained_by for h in undeclared)
+    every_missing = all(d in explains for d in missing)
+    out("every-undeclared-explained: %s" % ("yes" if every_undeclared else "no"))
+    out("every-declared-not-observed-explains: %s"
+        % ("yes" if every_missing else "no"))
+    if not dups and every_undeclared and every_missing:
+        out("verdict: UNMEASURED-STALE")
+        return 6
+    out("verdict: RED")
+    return 1
 
 
 if __name__ == "__main__":
@@ -390,6 +448,21 @@ baseline_from() {
     echo "<!-- ACCEPTED-UNATTRIBUTED-END -->"; } > "$1"
 }
 
+# A row of the enumeration: the sha, then the stable patch-id of the commit it
+# names. Taken here from the repository so the arms' baselines are built
+# INDEPENDENTLY of the judge, which never derives a patch-id from a declared
+# sha.
+pair_rows() {  # <repo>; shas on stdin, "sha patch-id" rows on stdout
+  local pr_repo="$1" pr_sha pr_pid
+  while read -r pr_sha; do
+    [ -n "$pr_sha" ] || continue
+    pr_pid="$(git -C "$pr_repo" show "$pr_sha" | git patch-id --stable \
+      | cut -d' ' -f1)"
+    [ -n "$pr_pid" ] || broken "no patch-id for $pr_sha in $pr_repo"
+    printf '%s %s\n' "$pr_sha" "$pr_pid"
+  done
+}
+
 ARM_OUT=""
 arm() { # name want repo baseline
   local name="$1" want="$2" rc
@@ -429,13 +502,18 @@ git -C "$ROOT" log HEAD --format='%H %G?' | awk '$2=="N"{print $1}' \
   || broken "could not measure the real tree's unattributed set"
 [ -s "$WORK/real_unattributed.txt" ] || broken "the real tree measured zero \
 unattributed commits; arms N, S and P have nothing to discriminate on"
-baseline_from "$WORK/real.base" < "$WORK/real_unattributed.txt"
+pair_rows "$ROOT" < "$WORK/real_unattributed.txt" > "$WORK/real_pairs.txt"
+baseline_from "$WORK/real.base" < "$WORK/real_pairs.txt"
 
 # ---- arm N: negative control on the real tree -----------------------------
 arm N 0 "$ROOT" "$WORK/real.base" \
   || broken "the real tree measured against a correct baseline did not answer \
 GREEN; either the classification or the set identity is wrong"
-want_line "delta: 0" "arm N answered GREEN on a non-zero delta"
+want_line "undeclared: 0" "arm N answered GREEN over a non-empty undeclared set"
+want_line "declared-not-observed: 0" "arm N answered GREEN with a row the \
+observed set does not contain"
+want_line "$FT37_INVARIANT" "arm N did not print the invariant this judge \
+exists to hold"
 n_scanned="$(printf '%s\n' "$ARM_OUT" | sed -n 's/^scanned: //p')"
 [ "${n_scanned:-0}" -gt 0 ] || broken "arm N answered GREEN over a scanned \
 count of ${n_scanned:-0}; a green that scanned nothing is a vacuum"
@@ -444,18 +522,46 @@ n_unattrib="$(printf '%s\n' "$ARM_OUT" | sed -n 's/^unattributed: //p')"
 [ "$n_declared" = "$n_unattrib" ] || broken "arm N: declared $n_declared and \
 unattributed $n_unattrib disagree on a run that answered GREEN"
 echo "arm N: scanned=$n_scanned declared=$n_declared \
-unattributed=$n_unattrib delta=0"
+unattributed=$n_unattrib undeclared=0"
 
-# ---- arm S: set identity, at unchanged cardinality ------------------------
-sed '1s/.*/0000000000000000000000000000000000000001/' \
-  "$WORK/real_unattributed.txt" | baseline_from "$WORK/swapped.base"
+# ---- arm S: set identity, at unchanged cardinality, in TWO shapes ---------
+# The two-token row can be corrupted in two ways and they are not one answer.
+# S-bogus-row replaces BOTH tokens: nothing accounts for the commit the row
+# stopped declaring, and the sets simply differ -> RED. S-sha-only replaces the
+# sha and keeps the TRUE patch-id: the difference IS accounted for, so the
+# verdict is 6 -- "re-declare this row" -- and never 0. A judge that answered
+# GREEN to the second would be letting a written patch-id stand in for a
+# declaration, which is the defect this file was repaired for.
 s_declared="$(grep -c '^[0-9a-f]\{40\}$' "$WORK/real_unattributed.txt")"
-arm S 1 "$ROOT" "$WORK/swapped.base" \
-  || broken "a baseline with one member swapped for a sha no object answers \
-to did not answer RED; this gate is comparing counts, not sets"
-want_line "BOGUS 0000000000000000000000000000000000000001" \
-  "arm S went RED without naming the swapped member"
-echo "arm S: cardinality unchanged at $s_declared, membership changed by one"
+s_hidden="$(head -1 "$WORK/real_unattributed.txt")"
+S_FAKE_SHA=0000000000000000000000000000000000000001
+S_FAKE_PID=0000000000000000000000000000000000000002
+sed "1s/.*/$S_FAKE_SHA $S_FAKE_PID/" \
+  "$WORK/real_pairs.txt" | baseline_from "$WORK/swapped.base"
+arm S-bogus-row 1 "$ROOT" "$WORK/swapped.base" \
+  || broken "a baseline with one row swapped for a sha and a patch-id nothing \
+answers to did not answer RED; this gate is comparing counts, not sets"
+want_line "DECLARED-NOT-OBSERVED $S_FAKE_SHA" \
+  "arm S-bogus-row went RED without naming the swapped row"
+want_line "UNDECLARED $s_hidden" "arm S-bogus-row went RED without naming the \
+commit the swapped row stopped declaring"
+echo "arm S-bogus-row: cardinality unchanged at $s_declared, membership \
+changed by one, RED"
+
+sed "1s/^[0-9a-f]\{40\}/$S_FAKE_SHA/" \
+  "$WORK/real_pairs.txt" | baseline_from "$WORK/shaonly.base"
+arm S-sha-only 6 "$ROOT" "$WORK/shaonly.base" \
+  || broken "a row whose sha was swapped but whose TRUE patch-id was kept did \
+not answer UNMEASURED-STALE; a written patch-id must account for a difference \
+without certifying it, and it must never answer GREEN"
+want_line "STALE-SHA $S_FAKE_SHA -> $s_hidden" "arm S-sha-only answered 6 \
+without naming which row the observed commit answers to"
+want_line "every-undeclared-explained: yes" "arm S-sha-only reached 6 on \
+something other than a fully accounted difference"
+reject_line "verdict: GREEN" "arm S-sha-only let a written patch-id certify a \
+row the observed set does not contain"
+echo "arm S-sha-only: cardinality unchanged at $s_declared, the true patch-id \
+kept, 6 and never 0"
 
 # ---- arm P: positive control, on a clone that has no allowed_signers ------
 git clone -q "$ROOT" "$WORK/clone" 2>/dev/null \
@@ -500,12 +606,18 @@ count of ${a_scanned:-0}; the empty set was not measured, it was assumed"
 want_line "declared: 0" "arm A did not declare the empty set"
 echo "arm A: scanned=$a_scanned over an empty declaration, GREEN by generation"
 
-# ---- arm R: the exemption survives a rewrite ------------------------------
+# ---- arm R: after a rewrite the declaration is STALE, and says which row ---
+# The claim this arm used to carry was "the exemption survives a future
+# rewrite", and it was false: a rewritten baseline names shas the history no
+# longer has, which is the definition of stale. What the WRITTEN patch-ids buy
+# is the mapping -- which new commit answers to which old row -- and the judge
+# hands it over and refuses to certify. 6, never 0.
 mkrepo "$WORK/rw"
 cunsigned "$WORK/rw" a.txt "r one"
 cunsigned "$WORK/rw" b.txt "r two"
 cunsigned "$WORK/rw" c.txt "r three"
-git -C "$WORK/rw" rev-list HEAD | baseline_from "$WORK/rw.base"
+git -C "$WORK/rw" rev-list HEAD | pair_rows "$WORK/rw" > "$WORK/rw.pairs"
+baseline_from "$WORK/rw.base" < "$WORK/rw.pairs"
 arm R-pre 0 "$WORK/rw" "$WORK/rw.base" \
   || broken "the un-rewritten scratch repository did not answer GREEN; arm R \
 cannot show a rewrite surviving a gate that was never green before it"
@@ -524,23 +636,64 @@ rw_moved=0
 while read -r rw_old; do
   git -C "$WORK/rw" merge-base --is-ancestor "$rw_old" HEAD 2>/dev/null \
     || rw_moved=$((rw_moved + 1))
-done < <(grep '^[0-9a-f]\{40\}$' "$WORK/rw.base")
+done < <(awk '{print $1}' "$WORK/rw.pairs")
 [ "$rw_moved" -eq 3 ] || broken "the rewrite moved $rw_moved of 3 shas; arm R \
 must rewrite every declared sha or it is not testing what it claims"
-arm R 0 "$WORK/rw" "$WORK/rw.base" \
-  || broken "a rewrite that moved every declared sha broke the exemption; the \
-patch-id fallback does not hold and a rebase would re-accuse accepted commits"
-want_line "STALE-SHA" "arm R held the exemption without printing STALE-SHA; a \
-baseline that is silently out of date is the state this line exists to name"
-want_line "covered-by-patchid: 3" "arm R did not resolve all three through \
-the patch-id"
+arm R 6 "$WORK/rw" "$WORK/rw.base" \
+  || broken "a rewrite that moved every declared sha did not answer \
+UNMEASURED-STALE; either the written patch-ids failed to account for the three \
+new commits, or the judge certified a baseline that names three shas this \
+history no longer has"
+want_line "STALE-SHA" "arm R reached 6 without printing STALE-SHA; the mapping \
+from stale row to new commit is the whole of what this exit hands the operator"
+want_line "explained-by-declared-patch-id: 3" "arm R did not account for all \
+three through the WRITTEN patch-ids"
+want_line "every-declared-not-observed-explains: yes" "arm R reached 6 with a \
+row that explains nothing"
+reject_line "verdict: GREEN" "arm R certified a rewritten baseline; a patch-id \
+match must never produce GREEN"
 
-# ---- arm X: the patch-id fallback exempts a commit nobody declared --------
-# DECLARED FAILING AT THIS BASIS -- see the ELEVEN ARMS block above. The arm is
-# built and run; its wanted exit is 1 and its observed exit is recorded, not
-# repaired. Every precondition is asserted before the judge is asked anything,
-# so a GREEN that came from a mis-built scratch repository cannot be read as the
-# finding this arm exists to record.
+# ---- arm R-partial: branch 6 is a CONJUNCTION, not "at least one" ---------
+# One undeclared commit and TWO rows the observed set does not contain. The
+# first row's written patch-id accounts for the commit; the second accounts for
+# nothing. Every undeclared IS explained, and one row is NOT, so the conjunction
+# fails and the verdict is RED. A judge that read branch 6 as "at least one
+# match" would answer 6 here and would let a row nobody can account for ride in
+# beside a row somebody can.
+mkrepo "$WORK/rwp"
+csigned "$WORK/rwp" a.txt "rp signed base"
+cunsigned "$WORK/rwp" b.txt "rp the one unattributed commit"
+rwp_u="$(git -C "$WORK/rwp" rev-parse HEAD)"
+rwp_pid="$(git -C "$WORK/rwp" show "$rwp_u" | git patch-id --stable \
+  | cut -d' ' -f1)"
+[ -n "$rwp_pid" ] || broken "arm R-partial: no patch-id for the unattributed \
+commit it is built around"
+RWP_A=00000000000000000000000000000000000000aa
+RWP_B=00000000000000000000000000000000000000bb
+RWP_DEAD=00000000000000000000000000000000000000de
+{ printf '%s %s\n' "$RWP_A" "$rwp_pid"
+  printf '%s %s\n' "$RWP_B" "$RWP_DEAD"; } | baseline_from "$WORK/rwp.base"
+arm R-partial 1 "$WORK/rwp" "$WORK/rwp.base" \
+  || broken "two rows the observed set does not contain, one accounted for by \
+its written patch-id and one accounted for by nothing, did not answer RED; \
+branch 6 is being read as \"at least one match\" and not as the conjunction it \
+is"
+want_line "every-undeclared-explained: yes" "arm R-partial did not reach the \
+conjunction it exists to test -- the undeclared half must hold for the failing \
+half to be what decides"
+want_line "every-declared-not-observed-explains: no" "arm R-partial went RED \
+without the unexplained row being the reason"
+want_line "DECLARED-NOT-OBSERVED $RWP_B" "arm R-partial went RED without \
+naming the row nothing accounts for"
+echo "arm R-partial: 1 undeclared explained, 1 of 2 rows unexplained, RED"
+
+# ---- arm X: the cherry-pick nobody declared ------------------------------
+# The commit E that HEAD reaches is unsigned, carries a different author and a
+# different message from the declared D, and is named by no row. The OLD judge
+# derived D's patch-id from D's object, matched E and answered GREEN. This one
+# answers 6 and prints D as DECLARED-NOT-OBSERVED. Every precondition is
+# asserted before the judge is asked anything, so an answer that came from a
+# mis-built scratch repository cannot be read as the finding.
 mkrepo "$WORK/xcp"
 csigned "$WORK/xcp" base.txt "x signed base"
 cunsigned "$WORK/xcp" declared.txt "x the declared unattributed commit"
@@ -582,21 +735,25 @@ if [ -z "$xcp_pd" ] || [ "$xcp_pd" != "$xcp_pe" ]; then
   broken "arm X: the two commits do not share a patch-id, so the fallback \
 this arm is about is not the thing being exercised"
 fi
-printf '%s\n' "$xcp_d" | baseline_from "$WORK/xcp.base"
+printf '%s %s\n' "$xcp_d" "$xcp_pd" | baseline_from "$WORK/xcp.base"
 
-echo "arm X-cherrypick: declared $xcp_d (unreachable from HEAD, still an object)"
+echo "arm X-cherrypick: declared $xcp_d, not reachable from HEAD"
 echo "arm X-cherrypick: undeclared $xcp_e ($XCP_ID, unsigned) shares patch-id $xcp_pd"
-if arm X-cherrypick 1 "$WORK/xcp" "$WORK/xcp.base"; then
-  broken "arm X-cherrypick answered RED. The patch-id fallback no longer \
-exempts a commit that nothing declares, which is the repair this basis does \
-NOT contain -- so the DECLARED FAILING block at the top of this file is stale \
-and must be rewritten with the repair that made it true"
-fi
-echo "arm X-cherrypick: DECLARED FAILING -- wanted RED, observed GREEN. An \
-unsigned commit by $XCP_ID that no line of the baseline names is exempt \
-because its patch-id matches one that does. That is an exemption by \
-membership in a class, and the section this gate reads forbids exactly that. \
-Recorded, not repaired."
+arm X-cherrypick 6 "$WORK/xcp" "$WORK/xcp.base" \
+  || broken "an unsigned commit that no row names, sharing a patch-id with a \
+row that does, did not answer UNMEASURED-STALE. If it answered 0 the patch-id \
+is exempting again and the repair is gone; if it answered 1 the written \
+patch-id stopped accounting for the difference at all"
+want_line "DECLARED-NOT-OBSERVED $xcp_d" "arm X-cherrypick reached 6 without \
+naming the declared commit HEAD no longer reaches; naming it is what turns \
+this exit into an instruction instead of a shrug"
+want_line "UNDECLARED $xcp_e" "arm X-cherrypick reached 6 without naming the \
+commit nothing declares"
+reject_line "verdict: GREEN" "arm X-cherrypick let a patch-id coincidence \
+carry an unsigned undeclared commit to GREEN, which is the defect this file \
+was repaired for"
+echo "arm X-cherrypick: the unsigned replay by $XCP_ID is no longer waved \
+through. 6, and the two rows to look at are printed by name."
 
 # ---- arm C: a comment is not a declaration, in both directions ------------
 # The body is built by hand rather than by the judge: three rows carrying a
@@ -605,21 +762,22 @@ Recorded, not repaired."
 # arm claims to test is not in the file, the arm proves nothing, so the shape
 # is asserted before it is measured.
 { echo "# a group heading, which declares nothing"
-  head -3 "$WORK/real_unattributed.txt" | while read -r c_sha; do
-      printf '%s  %s %s\n' "$c_sha" \
+  head -3 "$WORK/real_pairs.txt" | while read -r c_sha c_pid; do
+      printf '%s %s  %s %s\n' "$c_sha" "$c_pid" \
         "$(git -C "$ROOT" log -1 --format=%h "$c_sha")" \
         "$(git -C "$ROOT" log -1 --format=%ad --date=short "$c_sha")"
     done
   echo "#"
-  echo "# and the rest, declared bare"
-  sed -n '4,$p' "$WORK/real_unattributed.txt"; } > "$WORK/commented.body"
+  echo "# and the rest, declared as the bare pair"
+  sed -n '4,$p' "$WORK/real_pairs.txt"; } > "$WORK/commented.body"
 c_rows="$(grep -c '^[0-9a-f]\{40\}' "$WORK/commented.body")"
 c_hashlines="$(grep -c '^#' "$WORK/commented.body")"
-c_trailing="$(grep -c '^[0-9a-f]\{40\} .' "$WORK/commented.body")"
+c_trailing="$(grep -c '^[0-9a-f]\{40\} [0-9a-f]\{40,64\}  .' \
+  "$WORK/commented.body")"
 if [ "$c_hashlines" -lt 2 ] || [ "$c_trailing" -lt 3 ]; then
   broken "arm C-comment built a body with $c_hashlines comment lines and \
-$c_trailing rows carrying trailing text; it must carry both or it is measuring \
-a form it does not contain"
+$c_trailing rows carrying text after the patch-id; it must carry both or it is \
+measuring a form it does not contain"
 fi
 [ "$c_rows" -eq "$s_declared" ] || broken "arm C-comment declared $c_rows of \
 the $s_declared observed commits; the body lost a row while being decorated"
@@ -630,12 +788,13 @@ between the shas, short-sha and date after them -- did not answer GREEN; the \
 enumeration this repository is about to write is not the one the judge reads"
 want_line "declared: $c_rows" "arm C-comment counted something other than the \
 $c_rows sha rows; a comment line was counted as a declaration"
-want_line "delta: 0" "arm C-comment answered GREEN on a non-zero delta"
-echo "arm C-comment: $c_rows sha rows, $c_hashlines comment lines, \
-$c_trailing rows with trailing text, declared=$c_rows delta=0"
+want_line "undeclared: 0" "arm C-comment answered GREEN over a non-empty \
+undeclared set"
+echo "arm C-comment: $c_rows pair rows, $c_hashlines comment lines, \
+$c_trailing rows with text after the patch-id, declared=$c_rows undeclared=0"
 
-c_hidden="$(head -1 "$WORK/real_unattributed.txt")"
-sed '1s/^/# /' "$WORK/real_unattributed.txt" | baseline_from "$WORK/hidden.base"
+c_hidden="$s_hidden"
+sed '1s/^/# /' "$WORK/real_pairs.txt" | baseline_from "$WORK/hidden.base"
 arm C-commented-out 1 "$ROOT" "$WORK/hidden.base" \
   || broken "a true member of the observed set, commented out with '# ', did \
 not turn the gate RED; commenting a line would be a way to drop a commit from \
@@ -664,8 +823,10 @@ arm B-empty 1 "$ROOT" "$WORK/empty.base" \
 commits did not answer RED; an empty block is a declaration that nothing is \
 exempt, and on this tree that declaration is false"
 want_line "declared: 0" "arm B-empty did not declare the empty set"
-want_line "delta: $s_declared" "arm B-empty went RED at a delta other than the \
-$s_declared commits it declared nothing about"
+want_line "undeclared: $s_declared" "arm B-empty went RED over an undeclared \
+set other than the $s_declared commits it declared nothing about"
+want_line "every-undeclared-explained: no" "arm B-empty reached RED without \
+the empty declaration being what failed to account for them"
 echo "arm B-empty: the byte-identical empty declaration that answered GREEN \
 in arm A answers RED here; the tree under it changed and the file did not"
 
@@ -679,7 +840,7 @@ case "$p_rc" in
   1) echo "RED: the unattributed set reachable from HEAD is not the declared set" ;;
   2) echo "UNMEASURED: no commit was read" ;;
   3) echo "UNMEASURED-BASELINE: no baseline declares an unattributed set" ;;
-  6) echo "UNMEASURED-STALE: a declared commit resolved by neither sha nor patch-id" ;;
+  6) echo "UNMEASURED-STALE: every difference is accounted for by a declared patch-id, and a patch-id never certifies -- re-declare the rows named above" ;;
   *) broken "the judge answered an exit outside its contract: $p_rc" ;;
 esac
 exit "$p_rc"
