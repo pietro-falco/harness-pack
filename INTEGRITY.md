@@ -303,3 +303,37 @@ remote. `git push --mirror` and an explicit `refs/backup/*:refs/backup/*`
 refspec both send them; a client-side `pre-push` hook sees the resolved ref
 list in both cases -- measured -- so this is gateable, and it is not gated
 today.
+
+## The session trailer
+
+Some commit messages in this history end with a trailer that names the session
+in which the commit was produced:
+
+```
+Claude-Session: <url>
+```
+
+THE URL IS OPAQUE TO EVERY READER BUT THE OPERATOR. It does not resolve, and it
+is not meant to: no reader can follow it to a transcript, and nothing in this
+repository depends on one existing. It is a provenance marker -- it says that a
+session produced this commit, and which session that was -- not a citation. A
+reader who treats it as a source to consult has misread what it is for.
+
+The identity this repository considers binding is the SIGNATURE, not the URL.
+`%GS` is the whole of the attribution reading, exactly as `%G?` is the whole of
+the signature reading:
+
+```
+git log --format='%h %G? %GS'
+```
+
+A reader verifies attribution in those two columns and NEVER at the trailer.
+The trailer is message text, written by the same process that wrote the
+subject; it attests to nothing it does not simply assert, and an unsigned
+commit carrying one is unattributed exactly as an unsigned commit without one
+is.
+
+The trailer was not removed. Removing it would make the record less true: those
+sessions happened, they produced those commits, and a message stripped of the
+line would say less about how the commit came to exist than the message that
+carries it. The class is declared here rather than deleted there.
