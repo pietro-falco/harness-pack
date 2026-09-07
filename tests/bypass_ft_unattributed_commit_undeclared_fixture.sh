@@ -269,6 +269,54 @@ WORK="$(mktemp -d "${TMPDIR:-/tmp}/ftuca.XXXXXX")"; trap 'rm -rf "$WORK"' EXIT
 
 broken() { echo "FIXTURE BROKEN: $*" >&2; exit 4; }
 
+# ---- the preflight: it refuses to measure, and it does not cover ----------
+# MEASURED ONCE, HERE, and read by three blocks below. $ROOT is the one
+# repository the arms cannot choose, and a shallow checkout of it is not a
+# smaller repository: `git log HEAD` returns the commits inside the depth
+# window and stops, with no error and nothing on the rows to say so. TEN arms
+# read that corpus -- eight invoke the judge with --repo "$ROOT", and P-pre and
+# P run against a clone of $ROOT, which inherits its depth -- and the block
+# that builds the baseline those ten share reads $ROOT's own log and calls
+# broken when the window holds no unattributed commit at all.
+#
+# WHAT THIS IS NOT is a short circuit. A guard that answered "unmeasurable" for
+# the WHOLE file the moment $ROOT looked truncated would hide every defect in
+# the arms that build their own repositories and never read $ROOT: a shallow
+# checkout would become a place where this falsifier certifies nothing AND
+# accuses nothing, which is worse than the FIXTURE BROKEN it replaces and is
+# reached by cloning shallower. So the scratch arms RUN, in every condition,
+# and a failure among them still leaves this fixture by the exit-4 door. Arm
+# V-scratch-visible is what holds that open.
+#
+# The three doors at the tail, in this order: a broken scratch arm -> 4, by
+# `broken`, before the tail is reached at all; otherwise anything skipped -> 5
+# UNMEASURED-SHALLOW; otherwise the ordinary verdict.
+#
+# AN UNANSWERABLE PREFLIGHT IS A BROKEN CONTROL AND NOT A TRUNCATED TREE. If
+# git will not say whether this checkout is shallow, the arms below cannot know
+# whether the history they are about to read is the whole one, and that is a 4.
+ROOT_SHALLOW="$(git -C "$ROOT" rev-parse --is-shallow-repository 2>/dev/null \
+  || true)"
+case "$ROOT_SHALLOW" in
+  true|false) ;;
+  *) broken "\`git rev-parse --is-shallow-repository\` did not answer for \
+this repository, so no arm below can know whether the history it is about to \
+read is the whole one" ;;
+esac
+
+# Each skipped arm names ITSELF and its reason on its own line. A count would
+# say how many questions went unasked and never which, and the reader of a 5
+# needs the second. Nothing here prints a path: the reason is a property of the
+# checkout, not of where it sits.
+ROOT_ARMS_SKIPPED=0
+skip_root() { # <arm name>
+  ROOT_ARMS_SKIPPED=1
+  echo "skipped [$1]: this checkout is shallow, and this arm's corpus is this \
+repository's own history. At this depth the observed set is the window the \
+checkout chose, so a verdict here would be about the depth and not about the \
+declaration"
+}
+
 # The one property the repair guarantees, spelled once here and asserted on the
 # arms that reach a verdict. If the judge stops printing it, the arms say so.
 FT37_INVARIANT="INVARIANT: a patch-id match never produces GREEN"
@@ -619,6 +667,18 @@ mkrepo "$WORK/empty"
 arm Z-scope 2 "$WORK/empty" "$WORK/nonexistent.md" \
   || broken "a repository with no commit did not answer UNMEASURED-SCOPE; a \
 gate that reads nothing must not be able to answer GREEN"
+# THE BLOCK BELOW IS NOT INDENTED UNDER THIS `else`, and that is deliberate.
+# Its multi-line messages continue at column 0 inside their own quotes, so
+# indenting them would rewrite the text of every message this fixture prints.
+# The guard is a door in front of the block, not a rewrite of it.
+if [ "$ROOT_SHALLOW" = "true" ]; then
+skip_root Z-baseline
+skip_root N
+skip_root S-bogus-row
+skip_root S-sha-only
+skip_root P-pre
+skip_root P
+else
 arm Z-baseline 3 "$ROOT" "$WORK/nonexistent.md" \
   || broken "an absent baseline did not answer UNMEASURED-BASELINE; an absent \
 declaration is not an empty declaration"
@@ -718,6 +778,7 @@ arm P 1 "$WORK/clone" "$WORK/real.base" \
   || broken "one further unsigned commit, declared nowhere, did not turn the \
 gate RED; the gate does not detect what it exists to detect"
 want_line "UNDECLARED" "arm P went RED without naming the undeclared commit"
+fi
 
 # ---- arm A: anti-vacuity BY GENERATION ------------------------------------
 mkrepo "$WORK/allsigned"
@@ -889,6 +950,12 @@ through. 6, and the two rows to look at are printed by name."
 # bare '#' between the groups, and the remaining rows bare. If the shape this
 # arm claims to test is not in the file, the arm proves nothing, so the shape
 # is asserted before it is measured.
+if [ "$ROOT_SHALLOW" = "true" ]; then
+skip_root C-comment
+skip_root C-commented-out
+skip_root B-nosection
+skip_root B-empty
+else
 { echo "# a group heading, which declares nothing"
   head -3 "$WORK/real_pairs.txt" | while read -r c_sha c_pid; do
       printf '%s %s  %s %s\n' "$c_sha" "$c_pid" \
@@ -957,6 +1024,7 @@ want_line "every-undeclared-explained: no" "arm B-empty reached RED without \
 the empty declaration being what failed to account for them"
 echo "arm B-empty: the byte-identical empty declaration that answered GREEN \
 in arm A answers RED here; the tree under it changed and the file did not"
+fi
 
 # ---- arm H: a truncated history is not a smaller history ------------------
 # The source is built here rather than cloned from $ROOT: the arm needs a
@@ -1144,7 +1212,12 @@ reduces blobs and the judge reads commits"
 # The inner runs carry FT37_META=1, and that is what stops this block from
 # recursing: without it V-full-root's inner run would build its own checkouts
 # and run its own V arms, without end.
-if [ -z "${FT37_META:-}" ]; then
+if [ -z "${FT37_META:-}" ] && [ "$ROOT_SHALLOW" = "true" ]; then
+  skip_root V-shallow-root
+  skip_root V-full-root
+  skip_root V-scratch-visible
+fi
+if [ -z "${FT37_META:-}" ] && [ "$ROOT_SHALLOW" != "true" ]; then
   SELF_NAME="$(basename "$0")"
   SELF="$ROOT/tests/$SELF_NAME"
   [ -f "$SELF" ] || broken "arm V: this fixture is not at tests/$SELF_NAME \
@@ -1225,7 +1298,11 @@ under the preflight, so the guard is covering the file rather than refusing to \
 judge the tree"
   v_want_line "arm H-partial: GREEN" "arm V-shallow-root: the last scratch arm \
 did not run, so the inner run stopped early rather than skipping selectively"
-  v_reject_line "FIXTURE BROKEN" "arm V-shallow-root reached exit 5 through a \
+  # The needle carries the colon `broken()` emits. The tail's own summary above
+  # names the exit-4 door in prose, and a bare "FIXTURE BROKEN" would match that
+  # sentence on every green inner run -- measured, on the first inner run this
+  # arm was pointed at after the preflight landed.
+  v_reject_line "FIXTURE BROKEN: " "arm V-shallow-root reached exit 5 through a \
 broken control rather than through the preflight"
   echo "arm V-shallow-root: UNMEASURED-SHALLOW; the arms reading this \
 repository's own history skipped by name in both regions, the scratch arms \
@@ -1294,10 +1371,34 @@ scratch arm -- the preflight refuses to measure and does not cover"
 fi
 
 echo "== verdict =="
+# The three doors, in order. A broken scratch arm has already left through
+# `broken` and never reaches here, which is what makes exit 4 mean the same
+# thing on a shallow checkout as on a full one. What is left is: something was
+# skipped, or nothing was.
+if [ "$ROOT_ARMS_SKIPPED" -ne 0 ]; then
+  echo "skipped: the arms whose corpus is this repository's own history were \
+not asked, each for the reason it printed above. The arms that build their own \
+repositories all ran; a failure among them leaves this fixture by the exit-4 \
+door and never reaches this line"
+fi
 set +e
 python3 "$WORK/judge.py" --repo "$ROOT" --baseline "$ROOT/INTEGRITY.md"
 p_rc=$?
 set -e
+# The preflight and the judge read the same property off the same checkout by
+# two different routes -- `rev-parse --is-shallow-repository` up there, the
+# judge's own reading down here. If they disagree, one of them is wrong about
+# the tree and this fixture must not spend a verdict on which.
+if [ "$ROOT_SHALLOW" = "true" ] && [ "$p_rc" -ne 5 ]; then
+  broken "the arms reading this repository's own history were skipped because \
+this checkout answered 'true' to --is-shallow-repository, and the judge then \
+answered $p_rc rather than 5 over that same checkout"
+fi
+if [ "$ROOT_SHALLOW" != "true" ] && [ "$p_rc" -eq 5 ]; then
+  broken "no arm was skipped, because this checkout answered \
+'$ROOT_SHALLOW' to --is-shallow-repository, and the judge then answered 5 \
+UNMEASURED-SHALLOW over that same checkout"
+fi
 case "$p_rc" in
   0) echo "GREEN: the unattributed set reachable from HEAD is exactly the declared set" ;;
   1) echo "RED: the unattributed set reachable from HEAD is not the declared set" ;;
